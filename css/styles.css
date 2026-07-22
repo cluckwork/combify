@@ -219,6 +219,3 @@ body {
 .about__body { display: grid; gap: 12px; padding: 4px 18px 18px; }
 .about__body p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
 .about__body strong { color: var(--text); }
-
-.foot { color: var(--muted); font-size: 13px; text-align: center; line-height: 1.5; }
-.foot strong { color: var(--text); }
