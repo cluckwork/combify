@@ -194,5 +194,31 @@ body {
 .more[open] > summary::after { transform: rotate(180deg); }
 .more__body { display: grid; gap: 16px; padding-top: 12px; }
 
+/* Collapsible "About Combify" — a quiet card, closed by default */
+.about {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid #232833;
+  overflow: hidden;
+}
+.about > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.about > summary::-webkit-details-marker { display: none; }
+.about > summary::after { content: "\2304"; font-size: 18px; line-height: 1; color: var(--muted); transition: transform .2s; }
+.about[open] > summary::after { transform: rotate(180deg); }
+.about[open] > summary { border-bottom: 1px solid #232833; }
+.about__body { display: grid; gap: 12px; padding: 4px 18px 18px; }
+.about__body p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.about__body strong { color: var(--text); }
+
 .foot { color: var(--muted); font-size: 13px; text-align: center; line-height: 1.5; }
 .foot strong { color: var(--text); }
