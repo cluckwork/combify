@@ -104,8 +104,55 @@ function bell(times = 1) {
 }
 
 // ---------- Voice ----------
-// Browsers ship a robotic default AND better "neural/natural" voices.
-// Pick the most natural English voice available on the device.
+// The app calls combos two ways, in order of preference:
+//   1. Audio CLIPS in the /audio folder — one short file per move (audio/1.mp3,
+//      audio/slip.mp3, ...). Generate these once with your ElevenLabs voice and
+//      the app chains them into any combo. This is the good-sounding path.
+//      See audio/README.md for the exact file list.
+//   2. The browser's built-in TEXT-TO-SPEECH as a fallback, used automatically
+//      when the clips aren't present (e.g. before you've added them).
+
+// -- Clip playback --
+const CLIP_DIR = "audio/";
+const CLIP_EXT = ".mp3"; // match whatever your voice tool exports (.mp3 or .wav)
+const CLIP_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "slip", "roll", "block", "pivot"];
+const clipCache = {};
+const voice = { useClips: false, current: null };
+
+function preloadClips() {
+  CLIP_KEYS.forEach((key) => {
+    const a = new Audio(CLIP_DIR + key + CLIP_EXT);
+    a.preload = "auto";
+    clipCache[key] = a;
+  });
+  // If the first clip loads, assume the set is present and switch to clips.
+  const probe = clipCache["1"];
+  probe.addEventListener("canplaythrough", () => { voice.useClips = true; }, { once: true });
+  probe.addEventListener("error", () => { voice.useClips = false; }, { once: true });
+}
+preloadClips();
+
+// Play a combo's clips one after another, then call onDone().
+function playClips(keys, onDone) {
+  let i = 0;
+  const playNext = () => {
+    voice.current = null;
+    if (!state.running || state.phase !== "work" || i >= keys.length) { onDone(); return; }
+    const src = clipCache[keys[i++]];
+    if (!src) { playNext(); return; }
+    const node = src.cloneNode();
+    voice.current = node;
+    node.onended = playNext;
+    node.onerror = playNext;
+    const p = node.play();
+    if (p && p.catch) p.catch(() => playNext());
+  };
+  playNext();
+}
+
+// -- Text-to-speech fallback --
+// Browsers ship a robotic default AND better "neural/natural" voices; pick the
+// most natural English voice available on the device.
 let chosenVoice = null;
 function pickVoice() {
   const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
@@ -127,9 +174,11 @@ if ("speechSynthesis" in window) {
 // Speak a combo, then call onDone() when it finishes — so the NEXT combo waits
 // for this one to finish and then applies the pace gap. This keeps the callout
 // in sync with the pace setting instead of talking over itself.
-function speakCombo(text, onDone) {
-  if (!el.voiceOn.checked || !("speechSynthesis" in window)) { onDone(); return; }
-  const u = new SpeechSynthesisUtterance(text);
+function speakCombo(combo, onDone) {
+  if (!el.voiceOn.checked) { onDone(); return; }
+  if (voice.useClips) { playClips(combo, onDone); return; }
+  if (!("speechSynthesis" in window)) { onDone(); return; }
+  const u = new SpeechSynthesisUtterance(comboToSpeech(combo));
   if (chosenVoice) u.voice = chosenVoice;
   u.rate = 1.0;
   u.pitch = 1.0;
@@ -156,7 +205,7 @@ function nextCombo() {
   if (!state.running || state.phase !== "work") return;
   const combo = randomCombo(getLevel());
   el.combo.textContent = comboToText(combo);
-  speakCombo(comboToSpeech(combo), () => {
+  speakCombo(combo, () => {
     if (!state.running || state.phase !== "work") return;
     state.comboTimer = setTimeout(nextCombo, getPace()); // pace read fresh each time
   });
@@ -167,6 +216,7 @@ function stopComboLoop() {
   clearTimeout(state.comboFallback);
   state.comboTimer = null;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
+  if (voice.current) { try { voice.current.pause(); } catch (e) {} voice.current = null; }
 }
 
 // ---------- Phase changes ----------

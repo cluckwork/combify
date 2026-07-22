@@ -97,9 +97,9 @@ committed — it depends on what validation tells us.
 
 Short version here; full trade-offs in each feature spec and the Decision Log.
 
-1. ~~**Voice quality**~~ ✅ **DECIDED** — AI voice clips ("dawg" from VoiceBox).
-   Clip-playback system is built; now needs the 12 clips generated and dropped
-   into `audio/`. → see **6.1**
+1. ~~**Voice quality**~~ ✅ **DECIDED** — AI voice clips generated via **ElevenLabs**.
+   Clip-playback system is built (provider-agnostic); now needs the 12 clips
+   generated and dropped into `audio/`. → see **6.1**
 2. **Music** — play-your-own in the background *(recommended)* / full Spotify
    integration / skip? → see **6.2**
 3. **Breakdown animation** — green-light the 2D-silhouette proof-of-concept
@@ -135,30 +135,40 @@ These are blockers I can't clear for you, and they're high-leverage:
 - **Why device TTS can't fix it:** browser TTS quality is **capped by the
   device** — we can't fix a weak voice from inside the app. So the fix is to stop
   relying on device TTS and play our own audio.
-- **Decision:** use **pre-generated AI voice clips** — the **"dawg"** voice
-  created in **VoiceBox**. Because every combo is just a sequence of the same
-  words, we only need **12 clips, made once** (`1`–`8`, `slip`, `roll`, `block`,
-  `pivot`); the app chains them into any combo. Free at runtime, works offline,
-  no per-combo generation.
-- **Rejected alternatives:** voice picker (still robotic on weak devices); cloud
-  AI at runtime (costs money, needs internet + backend + API keys).
-- **Constraint noted:** I can't access VoiceBox from this environment (no network
-  / no account access), so the founder generates the 12 clips and drops them in.
+- **Decision:** use **pre-generated AI voice clips** made with **ElevenLabs**.
+  Because every combo is just a sequence of the same words, we only need
+  **12 clips, made once** (`1`–`8`, `slip`, `roll`, `block`, `pivot`); the app
+  chains them into any combo. Free at runtime, works offline, no per-combo
+  generation.
+- **Tried and rejected:**
+  - Voice picker (browser TTS) — still robotic on weak devices.
+  - VoiceBox "dawg" voice — clips were generated and wired in, but didn't sound
+    good enough on listening; reverted.
+  - Free Microsoft Edge neural voices (edge-tts) — genuinely natural and
+    proven working (5 voices demoed live), but the founder chose to go with
+    ElevenLabs instead.
+- **Constraint noted:** I can't access ElevenLabs from this environment (no
+  account access), so the founder generates the 12 clips and drops them in.
 - **How it's built:** app looks for clips in `audio/`; if present, it uses them
   and chains them per combo; if missing, it silently falls back to TTS so nothing
   breaks. Clip playback stays in sync with pace (waits for each callout to end).
+  Architecture is provider-agnostic — this is the 2nd voice source plugged into
+  the same system.
 - **Tasks:**
-  - [x] Decide the approach (AI clips, "dawg")
+  - [x] Decide the approach (AI clips) and try providers
   - [x] Build clip playback + chaining + TTS fallback (`js/app.js`)
   - [x] Document the exact 12-file list (`audio/README.md`)
-  - [x] **Founder:** generate the 12 "dawg" clips in VoiceBox, drop into `audio/`
-        (delivered as `.wav`; `CLIP_EXT` updated to match)
+  - [ ] **Founder:** generate the 12 clips in ElevenLabs, drop into `audio/`
+        (expects `.mp3`; update `CLIP_EXT` if a different format is exported)
   - [ ] Test on a real phone; trim clips tight if chaining sounds draggy
   - [ ] (Optional) let the preview demo the good voice by embedding clips as
         data-URIs
-- **Done when:** combos are called in the "dawg" voice, tight and in sync with
-  pace, on a normal phone.
-- **Effort:** remaining = **S** (real-device listening test)
+- **Done when:** combos are called in the ElevenLabs voice, tight and in sync
+  with pace, on a normal phone.
+- **Effort:** remaining = **S** (just generating + dropping in files)
+- **Idea parked:** cycle between several tonal takes of the same word (proven
+  feasible with edge-tts in a live demo) to avoid a looped-clip feel. Revisit
+  once the base ElevenLabs voice is in and confirmed good.
 - **Open questions:** if a word chains awkwardly, we may later add a few
   whole-combo clips for common combos — not needed for now.
 
@@ -368,6 +378,12 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-22** — Voice provider switched to **ElevenLabs**. Reverted the
+  VoiceBox "dawg" clips (didn't sound good enough) back to TTS-only, live-tested
+  5 free Microsoft Edge neural voices and a tonal-variation concept (both proven
+  to work, but founder chose ElevenLabs instead), then restored the
+  provider-agnostic clip-playback system pointed at ElevenLabs (`.mp3`).
+  Currently back on TTS fallback until the ElevenLabs clips are generated.
 - **2026-07-22** — Added the 12 "dawg" voice clips (`.wav`) to `audio/`; app now
   calls combos in the real AI voice instead of TTS. Files transferred from the
   founder's Mac via a terminal upload (tmpfiles.org) since this environment has
