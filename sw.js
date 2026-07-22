@@ -1,6 +1,6 @@
 // sw.js — a tiny service worker so Combify loads fast and works offline
 // once it's been opened once. Bump CACHE when you change files.
-const CACHE = "combify-v1";
+const CACHE = "combify-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const ASSETS = [
   "./js/combos.js",
   "./manifest.json",
   "./icons/icon.svg",
+  "./icons/bwb-logo-white.png",
 ];
 
 self.addEventListener("install", (event) => {
