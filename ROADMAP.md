@@ -1,133 +1,378 @@
-# Combify — Roadmap
+# Combify — Product Roadmap & Plan
 
-The single source of truth for where this project is and what's next. Read this
-first each session. Last updated: **2026-07-21**.
+> The single source of truth for this project. If you read one file at the start
+> of a session, read this one. It holds the vision, every idea we've had, what's
+> built, what's next, and what only you can do.
+>
+> **Last updated:** 2026-07-22 · **Current version:** v1 (local, not yet deployed)
 
 ---
 
-## The vision
+## How to use this document
+
+- **Status legend:** ✅ done · 🔨 in progress · 🟡 needs your decision ·
+  ⏳ planned · 💡 idea / not committed · 🚧 blocked
+- **Effort sizes:** **S** = under an hour · **M** = a session · **L** = a few
+  sessions · **XL** = a mini-project of its own
+- Each feature below has **What / Why / How / Tasks / Done-when / Effort /
+  Depends on / Open questions** so we can pick it up cold and know exactly what
+  "finished" means.
+- The **Decision Log** records choices and *why*, so we don't re-argue them.
+- Keep this file honest: when something ships, move it to the Changelog; when a
+  plan changes, edit it here.
+
+---
+
+## 1. Vision
 
 **Combify** — a round timer + boxing combo caller web app, "by Boxing With Bakr."
 
-**Why it exists (the business goal):** keep gym members training *between*
-classes. More reps at home → more progress → members stay and keep paying. Good
-for the boxer, good for Bakr's business. It's also a marketing differentiator —
-"our gym has its own training app."
+**Why it exists (business goal):** keep gym members training *between* classes.
+More reps at home → faster progress → members feel it working → they stay and
+keep paying. That retention is the value to Bakr's business. Secondary win: it's
+a differentiator he can market — most local gyms can't say "we have our own
+training app."
 
-**Guiding principle:** real usage is the only measure of value. Ship the
-smallest thing real people will open, watch if they use it, then build more.
-Validate before going all-in on big features.
+**Who it's for:**
+1. **Members** (primary) — need structure for the 5 days/week they're not in
+   class. Shadowboxing alone is boring and directionless; Combify gives it shape.
+2. **Bakr / the business** — retention + a marketing asset + a way to extend his
+   coaching beyond gym hours.
+3. **Coaches** (minor) — not a target; only the founder personally struggles to
+   invent combos, so coach-facing tools are deprioritized.
 
----
-
-## ✅ Done so far (v1)
-
-- Round timer — rounds, work/rest periods, synthesized bell
-- Combo caller — combos shown on screen **and** called out loud
-- Three difficulty levels (beginner / intermediate / advanced) with real
-  difficulty scaling
-- Full move set: punches **1–8**, plus **slip, roll, block, pivot**
-- App-like settings: swipe segmented controls, drag/tap steppers, toggle switch
-- "More options" dropdown hides pace + voice; Level and round setup stay up front
-- Natural-voice selection (picks the best voice on the device)
-- Pace is synced to the voice — the next combo waits for the callout to finish
-- Installable as a phone app (PWA) + works offline
-- Combos live in one editable file: `js/combos.js`
-- Live preview published as a Claude Artifact for sharing/testing
+**Guiding principles:**
+- **Usage is the only proof of value.** If nobody opens it, it failed — polish
+  and "cool" don't count.
+- **Ship the smallest thing real people will use, then watch.** Add features
+  only when use justifies them.
+- **Validate big bets before building them.** Prototype the risky part first
+  (e.g. one animation) before committing weeks.
+- **Stay buildable and ownable.** The founder is a beginner; prefer approaches he
+  can understand and maintain over maximal tech.
 
 ---
 
-## 🟡 Decisions waiting on YOU
+## 2. Success metrics (how we'll know it's working)
 
-These need your call before I can build them. (Details for each are in the
-Backlog below.)
+We have no analytics yet (v1 has no accounts/backend). These are the behaviors to
+design toward and, later, to measure:
 
-- [ ] **Voice quality** — record real coach clips (recommended) / voice picker /
-      cloud AI voice?
-- [ ] **Music** — let users play their own in the background + quick-launch
-      buttons (recommended) / full Spotify integration / skip for now?
-- [ ] **Breakdown animation** — green-light the 2D silhouette proof-of-concept
-      (jab + cross demo) before committing to all moves?
+| Signal | What it tells us | How we'd measure it (later) |
+| --- | --- | --- |
+| Bakr recommends it to members | The core stakeholder believes in it | Ask him directly |
+| A member opens it a 2nd and 3rd time | It's not a one-time novelty | Local streak counter / opt-in analytics |
+| Members train on non-class days | It's actually filling the between-class gap | Streak / session log |
+| Members ask for it / for features | Real pull, not polite interest | Word of mouth, feature requests |
+| Installed to home screen | Treated as a real app, not a link | PWA install event |
 
----
-
-## 🥊 Things only YOU can do (real-world, no code)
-
-- [ ] **Show Bakr the preview** and watch his reaction — would he actually tell
-      members to use it? This is the most important validation step.
-- [ ] **Ask Bakr what 7 and 8 mean** in his numbering system (gyms differ — body
-      hooks? overhands?). Needed for correct combos + the breakdown feature.
-- [ ] **Get Bakr's real combos** to replace the placeholder combos in
-      `js/combos.js`. This makes it *his* gym's app, not a generic timer.
-- [ ] (Optional) Ask Bakr his biggest headache running the gym — may reveal an
-      even higher-value feature.
+**Near-term goal:** get it in front of Bakr and ~3–5 members and learn whether
+they reach for it a second time. Everything else is secondary to that answer.
 
 ---
 
-## 📋 Feature backlog (ideas, roughly prioritized)
+## 3. Milestones (the sequence)
 
-### 1. Voice — make it sound like a real coach
-The robotic voice is a device-TTS limitation. Options:
-- **Recorded coach clips (recommended):** you/Bakr record ~12 short punchy
-  callouts ("one", "two"… "slip", "roll"). App plays those. Sounds authentic,
-  offline, free, on-brand.
-- **Voice picker (TTS):** let users choose the best device voice. Free, no
-  recording, still robotic on weak devices.
-- **Cloud AI voice:** truly natural, but costs money + needs internet/backend.
-  Overkill for now.
+Ordered so each step either ships value or de-risks the next. Nothing past M2 is
+committed — it depends on what validation tells us.
 
-### 2. Music while training
-People like to shadowbox to their own music. Options:
-- **Play-your-own (recommended):** users start Spotify/Apple Music, then open
-  Combify; music keeps playing under the bell/voice. Add "Open Spotify / Apple
-  Music" quick buttons. Works today, no logins.
-- **Full Spotify integration:** pick playlists in-app. Needs Premium + login for
-  every user + app registration. Big build — later milestone.
-
-### 3. "Break it down" — animated combo breakdown  ← the big one
-A help feature that *teaches* the combo, turning Combify from a shouting timer
-into a coach.
-- **Button** ("Break it down") → shows the **last few combos** called this round
-  → user taps the one they struggled with → a **blank silhouette figure**
-  performs it slowly, move by move, with coaching cues and step-through controls.
-- **How it works:** animate each move once (like a video game), then chain the
-  clips to match any combo. The work is creating a clean animation per move
-  (1–8, slip, roll, block, pivot).
-- **Approach:** 2D coded silhouette (recommended — self-contained, matches the
-  silhouette vision, smooth via tweening) vs. full 3D (Three.js + Mixamo mocap;
-  most realistic but heavy and hard to maintain).
-- **Plan:** build proof-of-concept (button + combo history + jab & cross
-  animated) FIRST → judge quality → then animate the rest. Don't build all 12
-  animations on spec.
-- **Prep that's cheap and needed anyway:** start logging combo history as combos
-  are called.
-
-### 4. Retention features (serve the core business goal)
-- Session tracking / a simple streak ("you trained 4 days this week")
-- Save your favorite settings so they persist
-- Named "signature" combos from Bakr
-- A single shareable gym link Bakr hands to every member
+- ✅ **M0 — Working v1 (local).** Timer + combo caller + settings + natural voice
+  + PWA. *Done.*
+- 🟡 **M1 — Ship it for real.** Get on GitHub, deploy to a live URL, put Bakr's
+  real combos in, show it to Bakr and members. *This is the priority.* Validation
+  gate: do people come back?
+- 🟡 **M2 — Make the callouts feel pro.** Decide + build the voice upgrade and
+  the music approach. These are the two things users will judge first.
+- 💡 **M3 — Teach, don't just shout: the "Break it down" animation.** The big
+  differentiator. Gated on an approved proof-of-concept.
+- 💡 **M4 — Retention loop.** Streaks, saved settings, signature combos — the
+  features that directly serve "keep members coming back." Build once we know the
+  basics get used.
+- 💡 **M5 — Scale / polish.** Full music integration, accounts (only if needed),
+  multi-gym support, etc. Far out; listed so we don't forget.
 
 ---
 
-## 🚀 Deployment (get it onto a real URL)
+## 4. Decisions waiting on YOU 🟡
 
-- [ ] Get the code onto the user's **GitHub** account
-      - Blocker: `gh` CLI isn't logged in, and this environment may block
-        outbound network to GitHub.
-      - Next step: test whether GitHub is reachable from here. If yes →
-        `gh auth login`, push, done. If no → hand over the exact git commands to
-        run on the user's own laptop.
-- [ ] Turn on **GitHub Pages** for a free live URL (e.g.
-      `username.github.io/combify`) to text to Bakr and install on a phone
+Short version here; full trade-offs in each feature spec and the Decision Log.
+
+1. ~~**Voice quality**~~ ✅ **DECIDED** — AI voice clips ("dawg" from VoiceBox).
+   Clip-playback system is built; now needs the 12 clips generated and dropped
+   into `audio/`. → see **6.1**
+2. **Music** — play-your-own in the background *(recommended)* / full Spotify
+   integration / skip? → see **6.2**
+3. **Breakdown animation** — green-light the 2D-silhouette proof-of-concept
+   (jab + cross) before committing to all moves? → see **6.3**
 
 ---
 
-## Project facts (quick reference)
+## 5. Things only YOU can do (real-world, no code) 🥊
 
-- **Repo:** `/home/joe/git/BWB-combo` (git initialized locally)
-- **Stack:** vanilla HTML / CSS / JavaScript, no framework, installable PWA
-- **Edit combos here:** `js/combos.js`
-- **No accounts / database / payments in v1** — deliberately. Add only if used.
-- **Numbering:** 1 jab, 2 cross, 3 lead hook, 4 rear hook, 5 lead uppercut,
-  6 rear uppercut, 7 & 8 = TBD (confirm with Bakr), plus slip/roll/block/pivot
+These are blockers I can't clear for you, and they're high-leverage:
+
+- ⏳ **Show Bakr the live preview and watch him use it.** The single most
+  important step. Listen for "I'd tell members to use this" vs. polite nodding.
+- ⏳ **Ask Bakr what 7 and 8 are** in his numbering (gyms differ — body hooks?
+  overhands?). Blocks correct combos *and* the breakdown animations.
+- ⏳ **Collect Bakr's real combos** (by level if possible) to replace the
+  placeholders in `js/combos.js`. This is what makes it *his gym's* app.
+- 💡 **Ask Bakr his single biggest headache running the gym.** May surface a
+  higher-value product than anything on this list — worth the question.
+- 💡 **Watch a member try it** without coaching them. Where do they get confused?
+  That's your real backlog.
+
+---
+
+## 6. Feature specs
+
+### 6.1 — Voice: sound like a real coach 🔨 · M2 · DECIDED
+
+- **What:** replace the robotic text-to-speech callouts with a good AI voice.
+- **Why:** it's the first thing users judge; a robotic voice makes a good app
+  feel cheap. The founder flagged it as still too robotic even after picking the
+  best device voice.
+- **Why device TTS can't fix it:** browser TTS quality is **capped by the
+  device** — we can't fix a weak voice from inside the app. So the fix is to stop
+  relying on device TTS and play our own audio.
+- **Decision:** use **pre-generated AI voice clips** — the **"dawg"** voice
+  created in **VoiceBox**. Because every combo is just a sequence of the same
+  words, we only need **12 clips, made once** (`1`–`8`, `slip`, `roll`, `block`,
+  `pivot`); the app chains them into any combo. Free at runtime, works offline,
+  no per-combo generation.
+- **Rejected alternatives:** voice picker (still robotic on weak devices); cloud
+  AI at runtime (costs money, needs internet + backend + API keys).
+- **Constraint noted:** I can't access VoiceBox from this environment (no network
+  / no account access), so the founder generates the 12 clips and drops them in.
+- **How it's built:** app looks for clips in `audio/`; if present, it uses them
+  and chains them per combo; if missing, it silently falls back to TTS so nothing
+  breaks. Clip playback stays in sync with pace (waits for each callout to end).
+- **Tasks:**
+  - [x] Decide the approach (AI clips, "dawg")
+  - [x] Build clip playback + chaining + TTS fallback (`js/app.js`)
+  - [x] Document the exact 12-file list (`audio/README.md`)
+  - [ ] **Founder:** generate the 12 "dawg" clips in VoiceBox, name them
+        `1.mp3`…`pivot.mp3`, drop into `audio/`
+  - [ ] Test on a real phone; trim clips tight if chaining sounds draggy
+  - [ ] (Optional) let the preview demo the good voice by embedding clips as
+        data-URIs
+- **Done when:** combos are called in the "dawg" voice, tight and in sync with
+  pace, on a normal phone.
+- **Effort:** remaining = **S** (just generating + dropping in files)
+- **Open questions:** if a word chains awkwardly, we may later add a few
+  whole-combo clips for common combos — not needed for now.
+
+### 6.2 — Music while training 🟡 · M2
+
+- **What:** let people shadowbox to their own music alongside the bell/voice.
+- **Why:** people strongly associate shadowboxing with music; its absence feels
+  dead.
+- **Reality check:** a phone already plays background music from Spotify/Apple
+  Music while another app runs. So "connecting" may be unnecessary — we mainly
+  need our audio to coexist and not kill their music.
+- **Options:**
+  - **A) Play-your-own — recommended.** User starts their music app, then opens
+    Combify; music continues under the bell/voice. Add "Open Spotify / Apple
+    Music" shortcut buttons. Works today, no logins, no cost.
+  - **B) Full Spotify integration.** Pick playlists / control playback in-app via
+    the Web Playback SDK. Requires **every user** to have Spotify **Premium**, log
+    in through Spotify, plus app registration. Apple Music is a separate SDK. Big
+    build. Later milestone.
+- **Tasks:**
+  - [ ] Decide the option
+  - [ ] (A) Add quick-launch buttons; verify our audio ducks/coexists on iOS +
+        Android without stopping background playback
+  - [ ] (B) — deferred; scope separately if we ever commit
+- **Done when:** a user can have their playlist going and hear both the music and
+  the callouts comfortably.
+- **Effort:** A = **S** · B = **XL**
+- **Open questions:** does our WebAudio bell interrupt background music on iOS?
+  (Needs a real-device test — may require configuring the audio session.)
+
+### 6.3 — "Break it down": animated combo breakdown 💡 · M3 · ← the big one
+
+- **What:** a help feature that *teaches* a combo. A blank silhouette figure
+  performs the combo against a target, slowly and clearly, so a confused user can
+  see how it's actually thrown.
+- **Why:** this is the leap from "timer that shouts numbers" to "coach in your
+  pocket." It's the most defensible, most valuable idea on the list.
+- **UX flow:** a **"Break it down"** button → shows the **last few combos** called
+  this round → user taps the one they struggled with → the figure performs it
+  move-by-move with coaching cues ("Slip — dip under, weight to lead foot") and
+  step-through / replay / slow-mo controls.
+- **How it works (the game-engine idea):** you don't animate whole combos — you
+  animate **each move once** and **chain** the clips to match any combo, blending
+  between them. So "adapts to the round's combo" is the easy part; the work is a
+  clean animation per move: **1–8, slip, roll, block, pivot**.
+- **Approach A — 2D coded silhouette (recommended):** a figure from a simple
+  skeleton (torso, head, arms, legs); each move is a few keyframe poses the app
+  tweens between for smooth motion. Self-contained, instant load, matches the
+  "blank silhouette" vision, we own every frame, fits the current stack.
+- **Approach B — full 3D (Three.js + free Mixamo mocap):** real rigged character,
+  most realistic, camera you can orbit. But adds a 3D engine + multi-MB assets,
+  the free mocap doesn't map 1:1 to our numbering (cleanup), and it's hard for a
+  beginner to maintain.
+- **Plan (de-risk first):**
+  1. Proof-of-concept: button + combo-history + silhouette animating **jab &
+     cross**, chained. Judge the quality.
+  2. If good → animate the rest, one move at a time.
+  3. If not → pivot to 3D or rethink, having spent an hour not a week.
+- **Tasks:**
+  - [ ] Log combo history as combos are called (cheap, needed anyway — do this
+        even before the animation)
+  - [ ] "Break it down" button + recent-combo picker screen
+  - [ ] Silhouette rig + tweening engine
+  - [ ] Jab + cross animations (the PoC)
+  - [ ] Review gate → animate remaining moves (3,4,5,6,7,8, slip, roll, block,
+        pivot)
+  - [ ] Coaching-cue text per move
+  - [ ] Step-through / replay / slow-mo controls
+- **Done when:** a user can pick a struggled combo and clearly understand how to
+  throw it from the animation alone.
+- **Effort:** PoC = **M** · full feature = **XL**
+- **Depends on:** knowing what 7 & 8 are (for correct animations) — see §5.
+- **Open questions:** side-on vs. angled view? auto-play vs. tap-through by
+  default? one figure or mirror for orthodox/southpaw?
+
+### 6.4 — Retention loop 💡 · M4
+
+Directly serves the business goal. Build after the basics are shown to get used.
+
+- **Streaks / session log** — "you trained 4 days this week." The single most
+  retention-relevant feature. Stored locally first (no account needed).
+  Effort **M**.
+- **Save favorite settings** — remember level/rounds/work/rest/pace/voice so it
+  opens ready to go. Effort **S**.
+- **Signature combos** — named combos from Bakr ("Bakr's Special") as their own
+  selectable set; makes the app feel personally his. Effort **S–M**.
+- **Shareable gym link** — one link Bakr texts every member; maybe a lightweight
+  gym-branded landing. Effort **S** (link) / **M** (landing).
+
+### 6.5 — Difficulty & combo content ⏳ (ongoing)
+
+- ✅ Rebuilt all three levels with real scaling; added 7 & 8.
+- ⏳ Swap placeholders for **Bakr's real combos** (needs §5).
+- 💡 Per-level tuning as members give feedback ("advanced still too easy," etc.).
+- 💡 Optional move-set expansion — see Parking Lot.
+
+---
+
+## 7. Deployment 🟡 · M1
+
+- **Goal:** a free public URL (e.g. `username.github.io/combify`) to text to Bakr
+  and install on a phone.
+- **Tasks:**
+  - [ ] 🚧 Get code onto the founder's **GitHub**. Blocker: `gh` CLI isn't logged
+        in and this environment may block outbound network to GitHub.
+        - Next step: test whether GitHub is reachable from here. If yes →
+          `gh auth login` → push. If no → hand over the exact git commands to run
+          on the founder's own laptop.
+  - [ ] Enable **GitHub Pages** on the repo (serves the static site free).
+  - [ ] Verify PWA install + offline work from the live URL on a real phone.
+  - [ ] Put the real combos in before wide sharing.
+- **Effort:** **S** once the network/auth blocker is cleared.
+
+---
+
+## 8. Technical architecture
+
+- **Stack:** vanilla HTML / CSS / JavaScript. No framework, no build step. Chosen
+  for a beginner: readable, nothing to break, deploys as static files.
+- **PWA:** `manifest.json` + `sw.js` (service worker) → installable + offline.
+- **Audio:** bell is synthesized via the Web Audio API (no files); voice via the
+  Web Speech API (`speechSynthesis`). Both free, no network.
+- **File map:**
+  | File | Role |
+  | --- | --- |
+  | `index.html` | Page structure |
+  | `css/styles.css` | All styling (dark, boxing-red, mobile-first) |
+  | `js/app.js` | Timer, bell, voice, settings controls |
+  | `js/combos.js` | **The combo playbook — edit this to change combos** |
+  | `manifest.json` | PWA install metadata |
+  | `sw.js` | Offline caching |
+  | `icons/icon.svg` | App icon |
+- **State/data:** currently in-memory only. Streaks/saved-settings (M4) will use
+  `localStorage` — still no server, still private to the device.
+- **When we might need a backend:** only for cross-device accounts, real
+  analytics, or cloud voice. Deliberately avoided until a feature truly requires
+  it.
+
+---
+
+## 9. Decision log
+
+Choices made and *why*, so we don't relitigate them.
+
+- **Web app, not a native iOS/Android app** — a beginner-friendly path that still
+  installs like an app (PWA) and works everywhere instantly; native means
+  Swift/Kotlin, dev accounts, and store reviews — a wall before anything works.
+- **Vanilla JS, no framework** — readable and unbreakable for a first project;
+  add tooling only if a feature demands it.
+- **Members + retention as the target, not coaches** — only the founder struggles
+  to invent combos, so coach tools are low value; retention is where business
+  value lives.
+- **No accounts/database/payments in v1** — ship the smallest usable thing; add
+  infrastructure only when usage justifies it.
+- **Pace = the gap *after* a callout finishes** — so the voice never talks over
+  itself and pace changes apply live (fixed the pace/voice mismatch).
+- **Name: "Combify," branded "by Boxing With Bakr"** — product-sounding, not a
+  school project; still tied to the gym.
+
+---
+
+## 10. Risks & open questions
+
+- **Voice quality on weak devices** → mitigate with recorded clips (6.1).
+- **Nobody uses it** (the core risk) → mitigate by validating with Bakr + members
+  at M1 *before* building M3/M4.
+- **Breakdown animation is a time sink** → mitigate with the PoC-first plan (6.3).
+- **iOS audio quirks** (bell vs. background music, autoplay rules) → needs
+  real-device testing.
+- **Network-restricted build environment** → may block GitHub; have a
+  run-locally fallback ready.
+- **Founder is on vacation / limited device access** → keep momentum on things
+  that don't need the gym; batch the Bakr-dependent items for when he's back.
+
+---
+
+## 11. Glossary
+
+- **Boxing numbering** (this app): 1 jab · 2 cross · 3 lead hook · 4 rear hook ·
+  5 lead uppercut · 6 rear uppercut · **7 & 8 = TBD, confirm with Bakr** (often
+  body hooks or overhands). Defense/movement: **slip** (dip under a punch),
+  **roll** (weave under), **block**, **pivot** (turn on the lead foot).
+- **Combo** — an ordered list of moves, e.g. `1-2-slip-2`.
+- **Round / work / rest** — a work period (throwing) followed by a rest period,
+  repeated for N rounds, bookended by bells.
+- **PWA** — Progressive Web App; a website that can be installed to the home
+  screen and run offline like a native app.
+- **TTS** — text-to-speech; the browser reading text aloud (the current voice).
+
+---
+
+## 12. Parking lot (uncommitted ideas)
+
+Captured so they're not lost; not planned yet.
+
+- Southpaw / orthodox mirroring for combos and animations
+- Body-vs-head shot distinction in the numbering
+- Feints, footwork (step in/out, angles), level changes, catch/parry as callable
+  moves
+- Custom combo builder (users/coaches craft and save their own)
+- "Freestyle" mode — pure timer, no combos
+- Difficulty that ramps within a session (harder each round)
+- Multi-gym / white-label version other coaches could brand
+- Leaderboards or challenges between members
+
+---
+
+## 13. Changelog
+
+- **2026-07-22** — Voice decided: AI clips ("dawg" from VoiceBox). Built the
+  clip-playback + chaining system with TTS fallback; added `audio/README.md`
+  with the 12-file list. Awaiting the generated clips.
+- **2026-07-22** — Expanded this roadmap into a full planning document.
+- **2026-07-21** — v1 built: timer + combo caller; app-like swipe/stepper
+  settings; natural-voice selection; pace synced to voice; punches 7 & 8 +
+  real difficulty scaling; collapsible "More options"; PWA + offline. Live
+  preview published as a Claude Artifact. Not yet on GitHub.
