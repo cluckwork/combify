@@ -143,6 +143,14 @@ function preloadClips() {
 }
 preloadClips();
 
+// The "Combo pace" setting previously only controlled the gap AFTER a full
+// combo finishes — it had no effect on how quickly the words WITHIN a combo
+// were called, so a long advanced combo took just as long to speak at "Fast"
+// as at "Relaxed." Derive a small inter-word gap from the same pace value so
+// one setting now governs both: faster pace = quicker cadence AND shorter
+// gap between combos.
+const getWordGap = () => Math.max(40, Math.min(300, getPace() * 0.09));
+
 // Play a combo's clips one after another, then call onDone().
 function playClips(keys, onDone) {
   let i = 0;
@@ -153,7 +161,10 @@ function playClips(keys, onDone) {
     if (!src) { playNext(); return; }
     const node = src.cloneNode();
     voice.current = node;
-    node.onended = playNext;
+    node.onended = () => {
+      if (!state.running || state.phase !== "work") { onDone(); return; }
+      setTimeout(playNext, getWordGap());
+    };
     node.onerror = playNext;
     const p = node.play();
     if (p && p.catch) p.catch(() => playNext());
