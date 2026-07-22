@@ -132,16 +132,34 @@ function preloadClips() {
 }
 preloadClips();
 
-// Play a combo's clips one after another, then call onDone().
+// iOS/Safari only allows an <audio> element to play without a fresh tap once
+// it has *already* played inside a real user gesture. Combos call clips in a
+// chain (each one started from the previous one's "ended" event, not a tap),
+// so every cached clip needs to be "unlocked" once, up front, inside the
+// Start button's own click handler.
+function unlockClips() {
+  CLIP_KEYS.forEach((key) => {
+    const a = clipCache[key];
+    if (!a) return;
+    const p = a.play();
+    if (p && p.catch) p.catch(() => {});
+    a.pause();
+    a.currentTime = 0;
+  });
+}
+
+// Play a combo's clips one after another, then call onDone(). Reuses the same
+// cached <audio> element per word (rather than cloning a fresh one each time)
+// since only the unlocked originals are guaranteed to keep playing on iOS.
 function playClips(keys, onDone) {
   let i = 0;
   const playNext = () => {
     voice.current = null;
     if (!state.running || state.phase !== "work" || i >= keys.length) { onDone(); return; }
-    const src = clipCache[keys[i++]];
-    if (!src) { playNext(); return; }
-    const node = src.cloneNode();
+    const node = clipCache[keys[i++]];
+    if (!node) { playNext(); return; }
     voice.current = node;
+    node.currentTime = 0;
     node.onended = playNext;
     node.onerror = playNext;
     const p = node.play();
@@ -240,6 +258,7 @@ function tick() {
 function start() {
   audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") audioCtx.resume();
+  unlockClips();
   state.running = true; state.currentRound = 1;
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
   enterWork(); state.tickTimer = setInterval(tick, 1000);
