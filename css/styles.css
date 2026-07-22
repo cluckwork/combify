@@ -186,5 +186,13 @@ body {
 .switch input:checked + .switch__track::after { transform: translateX(21px); }
 .switch input:focus-visible + .switch__track { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Collapsible "More options" — keeps the fine-tuning out of the way */
+.more { border-top: 1px solid #232833; margin-top: 2px; }
+.more > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 12px 2px 4px; color: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: .3px; }
+.more > summary::-webkit-details-marker { display: none; }
+.more > summary::after { content: "\2304"; font-size: 18px; line-height: 1; transition: transform .2s; }
+.more[open] > summary::after { transform: rotate(180deg); }
+.more__body { display: grid; gap: 16px; padding-top: 12px; }
+
 .foot { color: var(--muted); font-size: 13px; text-align: center; line-height: 1.5; }
 .foot strong { color: var(--text); }

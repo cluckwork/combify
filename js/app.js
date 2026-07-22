@@ -83,7 +83,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, tickTimer: null, comboTimer: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, tickTimer: null, comboTimer: null, comboFallback: null };
 
 // ---------- Bell: a synthesized tone (no audio files needed) ----------
 let audioCtx = null;
@@ -124,14 +124,22 @@ if ("speechSynthesis" in window) {
   window.speechSynthesis.onvoiceschanged = pickVoice; // voices load async
 }
 
-function say(text) {
-  if (!el.voiceOn.checked || !("speechSynthesis" in window)) return;
+// Speak a combo, then call onDone() when it finishes — so the NEXT combo waits
+// for this one to finish and then applies the pace gap. This keeps the callout
+// in sync with the pace setting instead of talking over itself.
+function speakCombo(text, onDone) {
+  if (!el.voiceOn.checked || !("speechSynthesis" in window)) { onDone(); return; }
   const u = new SpeechSynthesisUtterance(text);
   if (chosenVoice) u.voice = chosenVoice;
   u.rate = 1.0;
   u.pitch = 1.0;
+  let done = false;
+  const finish = () => { if (done) return; done = true; clearTimeout(state.comboFallback); onDone(); };
+  u.onend = finish;
+  u.onerror = finish;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
+  state.comboFallback = setTimeout(finish, 10000); // safety if onend never fires
 }
 
 // ---------- Helpers ----------
@@ -144,9 +152,22 @@ function render() {
 }
 
 // ---------- Combo calling (only during work) ----------
-function callCombo() { const c = randomCombo(getLevel()); el.combo.textContent = comboToText(c); say(comboToSpeech(c)); }
-function startComboLoop() { callCombo(); state.comboTimer = setInterval(callCombo, getPace()); }
-function stopComboLoop() { clearInterval(state.comboTimer); state.comboTimer = null; }
+function nextCombo() {
+  if (!state.running || state.phase !== "work") return;
+  const combo = randomCombo(getLevel());
+  el.combo.textContent = comboToText(combo);
+  speakCombo(comboToSpeech(combo), () => {
+    if (!state.running || state.phase !== "work") return;
+    state.comboTimer = setTimeout(nextCombo, getPace()); // pace read fresh each time
+  });
+}
+function startComboLoop() { nextCombo(); }
+function stopComboLoop() {
+  clearTimeout(state.comboTimer);
+  clearTimeout(state.comboFallback);
+  state.comboTimer = null;
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+}
 
 // ---------- Phase changes ----------
 function enterWork() { state.phase = "work"; state.secondsLeft = getWork(); bell(1); render(); startComboLoop(); }

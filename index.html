@@ -42,8 +42,6 @@
 
     <!-- Settings -->
     <section class="settings" id="settings">
-      <p class="settings__title">Settings</p>
-
       <div class="field field--stack">
         <span class="field__label">Level</span>
         <div class="seg" id="level" data-value="intermediate" role="radiogroup" aria-label="Level" tabindex="0">
@@ -51,16 +49,6 @@
           <button class="seg__opt" data-value="beginner">Beginner</button>
           <button class="seg__opt" data-value="intermediate">Intermediate</button>
           <button class="seg__opt" data-value="advanced">Advanced</button>
-        </div>
-      </div>
-
-      <div class="field field--stack">
-        <span class="field__label">Combo pace</span>
-        <div class="seg" id="pace" data-value="4000" role="radiogroup" aria-label="Combo pace" tabindex="0">
-          <span class="seg__thumb"></span>
-          <button class="seg__opt" data-value="6000">Relaxed</button>
-          <button class="seg__opt" data-value="4000">Steady</button>
-          <button class="seg__opt" data-value="2500">Fast</button>
         </div>
       </div>
 
@@ -91,13 +79,28 @@
         </div>
       </div>
 
-      <div class="field">
-        <span>Call combos out loud</span>
-        <label class="switch">
-          <input type="checkbox" id="voiceOn" checked />
-          <span class="switch__track"></span>
-        </label>
-      </div>
+      <details class="more">
+        <summary>More options</summary>
+        <div class="more__body">
+          <div class="field field--stack">
+            <span class="field__label">Combo pace</span>
+            <div class="seg" id="pace" data-value="1500" role="radiogroup" aria-label="Combo pace" tabindex="0">
+              <span class="seg__thumb"></span>
+              <button class="seg__opt" data-value="3000">Relaxed</button>
+              <button class="seg__opt" data-value="1500">Steady</button>
+              <button class="seg__opt" data-value="500">Fast</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span>Call combos out loud</span>
+            <label class="switch">
+              <input type="checkbox" id="voiceOn" checked />
+              <span class="switch__track"></span>
+            </label>
+          </div>
+        </div>
+      </details>
     </section>
 
     <footer class="foot">

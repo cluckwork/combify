@@ -12,6 +12,8 @@ export const MOVES = {
   "4": { label: "4", say: "four" },
   "5": { label: "5", say: "five" },
   "6": { label: "6", say: "six" },
+  "7": { label: "7", say: "seven" },
+  "8": { label: "8", say: "eight" },
   "slip": { label: "slip", say: "slip" },
   "roll": { label: "roll", say: "roll" },
   "block": { label: "block", say: "block" },
@@ -20,6 +22,9 @@ export const MOVES = {
 
 // Combos grouped by level. Each combo is a list of move keys from MOVES above.
 // Swap these for Bakr's actual combos whenever you're ready.
+//   beginner     — short, punches only (2-3 moves)
+//   intermediate — longer, mixes in slips/rolls and higher numbers (4-6 moves)
+//   advanced     — long, heavy defense + pivots + body shots (6-8 moves)
 export const COMBOS = {
   beginner: [
     ["1", "2"],
@@ -28,21 +33,29 @@ export const COMBOS = {
     ["2", "3", "2"],
     ["1", "2", "5"],
     ["1", "6", "3"],
+    ["3", "4"],
+    ["2", "3", "2"],
   ],
   intermediate: [
     ["1", "2", "3", "4"],
-    ["1", "2", "slip", "2"],
     ["1", "2", "5", "2"],
-    ["1", "6", "3", "2"],
-    ["1", "2", "roll", "3"],
-    ["2", "3", "2", "1"],
+    ["1", "2", "slip", "2", "3"],
+    ["2", "3", "2", "roll", "3"],
+    ["1", "6", "3", "2", "4"],
+    ["1", "2", "7", "8"],
+    ["1", "1", "2", "5", "2"],
+    ["1", "2", "slip", "2", "5", "2"],
+    ["3", "4", "5", "6"],
   ],
   advanced: [
-    ["1", "2", "3", "2", "slip", "2"],
-    ["1", "1", "2", "5", "4", "3"],
-    ["2", "3", "2", "roll", "3", "6"],
-    ["1", "2", "slip", "2", "3", "4"],
-    ["1", "6", "3", "2", "pivot"],
+    ["1", "2", "slip", "2", "3", "4", "roll", "2"],
+    ["1", "1", "2", "5", "4", "3", "2"],
+    ["2", "3", "2", "roll", "3", "6", "pivot"],
+    ["1", "2", "5", "2", "slip", "6", "3", "4"],
+    ["1", "6", "3", "2", "block", "2", "7", "8"],
+    ["1", "2", "3", "2", "pivot", "1", "2", "3"],
+    ["1", "2", "7", "8", "5", "2", "slip", "2"],
+    ["3", "4", "5", "6", "roll", "2", "3"],
   ],
 };
 
