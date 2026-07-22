@@ -42,45 +42,62 @@
 
     <!-- Settings -->
     <section class="settings" id="settings">
-      <h2 class="settings__title">Settings</h2>
+      <p class="settings__title">Settings</p>
 
-      <label class="field">
-        <span>Level</span>
-        <select id="level">
-          <option value="beginner">Beginner</option>
-          <option value="intermediate" selected>Intermediate</option>
-          <option value="advanced">Advanced</option>
-        </select>
-      </label>
+      <div class="field field--stack">
+        <span class="field__label">Level</span>
+        <div class="seg" id="level" data-value="intermediate" role="radiogroup" aria-label="Level" tabindex="0">
+          <span class="seg__thumb"></span>
+          <button class="seg__opt" data-value="beginner">Beginner</button>
+          <button class="seg__opt" data-value="intermediate">Intermediate</button>
+          <button class="seg__opt" data-value="advanced">Advanced</button>
+        </div>
+      </div>
 
-      <label class="field">
+      <div class="field field--stack">
+        <span class="field__label">Combo pace</span>
+        <div class="seg" id="pace" data-value="4000" role="radiogroup" aria-label="Combo pace" tabindex="0">
+          <span class="seg__thumb"></span>
+          <button class="seg__opt" data-value="6000">Relaxed</button>
+          <button class="seg__opt" data-value="4000">Steady</button>
+          <button class="seg__opt" data-value="2500">Fast</button>
+        </div>
+      </div>
+
+      <div class="field">
         <span>Rounds</span>
-        <input type="number" id="rounds" min="1" max="20" value="3" />
-      </label>
+        <div class="step" id="rounds" data-min="1" data-max="20" data-step="1" data-value="3">
+          <button class="step__btn" data-dir="-1" aria-label="Fewer rounds">&minus;</button>
+          <span class="step__val">3</span>
+          <button class="step__btn" data-dir="1" aria-label="More rounds">+</button>
+        </div>
+      </div>
 
-      <label class="field">
+      <div class="field">
         <span>Work (seconds)</span>
-        <input type="number" id="workSec" min="10" max="600" step="5" value="120" />
-      </label>
+        <div class="step" id="workSec" data-min="10" data-max="600" data-step="5" data-value="120">
+          <button class="step__btn" data-dir="-1" aria-label="Less work time">&minus;</button>
+          <span class="step__val">120</span>
+          <button class="step__btn" data-dir="1" aria-label="More work time">+</button>
+        </div>
+      </div>
 
-      <label class="field">
+      <div class="field">
         <span>Rest (seconds)</span>
-        <input type="number" id="restSec" min="5" max="300" step="5" value="30" />
-      </label>
+        <div class="step" id="restSec" data-min="5" data-max="300" data-step="5" data-value="30">
+          <button class="step__btn" data-dir="-1" aria-label="Less rest time">&minus;</button>
+          <span class="step__val">30</span>
+          <button class="step__btn" data-dir="1" aria-label="More rest time">+</button>
+        </div>
+      </div>
 
-      <label class="field">
-        <span>Combo pace</span>
-        <select id="pace">
-          <option value="6000">Relaxed</option>
-          <option value="4000" selected>Steady</option>
-          <option value="2500">Fast</option>
-        </select>
-      </label>
-
-      <label class="field field--switch">
+      <div class="field">
         <span>Call combos out loud</span>
-        <input type="checkbox" id="voiceOn" checked />
-      </label>
+        <label class="switch">
+          <input type="checkbox" id="voiceOn" checked />
+          <span class="switch__track"></span>
+        </label>
+      </div>
     </section>
 
     <footer class="foot">
