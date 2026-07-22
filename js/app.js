@@ -212,7 +212,7 @@ function playWarning() {
       const osc = ctx.createOscillator(), gain = ctx.createGain();
       osc.type = "triangle"; osc.frequency.setValueAtTime(1100, t);
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.35, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.65, t + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
       osc.connect(gain).connect(ctx.destination);
       osc.start(t); osc.stop(t + 0.15);
