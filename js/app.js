@@ -118,49 +118,45 @@ function bell(times = 1) {
 //   2. The browser's built-in TEXT-TO-SPEECH as a fallback, used automatically
 //      when the clips aren't present (e.g. before you've added them).
 
-// -- Clip playback --
-// Uses Web Audio API buffers (same engine as the bell) instead of <audio>
-// elements. This sidesteps <audio>-specific autoplay/reuse quirks entirely:
-// once the shared AudioContext is resumed by a real tap (see start()), any
-// buffer can be started from it at any later point — timers, chained
-// callbacks, doesn't matter — with no per-element gesture requirement.
+// -- Clip playback (HTMLAudioElement) --
+// One cached <audio> per word; each combo clones a fresh element to play so
+// repeated/rapid words never fight over one element's state. This is the
+// original approach that worked — its only past failure was silent source
+// files, now fixed. (A reuse-with-unlock variant and a Web Audio variant were
+// both tried and broke playback, so we're back to this.)
 const CLIP_DIR = "audio/";
 const CLIP_EXT = ".mp3"; // match whatever your voice tool exports
 const CLIP_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "slip", "roll", "block", "pivot"];
-const clipBuffers = {};
+const clipCache = {};
 const voice = { useClips: false, current: null };
 
-async function loadClips() {
-  const ctx = getAudioCtx();
-  try {
-    await Promise.all(CLIP_KEYS.map(async (key) => {
-      const res = await fetch(CLIP_DIR + key + CLIP_EXT);
-      if (!res.ok) throw new Error("missing clip: " + key);
-      const bytes = await res.arrayBuffer();
-      clipBuffers[key] = await ctx.decodeAudioData(bytes);
-    }));
-    voice.useClips = true;
-  } catch (e) {
-    voice.useClips = false; // clips missing or failed to decode — TTS fallback below
-  }
+function preloadClips() {
+  CLIP_KEYS.forEach((key) => {
+    const a = new Audio(CLIP_DIR + key + CLIP_EXT);
+    a.preload = "auto";
+    clipCache[key] = a;
+  });
+  // If the first clip loads, assume the set is present and use clips.
+  const probe = clipCache["1"];
+  probe.addEventListener("canplaythrough", () => { voice.useClips = true; }, { once: true });
+  probe.addEventListener("error", () => { voice.useClips = false; }, { once: true });
 }
-loadClips();
+preloadClips();
 
 // Play a combo's clips one after another, then call onDone().
 function playClips(keys, onDone) {
-  const ctx = getAudioCtx();
   let i = 0;
   const playNext = () => {
     voice.current = null;
     if (!state.running || state.phase !== "work" || i >= keys.length) { onDone(); return; }
-    const buf = clipBuffers[keys[i++]];
-    if (!buf) { playNext(); return; }
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-    src.onended = playNext;
-    voice.current = src;
-    src.start(0);
+    const src = clipCache[keys[i++]];
+    if (!src) { playNext(); return; }
+    const node = src.cloneNode();
+    voice.current = node;
+    node.onended = playNext;
+    node.onerror = playNext;
+    const p = node.play();
+    if (p && p.catch) p.catch(() => playNext());
   };
   playNext();
 }
@@ -231,7 +227,7 @@ function stopComboLoop() {
   clearTimeout(state.comboFallback);
   state.comboTimer = null;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
-  if (voice.current) { try { voice.current.stop(); } catch (e) {} voice.current = null; }
+  if (voice.current) { try { voice.current.pause(); } catch (e) {} voice.current = null; }
 }
 
 // ---------- Phase changes ----------
