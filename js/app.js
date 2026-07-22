@@ -92,8 +92,23 @@ function getAudioCtx() {
   return audioCtx;
 }
 
-// ---------- Bell: a synthesized tone (no audio files needed) ----------
-function bell(times = 1) {
+// ---------- Bell: a real recorded ring bell, falling back to a synth tone ----------
+// Same pattern as the voice clips: prefer a real sample (audio/sfx/bell.mp3),
+// fall back to a synthesized tone if it's missing so the timer never breaks.
+const SFX_DIR = "audio/sfx/";
+const sfxCache = {};
+const sfx = { useSamples: false };
+function preloadSfx() {
+  const a = new Audio(SFX_DIR + "bell.mp3");
+  a.preload = "auto";
+  sfxCache.bell = a;
+  a.addEventListener("canplaythrough", () => { sfx.useSamples = true; }, { once: true });
+  a.addEventListener("error", () => { sfx.useSamples = false; }, { once: true });
+}
+preloadSfx();
+
+// Synthesized fallback tone (the original bell sound).
+function synthBell(times = 1) {
   try {
     audioCtx = getAudioCtx();
     for (let i = 0; i < times; i++) {
@@ -107,6 +122,54 @@ function bell(times = 1) {
       osc.start(t); osc.stop(t + 0.26);
     }
   } catch (e) { /* audio unavailable — timer still works */ }
+}
+
+// Ring the real bell sample `times` in a row (1 = round start, 3 = session over).
+function ringBell(times = 1) {
+  if (!sfx.useSamples) { synthBell(times); return; }
+  const gap = 650; // ms between successive strikes — a natural "ding-ding" rhythm
+  for (let i = 0; i < times; i++) {
+    setTimeout(() => {
+      const src = sfxCache.bell;
+      if (!src) return;
+      const node = src.cloneNode();
+      const p = node.play();
+      if (p && p.catch) p.catch(() => {});
+    }, i * gap);
+  }
+}
+
+// Short dry tick for the pre-round "3, 2, 1" countdown — deliberately NOT
+// bell-like, so it can never be mistaken for "go."
+function playTick() {
+  try {
+    const ctx = getAudioCtx();
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = "square"; osc.frequency.setValueAtTime(1500, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.25, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t); osc.stop(t + 0.07);
+  } catch (e) {}
+}
+
+// Two-beep "10 seconds left" cue — distinct from both the tick and the bell.
+function playWarning() {
+  try {
+    const ctx = getAudioCtx();
+    for (let i = 0; i < 2; i++) {
+      const t = ctx.currentTime + i * 0.18;
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = "triangle"; osc.frequency.setValueAtTime(1100, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.35, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.15);
+    }
+  } catch (e) {}
 }
 
 // ---------- Voice ----------
@@ -216,10 +279,10 @@ function speakCombo(combo, onDone) {
 // ---------- Helpers ----------
 const format = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 function render() {
-  el.clock.textContent = format(state.secondsLeft);
+  el.clock.textContent = state.phase === "countdown" ? String(state.secondsLeft) : format(state.secondsLeft);
   el.stage.dataset.phase = state.phase;
-  el.phase.textContent = state.phase === "work" ? "Work" : state.phase === "rest" ? "Rest" : state.phase === "done" ? "Done" : "Ready";
-  el.round.textContent = `Round ${state.currentRound} / ${getRounds()}`;
+  el.phase.textContent = state.phase === "work" ? "Work" : state.phase === "rest" ? "Rest" : state.phase === "done" ? "Done" : state.phase === "countdown" ? "Get Ready" : "Ready";
+  el.round.textContent = state.phase === "countdown" ? `Round 1 / ${getRounds()}` : `Round ${state.currentRound} / ${getRounds()}`;
 }
 
 // ---------- Combo calling (only during work) ----------
@@ -242,13 +305,24 @@ function stopComboLoop() {
 }
 
 // ---------- Phase changes ----------
-function enterWork() { state.phase = "work"; state.secondsLeft = getWork(); bell(1); render(); startComboLoop(); }
-function enterRest() { state.phase = "rest"; state.secondsLeft = getRest(); bell(2); stopComboLoop(); el.combo.textContent = "Rest"; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
-function finish() { state.phase = "done"; state.running = false; stopComboLoop(); clearInterval(state.tickTimer); bell(3); el.combo.textContent = "Session complete — nice work."; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); render(); }
+function enterWork() { state.phase = "work"; state.secondsLeft = getWork(); state.warned10 = false; ringBell(1); render(); startComboLoop(); }
+function enterRest() { state.phase = "rest"; state.secondsLeft = getRest(); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
+function finish() { state.phase = "done"; state.running = false; stopComboLoop(); clearInterval(state.tickTimer); ringBell(3); el.combo.textContent = "Session complete — nice work."; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); render(); }
 
 // ---------- The one-second heartbeat ----------
 function tick() {
+  if (state.phase === "countdown") {
+    state.secondsLeft -= 1;
+    if (state.secondsLeft > 0) { playTick(); render(); return; }
+    state.currentRound = 1;
+    enterWork();
+    return;
+  }
   state.secondsLeft -= 1;
+  if (state.phase === "work" && !state.warned10 && state.secondsLeft === 10 && getWork() > 10) {
+    playWarning();
+    state.warned10 = true;
+  }
   if (state.secondsLeft <= 0) {
     if (state.phase === "work") {
       if (state.currentRound >= getRounds()) { finish(); return; }
@@ -262,9 +336,12 @@ function tick() {
 function start() {
   audioCtx = getAudioCtx();
   if (audioCtx.state === "suspended") audioCtx.resume();
-  state.running = true; state.currentRound = 1;
+  state.running = true;
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
-  enterWork(); state.tickTimer = setInterval(tick, 1000);
+  state.phase = "countdown"; state.secondsLeft = 3;
+  el.combo.textContent = "Get ready...";
+  playTick(); render();
+  state.tickTimer = setInterval(tick, 1000);
 }
 function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); }
 function resume() { state.running = true; el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); }
