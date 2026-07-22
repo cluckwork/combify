@@ -105,16 +105,16 @@ function bell(times = 1) {
 
 // ---------- Voice ----------
 // The app calls combos two ways, in order of preference:
-//   1. Audio CLIPS in the /audio folder — one short file per move (audio/1.mp3,
-//      audio/slip.mp3, ...). Generate these once in your voice tool (the "dawg"
-//      voice from VoiceBox) and the app chains them into any combo. This is the
-//      good-sounding path. See audio/README.md for the exact file list.
+//   1. Audio CLIPS in the /audio folder — one short file per move (audio/1.wav,
+//      audio/slip.wav, ...), generated with the "dawg" voice from VoiceBox.
+//      The app chains them into any combo. This is the good-sounding path.
+//      See audio/README.md for the exact file list.
 //   2. The browser's built-in TEXT-TO-SPEECH as a fallback, used automatically
 //      when the clips aren't present (e.g. before you've added them).
 
 // -- Clip playback --
 const CLIP_DIR = "audio/";
-const CLIP_EXT = ".mp3"; // match whatever your voice tool exports (.mp3 or .wav)
+const CLIP_EXT = ".wav";
 const CLIP_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "slip", "roll", "block", "pivot"];
 const clipCache = {};
 const voice = { useClips: false, current: null };

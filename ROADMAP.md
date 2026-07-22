@@ -151,14 +151,14 @@ These are blockers I can't clear for you, and they're high-leverage:
   - [x] Decide the approach (AI clips, "dawg")
   - [x] Build clip playback + chaining + TTS fallback (`js/app.js`)
   - [x] Document the exact 12-file list (`audio/README.md`)
-  - [ ] **Founder:** generate the 12 "dawg" clips in VoiceBox, name them
-        `1.mp3`…`pivot.mp3`, drop into `audio/`
+  - [x] **Founder:** generate the 12 "dawg" clips in VoiceBox, drop into `audio/`
+        (delivered as `.wav`; `CLIP_EXT` updated to match)
   - [ ] Test on a real phone; trim clips tight if chaining sounds draggy
   - [ ] (Optional) let the preview demo the good voice by embedding clips as
         data-URIs
 - **Done when:** combos are called in the "dawg" voice, tight and in sync with
   pace, on a normal phone.
-- **Effort:** remaining = **S** (just generating + dropping in files)
+- **Effort:** remaining = **S** (real-device listening test)
 - **Open questions:** if a word chains awkwardly, we may later add a few
   whole-combo clips for common combos — not needed for now.
 
@@ -368,6 +368,10 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-22** — Added the 12 "dawg" voice clips (`.wav`) to `audio/`; app now
+  calls combos in the real AI voice instead of TTS. Files transferred from the
+  founder's Mac via a terminal upload (tmpfiles.org) since this environment has
+  no direct filesystem access to his machine.
 - **2026-07-22** — Voice decided: AI clips ("dawg" from VoiceBox). Built the
   clip-playback + chaining system with TTS fallback; added `audio/README.md`
   with the 12-file list. Awaiting the generated clips.

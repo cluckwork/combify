@@ -6,23 +6,23 @@ the app chains them into any combo automatically.
 
 ## What to add
 
-Generate these **12 clips** in your voice tool (the "dawg" voice from VoiceBox),
-one short word each, and drop them in this folder with these **exact names**:
+Generated with the "dawg" voice from VoiceBox, one short word each, named with
+these **exact names** (already in place as of 2026-07-22):
 
 | Say this word | File name |
 | --- | --- |
-| "one"   | `1.mp3` |
-| "two"   | `2.mp3` |
-| "three" | `3.mp3` |
-| "four"  | `4.mp3` |
-| "five"  | `5.mp3` |
-| "six"   | `6.mp3` |
-| "seven" | `7.mp3` |
-| "eight" | `8.mp3` |
-| "slip"  | `slip.mp3` |
-| "roll"  | `roll.mp3` |
-| "block" | `block.mp3` |
-| "pivot" | `pivot.mp3` |
+| "one"   | `1.wav` |
+| "two"   | `2.wav` |
+| "three" | `3.wav` |
+| "four"  | `4.wav` |
+| "five"  | `5.wav` |
+| "six"   | `6.wav` |
+| "seven" | `7.wav` |
+| "eight" | `8.wav` |
+| "slip"  | `slip.wav` |
+| "roll"  | `roll.wav` |
+| "block" | `block.wav` |
+| "pivot" | `pivot.wav` |
 
 That's it — 12 files, made once. They cover every combo the app will ever call.
 
@@ -32,8 +32,8 @@ That's it — 12 files, made once. They cover every combo the app will ever call
   drag. Boxing callouts are punchy ("one! two! slip!"), which is exactly how
   chained clips sound best.
 - Say each word on its own, at a consistent volume and energy.
-- **`.mp3`** is expected. If your tool only exports `.wav`, either convert to
-  mp3, or change `CLIP_EXT` in `js/app.js` from `".mp3"` to `".wav"`.
+- **`.wav`** is what `js/app.js` expects (`CLIP_EXT`). If you regenerate clips in
+  a different format, update `CLIP_EXT` to match.
 
 ## How it works
 
