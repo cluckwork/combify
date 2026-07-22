@@ -158,14 +158,16 @@ These are blockers I can't clear for you, and they're high-leverage:
   - [x] Decide the approach (AI clips) and try providers
   - [x] Build clip playback + chaining + TTS fallback (`js/app.js`)
   - [x] Document the exact 12-file list (`audio/README.md`)
-  - [ ] **Founder:** generate the 12 clips in ElevenLabs, drop into `audio/`
-        (expects `.mp3`; update `CLIP_EXT` if a different format is exported)
-  - [ ] Test on a real phone; trim clips tight if chaining sounds draggy
-  - [ ] (Optional) let the preview demo the good voice by embedding clips as
-        data-URIs
+  - [x] **Founder:** generate the 12 words in ElevenLabs — recorded as ONE
+        continuous take (more natural flow) instead of 12 separate takes, with
+        `<break>` tags between words so it could still be split programmatically
+  - [x] Split the single recording into 12 clips (detected silence gaps, added
+        small padding + micro-fades to avoid clicks) and dropped into `audio/`
+  - [ ] Test on a real phone; confirm clips chain cleanly
+  - [x] Preview updated to embed the real clips (data-URIs) for demoing
 - **Done when:** combos are called in the ElevenLabs voice, tight and in sync
   with pace, on a normal phone.
-- **Effort:** remaining = **S** (just generating + dropping in files)
+- **Effort:** remaining = **S** (real-device listening test)
 - **Idea parked:** cycle between several tonal takes of the same word (proven
   feasible with edge-tts in a live demo) to avoid a looped-clip feel. Revisit
   once the base ElevenLabs voice is in and confirmed good.
@@ -378,6 +380,12 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-22** — ElevenLabs clips are live. The founder recorded all 12 words
+  as one continuous natural take (with `<break>` tags between words) instead of
+  12 separate recordings; split programmatically using detected silence gaps
+  with padding + micro-fades to avoid clicks. App and the shareable preview
+  both now call combos in the real ElevenLabs voice. Remaining: a real-phone
+  listening test.
 - **2026-07-22** — Voice provider switched to **ElevenLabs**. Reverted the
   VoiceBox "dawg" clips (didn't sound good enough) back to TTS-only, live-tested
   5 free Microsoft Edge neural voices and a tonal-variation concept (both proven
