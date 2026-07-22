@@ -107,11 +107,33 @@ function preloadSfx() {
 }
 preloadSfx();
 
+// A synthetic reverb "room" — an algorithmically generated impulse response
+// (exponentially decaying noise) fed through a ConvolverNode. This is what
+// gives the bell an actual reverberating tail (reflections), on top of the
+// tone's own long decay. Built once per AudioContext and reused.
+let reverbNode = null;
+function getReverb(ctx) {
+  if (reverbNode) return reverbNode;
+  const duration = 2.2, decayPower = 2.5;
+  const length = Math.floor(ctx.sampleRate * duration);
+  const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = impulse.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decayPower);
+    }
+  }
+  reverbNode = ctx.createConvolver();
+  reverbNode.buffer = impulse;
+  return reverbNode;
+}
+
 // Synthesized fallback tone — an FM "bell" (carrier + inharmonic modulator,
 // the classic Chowning technique), not a plain sine wave. The modulation
 // depth decays fast (bright clang settling into a purer ring) while the
 // output decays slow (long natural ring-out), which is what makes it read
-// as a struck metal bell instead of a beep.
+// as a struck metal bell instead of a beep. A parallel reverb send adds the
+// reflected "in a room" tail on top of the tone's own decay.
 function bellStrike(ctx, t) {
   const carrierFreq = 600;   // a bright, mid-pitched brass bell — not a tiny jingle-bell tinkle
   const modFreq = carrierFreq * 1.4; // inharmonic ratio is what makes it sound metallic, not musical
@@ -126,17 +148,22 @@ function bellStrike(ctx, t) {
 
   const modGain = ctx.createGain(); // modulation depth in Hz — starts wide (clang), narrows (settles)
   modGain.gain.setValueAtTime(carrierFreq * 3, t);
-  modGain.gain.exponentialRampToValueAtTime(carrierFreq * 0.15, t + 0.6);
+  modGain.gain.exponentialRampToValueAtTime(carrierFreq * 0.15, t + 0.8);
   modulator.connect(modGain).connect(carrier.frequency);
 
   const outGain = ctx.createGain(); // sharp strike, long ring-out
   outGain.gain.setValueAtTime(0.0001, t);
   outGain.gain.exponentialRampToValueAtTime(0.6, t + 0.008);
-  outGain.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
-  carrier.connect(outGain).connect(ctx.destination);
+  outGain.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
+  carrier.connect(outGain);
+  outGain.connect(ctx.destination); // dry signal
+
+  const wetGain = ctx.createGain(); // reverb send level
+  wetGain.gain.setValueAtTime(0.55, t);
+  outGain.connect(getReverb(ctx)).connect(wetGain).connect(ctx.destination);
 
   modulator.start(t); carrier.start(t);
-  modulator.stop(t + 1.35); carrier.stop(t + 1.35);
+  modulator.stop(t + 2.5); carrier.stop(t + 2.5);
 }
 function synthBell(times = 1) {
   try {
