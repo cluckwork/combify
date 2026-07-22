@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Combify — Boxing With Bakr</title>
+  <meta name="description" content="Combify: round timer and combo caller by Boxing With Bakr. Train anywhere." />
+
+  <!-- PWA: lets people "Add to Home Screen" so it opens like a real app -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f1115" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand__mark">C</span>
+        <span class="brand__name">Combify</span>
+      </div>
+      <span class="brand__tag">by Boxing With Bakr</span>
+    </header>
+
+    <!-- The big timer face -->
+    <main class="stage" id="stage">
+      <p class="phase" id="phase">Ready</p>
+      <p class="clock" id="clock">00:00</p>
+      <p class="round" id="round">Round 0 / 0</p>
+      <p class="combo" id="combo">Press start to begin</p>
+    </main>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn btn--primary" id="startBtn">Start</button>
+      <button class="btn" id="resetBtn">Reset</button>
+    </div>
+
+    <!-- Settings -->
+    <section class="settings" id="settings">
+      <h2 class="settings__title">Settings</h2>
+
+      <label class="field">
+        <span>Level</span>
+        <select id="level">
+          <option value="beginner">Beginner</option>
+          <option value="intermediate" selected>Intermediate</option>
+          <option value="advanced">Advanced</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Rounds</span>
+        <input type="number" id="rounds" min="1" max="20" value="3" />
+      </label>
+
+      <label class="field">
+        <span>Work (seconds)</span>
+        <input type="number" id="workSec" min="10" max="600" step="5" value="120" />
+      </label>
+
+      <label class="field">
+        <span>Rest (seconds)</span>
+        <input type="number" id="restSec" min="5" max="300" step="5" value="30" />
+      </label>
+
+      <label class="field">
+        <span>Combo pace</span>
+        <select id="pace">
+          <option value="6000">Relaxed</option>
+          <option value="4000" selected>Steady</option>
+          <option value="2500">Fast</option>
+        </select>
+      </label>
+
+      <label class="field field--switch">
+        <span>Call combos out loud</span>
+        <input type="checkbox" id="voiceOn" checked />
+      </label>
+    </section>
+
+    <footer class="foot">
+      <p>Tip: on your phone, tap <strong>Share → Add to Home Screen</strong> to use it like an app.</p>
+    </footer>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

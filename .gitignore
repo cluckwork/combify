@@ -1,0 +1,10 @@
+# macOS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Node (only if we add tools later)
+node_modules/
+npm-debug.log*
