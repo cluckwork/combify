@@ -107,20 +107,41 @@ function preloadSfx() {
 }
 preloadSfx();
 
-// Synthesized fallback tone (the original bell sound).
+// Synthesized fallback tone — an FM "bell" (carrier + inharmonic modulator,
+// the classic Chowning technique), not a plain sine wave. The modulation
+// depth decays fast (bright clang settling into a purer ring) while the
+// output decays slow (long natural ring-out), which is what makes it read
+// as a struck metal bell instead of a beep.
+function bellStrike(ctx, t) {
+  const carrierFreq = 600;   // a bright, mid-pitched brass bell — not a tiny jingle-bell tinkle
+  const modFreq = carrierFreq * 1.4; // inharmonic ratio is what makes it sound metallic, not musical
+
+  const carrier = ctx.createOscillator();
+  carrier.type = "sine";
+  carrier.frequency.setValueAtTime(carrierFreq, t);
+
+  const modulator = ctx.createOscillator();
+  modulator.type = "sine";
+  modulator.frequency.setValueAtTime(modFreq, t);
+
+  const modGain = ctx.createGain(); // modulation depth in Hz — starts wide (clang), narrows (settles)
+  modGain.gain.setValueAtTime(carrierFreq * 3, t);
+  modGain.gain.exponentialRampToValueAtTime(carrierFreq * 0.15, t + 0.6);
+  modulator.connect(modGain).connect(carrier.frequency);
+
+  const outGain = ctx.createGain(); // sharp strike, long ring-out
+  outGain.gain.setValueAtTime(0.0001, t);
+  outGain.gain.exponentialRampToValueAtTime(0.6, t + 0.008);
+  outGain.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+  carrier.connect(outGain).connect(ctx.destination);
+
+  modulator.start(t); carrier.start(t);
+  modulator.stop(t + 1.35); carrier.stop(t + 1.35);
+}
 function synthBell(times = 1) {
   try {
     audioCtx = getAudioCtx();
-    for (let i = 0; i < times; i++) {
-      const t = audioCtx.currentTime + i * 0.28;
-      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-      osc.type = "sine"; osc.frequency.setValueAtTime(880, t);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.5, t + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
-      osc.connect(gain).connect(audioCtx.destination);
-      osc.start(t); osc.stop(t + 0.26);
-    }
+    for (let i = 0; i < times; i++) bellStrike(audioCtx, audioCtx.currentTime + i * 0.65);
   } catch (e) { /* audio unavailable — timer still works */ }
 }
 
@@ -322,6 +343,11 @@ function tick() {
   if (state.phase === "work" && !state.warned10 && state.secondsLeft === 10 && getWork() > 10) {
     playWarning();
     state.warned10 = true;
+  }
+  // Repeat the same clapper cue for each of the final 3 seconds — a quick
+  // "wrap it up" flourish leading into the bell.
+  if (state.phase === "work" && state.secondsLeft >= 1 && state.secondsLeft <= 3) {
+    playWarning();
   }
   if (state.secondsLeft <= 0) {
     if (state.phase === "work") {
