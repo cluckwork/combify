@@ -97,12 +97,16 @@ function getAudioCtx() {
 // fall back to a synthesized tone if it's missing so the timer never breaks.
 const SFX_DIR = "audio/sfx/";
 const sfxCache = {};
-const sfx = { useSamples: false };
+// Assume the sample exists (it's committed to the repo) and only fall back
+// on an actual load error — mobile Safari often never fires "canplaythrough"
+// for preloaded audio (it defers full buffering on cellular/Low Power Mode),
+// so waiting for that event to flip this on left phones stuck on the
+// synth fallback detection forever.
+const sfx = { useSamples: true };
 function preloadSfx() {
   const a = new Audio(SFX_DIR + "bell.mp3");
   a.preload = "auto";
   sfxCache.bell = a;
-  a.addEventListener("canplaythrough", () => { sfx.useSamples = true; }, { once: true });
   a.addEventListener("error", () => { sfx.useSamples = false; }, { once: true });
 }
 preloadSfx();
@@ -178,9 +182,9 @@ function ringBell(times = 1) {
   const gap = 650; // ms between successive strikes — a natural "ding-ding" rhythm
   for (let i = 0; i < times; i++) {
     setTimeout(() => {
-      const src = sfxCache.bell;
-      if (!src) return;
-      const node = src.cloneNode();
+      const node = getPooledBell();
+      if (!node) return;
+      node.currentTime = 0;
       const p = node.play();
       if (p && p.catch) p.catch(() => {});
     }, i * gap);
@@ -239,20 +243,89 @@ const CLIP_DIR = "audio/";
 const CLIP_EXT = ".mp3"; // match whatever your voice tool exports
 const CLIP_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "slip", "roll", "block", "pivot"];
 const clipCache = {};
-const voice = { useClips: false, current: null };
+// Assume the clip set is present (it's committed to the repo) and only fall
+// back to TTS on an actual load error. Waiting for "canplaythrough" (the old
+// approach) left phones stuck: mobile Safari frequently never fires it for
+// preloaded audio, so useClips stayed false and every combo fell through to
+// browser text-to-speech — whose "onend" also frequently never fires on iOS,
+// so combos only advanced via the 10s safety timeout in speakCombo(). That's
+// the "silent + 10-20 seconds per combo" bug on phones.
+const voice = { useClips: true, current: null };
 
 function preloadClips() {
   CLIP_KEYS.forEach((key) => {
     const a = new Audio(CLIP_DIR + key + CLIP_EXT);
     a.preload = "auto";
     clipCache[key] = a;
+    a.addEventListener("error", () => { voice.useClips = false; }, { once: true });
   });
-  // If the first clip loads, assume the set is present and use clips.
-  const probe = clipCache["1"];
-  probe.addEventListener("canplaythrough", () => { voice.useClips = true; }, { once: true });
-  probe.addEventListener("error", () => { voice.useClips = false; }, { once: true });
 }
 preloadClips();
+
+// -- Mobile unlock pool --
+// iOS (and some Android WebViews) only allow an <audio> element to play
+// programmatically if THAT SPECIFIC element already had .play() called on it
+// from inside a real tap. Cloning a fresh element later (inside a setTimeout,
+// as combos are called during a round) makes a brand-new element that was
+// never touched by a tap, so iOS silently blocks it. Desktop has no such
+// restriction, which is why this only ever showed up on phones.
+// Fix: at Start-tap time, pre-create a small pool of clones per word (and for
+// the bell) and "prime" each one with a play()+pause() inside the gesture.
+// Playback later reuses those primed elements round-robin instead of cloning
+// fresh ones — same cloned-HTMLAudioElement architecture, just created (and
+// unlocked) at the right time.
+const UNLOCK_POOL_SIZE = 3;
+const clipPool = {};
+const bellPool = [];
+const poolIndex = {};
+let audioUnlocked = false;
+
+function primeElement(a) {
+  a.muted = true;
+  const p = a.play();
+  if (p && p.catch) p.catch(() => {});
+  a.pause();
+  try { a.currentTime = 0; } catch (e) {}
+  a.muted = false;
+}
+
+function unlockAudioForMobile() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  CLIP_KEYS.forEach((key) => {
+    const pool = [];
+    for (let i = 0; i < UNLOCK_POOL_SIZE; i++) {
+      const a = new Audio(CLIP_DIR + key + CLIP_EXT);
+      primeElement(a);
+      pool.push(a);
+    }
+    clipPool[key] = pool;
+  });
+  for (let i = 0; i < UNLOCK_POOL_SIZE; i++) {
+    const a = new Audio(SFX_DIR + "bell.mp3");
+    primeElement(a);
+    bellPool.push(a);
+  }
+}
+
+// Round-robin a primed element for `key`, falling back to a plain clone if
+// the pool isn't ready yet (e.g. voice toggled on before Start was tapped).
+function getPooledClip(key) {
+  const pool = clipPool[key];
+  if (!pool || !pool.length) {
+    const src = clipCache[key];
+    return src ? src.cloneNode() : null;
+  }
+  const i = (poolIndex[key] || 0) % pool.length;
+  poolIndex[key] = i + 1;
+  return pool[i];
+}
+function getPooledBell() {
+  if (!bellPool.length) return sfxCache.bell ? sfxCache.bell.cloneNode() : null;
+  const i = (poolIndex["__bell"] || 0) % bellPool.length;
+  poolIndex["__bell"] = i + 1;
+  return bellPool[i];
+}
 
 // The "Combo pace" setting previously only controlled the gap AFTER a full
 // combo finishes — it had no effect on how quickly the words WITHIN a combo
@@ -268,9 +341,9 @@ function playClips(keys, onDone) {
   const playNext = () => {
     voice.current = null;
     if (!state.running || state.phase !== "work" || i >= keys.length) { onDone(); return; }
-    const src = clipCache[keys[i++]];
-    if (!src) { playNext(); return; }
-    const node = src.cloneNode();
+    const node = getPooledClip(keys[i++]);
+    if (!node) { playNext(); return; }
+    node.currentTime = 0;
     voice.current = node;
     node.onended = () => {
       if (!state.running || state.phase !== "work") { onDone(); return; }
@@ -389,6 +462,7 @@ function tick() {
 function start() {
   audioCtx = getAudioCtx();
   if (audioCtx.state === "suspended") audioCtx.resume();
+  unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
   state.running = true;
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
   state.phase = "countdown"; state.secondsLeft = 3;
