@@ -207,10 +207,18 @@ export async function boot(cfg = {}) {
   // APP_JS lets us point the same suite at an older revision to confirm the
   // tests actually catch the bug they were written for.
   const appFile = process.env.APP_JS || path.join(REPO, "js/app.js");
-  const appSrc = fs.readFileSync(appFile, "utf8").replace("./combos.js", "./combos_t.mjs");
-  fs.writeFileSync(path.join(SCRATCH, "combos_t.mjs"), fs.readFileSync(path.join(REPO, "js/combos.js")));
+  // Copy every sibling module alongside the app copy so its relative imports
+  // resolve. package.json sets "type": "module", so plain .js files here load
+  // as ES modules and no import rewriting is needed.
+  for (const f of fs.readdirSync(path.join(REPO, "js"))) {
+    if (f.endsWith(".js") && f !== "app.js") {
+      fs.copyFileSync(path.join(REPO, "js", f), path.join(SCRATCH, f));
+    }
+  }
+  // Unique filename per boot so Node's module cache doesn't hand back the
+  // already-initialised app from a previous test.
   const appPath = path.join(SCRATCH, `app_t_${Date.now()}_${Math.random().toString(36).slice(2)}.mjs`);
-  fs.writeFileSync(appPath, appSrc);
+  fs.writeFileSync(appPath, fs.readFileSync(appFile));
   await import("file://" + appPath);
   fs.unlinkSync(appPath);
 

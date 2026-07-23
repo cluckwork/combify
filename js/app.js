@@ -1,6 +1,7 @@
 // app.js — the brain of the trainer: settings controls, timer, bell, and voice.
 
 import { randomCombo, comboToText, comboToSpeech } from "./combos.js";
+import { VERSION, RELEASED } from "./version.js";
 
 // ---------- Segmented control: tap a segment, or swipe across it ----------
 function initSeg(id) {
@@ -116,6 +117,13 @@ const el = {
   settingsReady = true;
 })();
 el.voiceOn.addEventListener("change", saveSettings);
+
+// Stamp the build into the About section so a phone showing an old version is
+// obvious — that's usually a cached copy, not a change that failed to deploy.
+(function showVersion() {
+  const slot = document.getElementById("appVersion");
+  if (slot) slot.textContent = `${VERSION} · ${RELEASED}`;
+})();
 
 // Read settings through the controls
 const getLevel = () => levelCtl.value;

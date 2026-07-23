@@ -1,9 +1,11 @@
 // sw.js — a tiny service worker so Combify loads fast and works offline
 // once it's been opened once.
-// Bump this on every deploy that must reach existing installs: the activate
-// handler deletes every cache that isn't the current name, so an old phone
-// throws away whatever it was holding instead of serving a stale app.
-const CACHE = "combify-v4";
+// Must stay in step with VERSION in js/version.js (tests enforce it). The
+// activate handler deletes every cache that isn't this name, so bumping the
+// version makes old installs throw away whatever they were holding instead of
+// serving a stale app. A service worker can't import ES modules, hence the
+// duplicated literal.
+const CACHE = "combify-v1.1.0";
 const ASSETS = [
   "./",
   "./index.html",

@@ -509,6 +509,32 @@ async function collectSpokenVsShown(app, ms) {
   app.restore();
 }
 
+// ------------------------------------------------------- 24. version stamping
+{
+  section("24. Version is shown and consistent everywhere");
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const url = await import("node:url");
+  const repo = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "..");
+  const read = (f) => fs.readFileSync(path.join(repo, f), "utf8");
+
+  const version = /VERSION\s*=\s*"([^"]+)"/.exec(read("js/version.js"))?.[1];
+  const released = /RELEASED\s*=\s*"([^"]+)"/.exec(read("js/version.js"))?.[1];
+  const cache = /CACHE\s*=\s*"combify-v([^"]+)"/.exec(read("sw.js"))?.[1];
+  const pkg = JSON.parse(read("package.json")).version;
+
+  check("version.js declares a version", !!version, "not found");
+  check("service worker cache matches the version", cache === version, `sw.js has ${cache}, version.js has ${version}`);
+  check("package.json matches the version", pkg === version, `package.json has ${pkg}, version.js has ${version}`);
+  check("release date looks like a date", /^\d{4}-\d{2}-\d{2}$/.test(released || ""), String(released));
+
+  const app = await boot({ duration: 0.6 });
+  const shown = app.doc.getElementById("appVersion")?.textContent || "";
+  check("version is rendered into the About section", shown.includes(version), `About shows "${shown}"`);
+  results.push(`     (showing "${shown}")`);
+  app.restore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);
