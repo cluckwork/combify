@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.8.1 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.8.2 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,25 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.8.2** — **Bells you can hear: sfx became real samples.**
+  The bell, countdown tick and 10-second warning were Web-Audio-synth only, and
+  iPhones MUTE Web Audio output when the ring/silent switch is on — while
+  HTMLAudioElement media (the voice clips) plays regardless. So on a phone set
+  to silent, the voice called combos and every bell and tick was dead silence:
+  "bells not working". The three cues are now rendered offline to
+  `audio/sfx/*.mp3` (same FM synthesis + a Schroeder approximation of the
+  reverb tail, loudness matched to the voice clips) and play through the same
+  primed-element pipeline as the voice, with the synth kept as a per-sound
+  fallback. Also found in the sweep: **no audio file was in the service-worker
+  precache** — an installed app opened offline ran the entire session in
+  silence (all 15 files now precached, test-enforced); and the bell pool of 2
+  couldn't hold the session-end "ding-ding-ding" (3 strikes 650ms apart on a
+  ~2.5s ring), so the third strike cut off the first — bell pool is now 3.
+  A play() rejection no longer disables a sample for the whole session.
+  Tests: new sections for sample-based sfx and for missing-sfx synth fallback;
+  spoken-vs-shown assertions now separate voice from sfx. 170 behaviour + 226
+  layout green; real-browser run confirms all three samples decode and a full
+  session plays 4 bell strikes through the media path.
 - **2026-07-23 — v1.8.1** — **Bulletproofed the audio.** Two reported symptoms,
   one shared root cause: `audioCtx.resume()` was called in exactly one place
   (inside `start()`), fire-and-forget. Because `resume()` is async and the first

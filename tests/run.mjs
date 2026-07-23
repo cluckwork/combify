@@ -329,11 +329,15 @@ async function countCombos(app, ms, step = 200) {
   app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
   app.click("startBtn");
   await app.clock.advance(1200);
+  // The first tick fires inside start() itself, before the sample's load event
+  // has run — so it MUST come from the synth, which is exactly the case that
+  // used to be lost to the suspended context.
   check("the first countdown tick is actually heard", app.synth.oscStarted > 0,
     `heard ${app.synth.oscStarted}, lost ${app.synth.lost}`);
   check("no sound was fired into a suspended context", app.synth.lost === 0, `${app.synth.lost} lost`);
   await app.clock.advance(3000);
-  check("the round-start bell is heard too", app.synth.oscStarted > 1, `${app.synth.oscStarted}`);
+  check("the round-start bell is heard too", (app.stats.byKey.bell || 0) >= 1 || app.synth.oscStarted > 1,
+    `bell samples ${app.stats.byKey.bell || 0}, oscillators ${app.synth.oscStarted}`);
   app.restore();
 }
 
@@ -344,7 +348,7 @@ async function countCombos(app, ms, step = 200) {
   app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 5);
   app.click("startBtn");
   await app.clock.advance(4000);
-  const before = app.synth.oscStarted;
+  const before = app.stats.audible.length;
   // The OS suspends the context. Nothing in the app used to notice, and every
   // tick, bell and warning was silent for the remainder of the session.
   app.synth.ctx.state = "suspended";
@@ -353,8 +357,8 @@ async function countCombos(app, ms, step = 200) {
   await app.clock.advance(500);
   check("coming back re-arms the audio context", app.synth.ctx.state === "running", app.synth.ctx.state);
   await app.clock.advance(52000); // run out the round: warning beeps + end bell
-  check("sound returns for the rest of the session", app.synth.oscStarted > before,
-    `${before} → ${app.synth.oscStarted}`);
+  check("sound returns for the rest of the session", app.stats.audible.length > before,
+    `audible ${before} → ${app.stats.audible.length}`);
   check("nothing was lost to the suspended context", app.synth.lost === 0, `${app.synth.lost} lost`);
   app.restore();
 }
@@ -368,12 +372,13 @@ async function countCombos(app, ms, step = 200) {
   await app.clock.advance(4000);
   app.click("startBtn");                    // pause
   app.synth.ctx.state = "suspended";        // ...and the OS pulls audio away
-  const before = app.synth.oscStarted;
+  const before = app.stats.audible.length;
   app.click("startBtn");                    // resume — a real user gesture
   await app.clock.advance(200);
   check("resuming re-arms the context", app.synth.ctx.state === "running", app.synth.ctx.state);
   await app.clock.advance(58000);
-  check("bells ring again after resuming", app.synth.oscStarted > before, `${before} → ${app.synth.oscStarted}`);
+  check("sound continues after resuming", app.stats.audible.length > before,
+    `audible ${before} → ${app.stats.audible.length}`);
   app.restore();
 }
 
@@ -404,7 +409,10 @@ async function countCombos(app, ms, step = 200) {
   app.set("rounds", 3); app.set("workSec", 20); app.set("restSec", 5);
   app.click("startBtn");
   await app.clock.advance(80000);
-  check("element count stays bounded (no leak per combo)", app.stats.created <= 40, `${app.stats.created} created`);
+  // Budget: 12 words × pool of 2, plus sfx pools (bell 3, tick 2, warning 2)
+  // and the initial preload elements. Fixed per session regardless of combo
+  // count — which is what "no leak per combo" means.
+  check("element count stays bounded (no leak per combo)", app.stats.created <= 56, `${app.stats.created} created`);
   results.push(`     (${app.stats.created} elements for a 3-round session)`);
   app.restore();
 }
@@ -561,23 +569,45 @@ async function countCombos(app, ms, step = 200) {
 
 // ---------------------------------------------------------------- 19. the bell
 {
-  section("19. Bell must ring even though audio/sfx/bell.mp3 doesn't exist");
-  // The sample was deleted deliberately (the synth FM bell replaced it). The
-  // app must therefore ring the SYNTH, not try to play a missing file.
+  section("19. Bell, tick and warning play as real samples");
+  // They ship as files and play through the media pipeline because Web Audio
+  // output is muted by the iPhone ring/silent switch while media elements are
+  // not — the synth-only bell was silent on any phone set to silent, which is
+  // most phones. The synth survives below as the fallback.
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
   app.click("startBtn");
-  const beforeRound = app.synth.oscStarted;
-  await app.clock.advance(4000);          // countdown ends → round 1 bell
-  const afterBell = app.synth.oscStarted;
-  check("something audible fires at round start", afterBell > beforeRound,
-    `oscillators started: ${beforeRound} → ${afterBell}`);
-  await app.clock.advance(25000);         // work ends → session-over bell (3 strikes)
-  check("session-end bell rings too", app.synth.oscStarted > afterBell + 2,
-    `${afterBell} → ${app.synth.oscStarted}`);
-  check("no attempt to play the missing sample",
-    !Object.keys(app.stats.byKey).includes("bell"),
-    `tried to play: ${JSON.stringify(app.stats.byKey)}`);
+  await app.clock.advance(4000);          // 3 countdown ticks, then round 1 bell
+  check("the countdown ticks play as samples", (app.stats.byKey.tick || 0) >= 2,
+    `tick plays: ${app.stats.byKey.tick || 0}`);
+  check("the round-start bell plays as a sample", (app.stats.byKey.bell || 0) >= 1,
+    `bell plays: ${app.stats.byKey.bell || 0}`);
+  const afterStart = app.stats.byKey.bell || 0;
+  await app.clock.advance(25000);         // 10s warning, then session-over bell x3
+  check("the 10-second warning plays as a sample", (app.stats.byKey.warning || 0) >= 1,
+    `warning plays: ${app.stats.byKey.warning || 0}`);
+  check("the session-end bell rings all three strikes", (app.stats.byKey.bell || 0) >= afterStart + 3,
+    `bell plays: ${afterStart} → ${app.stats.byKey.bell || 0}`);
+  // Exactly one synth sound is expected: the tick fired inside start() runs
+  // before the sample's load event, so it uses the fallback. Everything after
+  // must come from samples.
+  check("no synth needed once the samples are loaded", app.synth.oscStarted <= 1,
+    `${app.synth.oscStarted} oscillators`);
+  app.restore();
+}
+
+// ------------------------------------- 19b. sfx files missing → synth fallback
+{
+  section("19b. Missing sfx files fall back to the synth");
+  const app = await boot({ duration: 0.6, missingClips: ["bell", "tick", "warning"] });
+  app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(4000);
+  check("ticks and bell still sound via the synth", app.synth.oscStarted > 0,
+    `${app.synth.oscStarted} oscillators`);
+  await app.clock.advance(25000);
+  check("the session still ends with an audible bell", app.synth.oscStarted >= 4,
+    `${app.synth.oscStarted} oscillators`);
   app.restore();
 }
 
@@ -655,7 +685,7 @@ async function collectSpokenVsShown(app, ms) {
     // little (still far inside the >=500ms gap between combos) and compare
     // only as many words as this combo actually has.
     const LAG = 200;
-    const heard = app.stats.audible.filter((a) => a.t >= t - LAG && a.t < shown[k + 1].t - LAG)
+    const heard = app.stats.audible.filter((a) => a.voice && a.t >= t - LAG && a.t < shown[k + 1].t - LAG)
       .map((a) => a.key).slice(0, expected.length);
     rows.push({ expected, heard });
   }
@@ -667,7 +697,8 @@ async function collectSpokenVsShown(app, ms) {
   app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
   app.setSeg("pace", "1500"); app.setSeg("level", "intermediate");
   app.click("startBtn");
-  const before = app.stats.audible.length;
+  const voiceHeard = () => app.stats.audible.filter((a) => a.voice).length;
+  const before = voiceHeard();
   const rows = await collectSpokenVsShown(app, 45000);
   const bad = rows.filter((r) => r.expected.join(",") !== r.heard.join(","));
   check("normal playback speaks every word, in order",
@@ -676,7 +707,7 @@ async function collectSpokenVsShown(app, ms) {
   // Guards the opposite failure: an over-eager retry speaking words twice,
   // which is heard as clips cutting each other off and ragged timing.
   const wordsShown = rows.reduce((n, r) => n + r.expected.length, 0);
-  const wordsHeard = app.stats.audible.length - before;
+  const wordsHeard = voiceHeard() - before;
   check("no word is spoken twice (no spurious retries)",
     wordsHeard <= wordsShown + rows.length + 2,
     `${wordsShown} words shown but ${wordsHeard} clips played`);
@@ -737,6 +768,19 @@ async function collectSpokenVsShown(app, ms) {
   const modules = fs.readdirSync(path.join(repo, "js")).filter((f) => f.endsWith(".js"));
   const missing = modules.filter((f) => !sw.includes(`./js/${f}`));
   check("every js module is precached for offline use", missing.length === 0, missing.join(", "));
+  // Same for every sound. The clips and sfx were absent from the precache for
+  // weeks: an installed app opened offline ran the whole session in silence.
+  const audioFiles = [];
+  const walkAudio = (dir) => {
+    for (const f of fs.readdirSync(path.join(repo, dir))) {
+      const rel = dir + "/" + f;
+      if (fs.statSync(path.join(repo, rel)).isDirectory()) walkAudio(rel);
+      else if (f.endsWith(".mp3")) audioFiles.push(rel);
+    }
+  };
+  walkAudio("audio");
+  const missingAudio = audioFiles.filter((f) => !sw.includes(`./${f}`));
+  check("every audio file is precached for offline use", missingAudio.length === 0, missingAudio.join(", "));
   // The changelog is only useful if it is actually kept up to date, and the
   // one way it silently rots is shipping a version without adding an entry.
   const { CHANGELOG } = await import("../js/changelog.js");

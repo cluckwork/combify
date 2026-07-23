@@ -5,7 +5,7 @@
 // version makes old installs throw away whatever they were holding instead of
 // serving a stale app. A service worker can't import ES modules, hence the
 // duplicated literal.
-const CACHE = "combify-v1.8.1";
+const CACHE = "combify-v1.8.2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -19,6 +19,13 @@ const ASSETS = [
   "./manifest.json",
   "./icons/icon.svg",
   "./icons/bwb-logo-white.png",
+  // Every sound the app can make. These were missing entirely, which meant an
+  // installed app opened offline had NO voice and NO bell — the timer ran in
+  // total silence. Tests now fail if a file in audio/ isn't listed here.
+  "./audio/1.mp3", "./audio/2.mp3", "./audio/3.mp3", "./audio/4.mp3",
+  "./audio/5.mp3", "./audio/6.mp3", "./audio/7.mp3", "./audio/8.mp3",
+  "./audio/slip.mp3", "./audio/roll.mp3", "./audio/block.mp3", "./audio/pivot.mp3",
+  "./audio/sfx/bell.mp3", "./audio/sfx/tick.mp3", "./audio/sfx/warning.mp3",
 ];
 
 self.addEventListener("install", (event) => {

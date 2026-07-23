@@ -279,27 +279,31 @@ document.addEventListener("visibilitychange", () => {
 document.addEventListener("pointerdown", armAudio, { capture: true, passive: true });
 document.addEventListener("touchstart", armAudio, { capture: true, passive: true });
 
-// ---------- Bell: a real recorded ring bell, falling back to a synth tone ----------
-// Same pattern as the voice clips: prefer a real sample (audio/sfx/bell.mp3),
-// fall back to a synthesized tone if it's missing so the timer never breaks.
+// ---------- Sound effects: real samples first, synthesis as fallback ----------
+// The bell, tick and warning are all shipped as real audio files
+// (audio/sfx/*.mp3, rendered from the exact synthesis below) and played
+// through the same primed-HTMLAudioElement pipeline as the voice clips. This
+// is not a cosmetic choice: on iPhone, Web Audio output is MUTED by the
+// ring/silent switch while media elements are not — so with the switch on
+// silent (most phones, most of the time) the voice clips played and every
+// synthesized bell and tick was dead silence. The synthesis stays as the
+// fallback so a missing or unloadable file still makes a sound.
+// Each sample stays OFF until it proves it loaded (a browser that defers
+// loading never fires the error event that would flip it back off).
 const SFX_DIR = "audio/sfx/";
+const SFX_KEYS = ["bell", "tick", "warning"];
 const sfxCache = {};
-// NOTE the deliberate asymmetry with the voice clips below: those default to ON
-// because the files ARE in the repo and the fallback (robotic TTS) is bad. The
-// bell sample is the opposite — there is no audio/sfx/bell.mp3 (the synth FM
-// bell replaced it), and the fallback is the sound we actually want. So this
-// stays OFF until a real sample proves it loaded. Defaulting it ON meant the
-// app tried to play a missing file and rang nothing at all, because a browser
-// that defers loading never fires the error event that would flip it back.
-const sfx = { useSamples: false };
+const sfx = { bell: false, tick: false, warning: false };
 function preloadSfx() {
-  const a = new Audio(SFX_DIR + "bell.mp3");
-  a.preload = "auto";
-  sfxCache.bell = a;
-  const enable = () => { sfx.useSamples = true; };
-  a.addEventListener("canplaythrough", enable, { once: true });
-  a.addEventListener("loadeddata", enable, { once: true }); // whichever lands first
-  a.addEventListener("error", () => { sfx.useSamples = false; }, { once: true });
+  SFX_KEYS.forEach((key) => {
+    const a = new Audio(SFX_DIR + key + ".mp3");
+    a.preload = "auto";
+    sfxCache[key] = a;
+    const enable = () => { sfx[key] = true; };
+    a.addEventListener("canplaythrough", enable, { once: true });
+    a.addEventListener("loadeddata", enable, { once: true }); // whichever lands first
+    a.addEventListener("error", () => { sfx[key] = false; }, { once: true });
+  });
 }
 preloadSfx();
 
@@ -367,26 +371,29 @@ function synthBell(times = 1) {
   });
 }
 
-// Ring the real bell sample `times` in a row (1 = round start, 3 = session over).
+// Play one sfx sample, or run its synth fallback. A play() rejection runs the
+// fallback for THIS sound but doesn't disable the sample — a one-off rejection
+// (momentary focus loss) shouldn't cost the whole session its real bell.
+function playSfx(key, fallback) {
+  if (!sfx[key]) { fallback(); return; }
+  const node = getPooledSfx(key);
+  if (!node) { fallback(); return; }
+  try { node.currentTime = 0; } catch (e) {}
+  const p = node.play();
+  if (p && p.catch) p.catch(fallback);
+}
+
+// Ring the bell `times` in a row (1 = round start, 3 = session over).
 function ringBell(times = 1) {
-  if (!sfx.useSamples) { synthBell(times); return; }
   const gap = 650; // ms between successive strikes — a natural "ding-ding" rhythm
   for (let i = 0; i < times; i++) {
-    setTimeout(() => {
-      const node = getPooledBell();
-      // Any failure here still rings the synth: a round must never start or end
-      // in silence just because a sample went missing.
-      if (!node) { synthBell(1); return; }
-      node.currentTime = 0;
-      const p = node.play();
-      if (p && p.catch) p.catch(() => { sfx.useSamples = false; synthBell(1); });
-    }, i * gap);
+    setTimeout(() => playSfx("bell", () => synthBell(1)), i * gap);
   }
 }
 
 // Short dry tick for the pre-round "3, 2, 1" countdown — deliberately NOT
 // bell-like, so it can never be mistaken for "go."
-function playTick() {
+function synthTick() {
   withAudio((ctx) => {
     const t = ctx.currentTime;
     const osc = ctx.createOscillator(), gain = ctx.createGain();
@@ -398,9 +405,10 @@ function playTick() {
     osc.start(t); osc.stop(t + 0.07);
   });
 }
+function playTick() { playSfx("tick", synthTick); }
 
 // Two-beep "10 seconds left" cue — distinct from both the tick and the bell.
-function playWarning() {
+function synthWarning() {
   withAudio((ctx) => {
     for (let i = 0; i < 2; i++) {
       const t = ctx.currentTime + i * 0.18;
@@ -414,6 +422,7 @@ function playWarning() {
     }
   });
 }
+function playWarning() { playSfx("warning", synthWarning); }
 
 // ---------- Voice ----------
 // The app calls combos two ways, in order of preference:
@@ -484,8 +493,13 @@ preloadClips();
 // dozens of live <audio> elements makes iOS drop media events, which is what
 // killed the chain mid-round.
 const UNLOCK_POOL_SIZE = 2;
+// The bell is the exception: the session-end "ding-ding-ding" is three strikes
+// 650ms apart on a sample that rings for ~2.5s, so three are genuinely sounding
+// at once. With two elements the third strike stole the first one's element and
+// cut its ring dead.
+const SFX_POOL_SIZE = { bell: 3, tick: 2, warning: 2 };
 const clipPool = {};
-const bellPool = [];
+const sfxPool = {};
 const poolIndex = {};
 let audioUnlocked = false;
 
@@ -518,12 +532,17 @@ function unlockAudioForMobile() {
       pool.forEach(primeElement);
       clipPool[key] = pool;
     });
-    // Only worth priming if a real sample actually loaded; the synth bell needs
-    // no unlocking (it goes through the AudioContext armed in this same tap).
-    if (sfx.useSamples) {
-      while (bellPool.length < UNLOCK_POOL_SIZE) bellPool.push(new Audio(SFX_DIR + "bell.mp3"));
-      bellPool.forEach(primeElement);
-    }
+    // Only worth priming samples that actually loaded; the synth fallbacks need
+    // no unlocking (they go through the AudioContext armed in this same tap).
+    SFX_KEYS.forEach((key) => {
+      if (!sfx[key]) return;
+      const pool = sfxPool[key] && sfxPool[key].length
+        ? sfxPool[key]
+        : (sfxCache[key] ? [sfxCache[key]] : []);
+      while (pool.length < SFX_POOL_SIZE[key]) pool.push(new Audio(SFX_DIR + key + ".mp3"));
+      pool.forEach(primeElement);
+      sfxPool[key] = pool;
+    });
     audioUnlocked = true;
   } catch (e) { /* leave the flag false so the next tap tries again */ }
 }
@@ -544,11 +563,12 @@ function getPooledClip(key) {
   poolIndex[key] = i + 1;
   return pool[i];
 }
-function getPooledBell() {
-  if (!bellPool.length) return sfxCache.bell ? sfxCache.bell.cloneNode() : null;
-  const i = (poolIndex["__bell"] || 0) % bellPool.length;
-  poolIndex["__bell"] = i + 1;
-  return bellPool[i];
+function getPooledSfx(key) {
+  const pool = sfxPool[key];
+  if (!pool || !pool.length) return sfxCache[key] ? sfxCache[key].cloneNode() : null;
+  const i = (poolIndex["__sfx_" + key] || 0) % pool.length;
+  poolIndex["__sfx_" + key] = i + 1;
+  return pool[i];
 }
 
 // The "Combo pace" setting previously only controlled the gap AFTER a full

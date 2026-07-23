@@ -57,3 +57,11 @@ curl -s -w "\n%{http_code}\n" -F "file=@combify-audio.zip" https://tmpfiles.org/
 
 Paste the resulting link back in chat and it'll be pulled straight into this
 folder.
+
+## sfx/ — the timer's own sounds
+
+`sfx/bell.mp3`, `sfx/tick.mp3`, `sfx/warning.mp3` are the bell, countdown tick
+and 10-second warning, rendered from the app's own synthesis. They exist as
+files because iPhones MUTE Web Audio output when the ring/silent switch is on,
+while audio files play regardless — a synth-only bell was silent on most
+phones. If a file is missing the app falls back to synthesizing the same sound.

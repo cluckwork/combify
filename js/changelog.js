@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.8.2",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Bells you can actually hear",
+    notes: [
+      "The bell, countdown ticks and 10-second warning now play even with your iPhone's silent switch on — they were muted along with it before, while the voice kept going.",
+      "All sounds now work offline in the installed app; previously an offline session ran completely silent.",
+      "The end-of-session bell rings all three strikes cleanly instead of cutting itself off.",
+    ],
+  },
+  {
     v: "1.8.1",
     date: "2026-07-23",
     size: "patch",
