@@ -1176,21 +1176,34 @@ async function collectSpokenVsShown(app, ms) {
   await app.clock.advance(20000);
   check("stays expanded through rest", appEl.dataset.focus === "1" && app.phase() === "Rest", app.phase());
 
-  // Pausing must bring the settings back — that's the whole interaction model.
+  // The session is ONE continuous fullscreen thing: pausing and restarting
+  // stay inside it, and only the exit button leaves.
   app.click("startBtn");
   await app.clock.advance(200);
-  check("pausing returns to the normal screen", appEl.dataset.focus !== "1", `focus=${appEl.dataset.focus}`);
-  check("settings reachable while paused", !!app.doc.getElementById("level"), "settings missing");
+  check("pausing STAYS fullscreen", appEl.dataset.focus === "1", `focus=${appEl.dataset.focus}`);
   app.click("startBtn");
   await app.clock.advance(200);
-  check("resuming expands again", appEl.dataset.focus === "1", `focus=${appEl.dataset.focus}`);
+  check("resuming carries on fullscreen", appEl.dataset.focus === "1", `focus=${appEl.dataset.focus}`);
+
+  // The restart icon runs it back — new session, still fullscreen.
+  app.click("resetBtn");
+  await app.clock.advance(500);
+  check("restart mid-session starts over WITHOUT leaving fullscreen",
+    appEl.dataset.focus === "1" && app.phase() === "Get Ready",
+    `focus=${appEl.dataset.focus} phase=${app.phase()}`);
 
   await app.clock.advance(60000);
   check("session finished", app.phase() === "Done", app.phase());
-  check("finishing returns to the normal screen", appEl.dataset.focus !== "1", `focus=${appEl.dataset.focus}`);
+  check("the finish screen STAYS fullscreen", appEl.dataset.focus === "1", `focus=${appEl.dataset.focus}`);
+  // Exit is the one door out.
+  app.click("exitBtn");
+  await app.clock.advance(200);
+  check("exit returns to the normal screen", appEl.dataset.focus !== "1", `focus=${appEl.dataset.focus}`);
+  check("settings reachable after exiting", !!app.doc.getElementById("level"), "settings missing");
+  // And on the plain ready screen, Reset keeps its ordinary meaning.
   app.click("resetBtn");
   await app.clock.advance(200);
-  check("reset leaves the normal screen", appEl.dataset.focus !== "1", `focus=${appEl.dataset.focus}`);
+  check("reset on the ready screen stays on the normal screen", appEl.dataset.focus !== "1", `focus=${appEl.dataset.focus}`);
   app.restore();
   clearStore();
 }

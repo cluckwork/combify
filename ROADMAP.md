@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.9.2 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.10.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,21 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.10.0** — **Staged finish finale; the session is one
+  fullscreen thing.** The finish is now three acts: the dial alone at the DEAD
+  CENTRE of the screen (a measured FLIP transform — exact in any orientation)
+  with the ripple blooming while the end bell rings; a glide back to its
+  resting place (up in portrait, left in landscape); then the headline and the
+  count-up slide in from below, staggered. Everything-at-once was overloading.
+  Under reduced motion the staging is skipped entirely. Fixed en route: the
+  done-screen finishRise ANIMATION was beating the finale's opacity in the
+  cascade, showing the stats through the centre-stage hold. Focus mode now
+  persists from Start until the new EXIT icon (third floating button):
+  pausing and restarting stay fullscreen, restart means "run it back"
+  (reset+start in place), and exit is the one door back to settings — it also
+  releases browser fullscreen. Interaction-model tests rewritten to match;
+  layout suite asserts the exit icon is present, icon-sized, on-screen, and
+  that exit restores the settings on every device. 185 behaviour + 250 layout.
 - **2026-07-23 — v1.9.2** — **Session end reverted to the three-strike bell.**
   The v1.9.1 victory jingle was rejected on listening — founder's call: the
   boxing bell IS the sound of finishing. Jingle code, sample, precache entry

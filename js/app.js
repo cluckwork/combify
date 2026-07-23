@@ -131,6 +131,7 @@ const el = {
   clock: document.getElementById("clock"), round: document.getElementById("round"),
   combo: document.getElementById("combo"), startBtn: document.getElementById("startBtn"),
   resetBtn: document.getElementById("resetBtn"), voiceOn: document.getElementById("voiceOn"),
+  exitBtn: document.getElementById("exitBtn"),
   stats: document.getElementById("stats"),
   comboName: document.getElementById("comboName"),
   app: document.querySelector(".app"),
@@ -197,7 +198,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null, finaleTimer: null };
 
 // ---------- Screen wake lock ----------
 // Keeps the screen on while a session runs, so a member who sets the phone
@@ -891,13 +892,14 @@ function renderStats() {
 }
 
 function render() {
-  // Full-screen only while a session is actually running. Pausing drops back to
-  // the normal screen so settings are reachable without leaving the session —
-  // no extra button to learn, and pausing is already what you do to change
-  // something. Finishing exits too, so you can adjust and go again.
+  // Full-screen for the WHOLE session experience — countdown, work, rest,
+  // paused, and the finish screen. Pausing and restarting stay inside it;
+  // the only door back to the settings screen is the exit button. (Earlier
+  // versions dropped out on pause and on finishing; the founder wanted the
+  // session to be one continuous fullscreen thing you explicitly leave.)
   if (el.app) {
-    const inSession = state.running && (state.phase === "countdown" || state.phase === "work" || state.phase === "rest");
-    el.app.dataset.focus = inSession ? "1" : "0";
+    el.app.dataset.focus = state.phase !== "ready" ? "1" : "0";
+    el.app.dataset.phase = state.phase; // lets CSS pick the right icon per state
   }
   el.clock.textContent = state.phase === "countdown" ? String(state.secondsLeft) : format(state.secondsLeft);
   el.stage.dataset.phase = state.phase;
@@ -1046,6 +1048,47 @@ function beginPhase(seconds) {
 }
 function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned10 = false; ringBell(1); render(); startComboLoop(); }
 function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
+// ---------- The finish finale ----------
+// Everything at once was overloading: bell + ripple + headline + count-up all
+// landing together. So the finish is staged. Act 1: the dial alone, moved to
+// the DEAD CENTRE of the screen, ripple blooming out of it while the end bell
+// rings. Act 2: the dial glides back to its resting spot (up in portrait,
+// left in landscape — the same glide because it's a measured transform, not a
+// layout guess). Act 3: the headline and the counting numbers arrive.
+// Skipped wholesale under reduced motion (and in jsdom): everything appears
+// at once, which for those users is the point.
+const FINALE_HOLD_MS = 1700;   // one ripple bloom before the glide
+const FINALE_GLIDE_MS = 650;
+function startFinale() {
+  if (!motionOK() || !el.app || el.app.dataset.focus !== "1") return;
+  const meta = el.stage.querySelector(".stage__meta");
+  if (!meta) return;
+  el.stage.classList.add("is-finale");
+  // FLIP: the layout already holds the dial at its final resting place (the
+  // stats are built, just invisible). Measure the gap to the screen centre and
+  // transform there — exact in any orientation, no per-layout coordinates.
+  const r = meta.getBoundingClientRect();
+  const dx = window.innerWidth / 2 - (r.left + r.width / 2);
+  const dy = window.innerHeight / 2 - (r.top + r.height / 2);
+  meta.style.transform = `translate(${Math.round(dx)}px, ${Math.round(dy)}px)`;
+  state.finaleTimer = setTimeout(() => {
+    meta.style.transition = `transform ${FINALE_GLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
+    meta.style.transform = "";
+    el.stage.classList.add("is-finale-reveal");
+    // Rebuild the summary so the count-up and pop run NOW, as the numbers
+    // appear — they already ran once while hidden, which nobody saw.
+    delete el.stats.dataset.finished;
+    renderStats();
+    state.finaleTimer = setTimeout(() => { meta.style.transition = ""; }, FINALE_GLIDE_MS + 80);
+  }, FINALE_HOLD_MS);
+}
+function clearFinale() {
+  clearTimeout(state.finaleTimer);
+  el.stage.classList.remove("is-finale", "is-finale-reveal");
+  const meta = el.stage.querySelector(".stage__meta");
+  if (meta) { meta.style.transform = ""; meta.style.transition = ""; }
+}
+
 function finish() {
   state.phase = "done"; state.running = false;
   // Three bell strikes: the traditional end of the fight. A composed victory
@@ -1058,7 +1101,8 @@ function finish() {
   el.combo.style.removeProperty("--fit");
   if (el.comboName) el.comboName.textContent = "";
   el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running");
-  render();
+  render(); // builds the summary (hidden during the finale) so layout is final
+  startFinale();
 }
 
 // ---------- The one-second heartbeat ----------
@@ -1151,7 +1195,7 @@ function pause() { state.running = false; clearInterval(state.tickTimer); stopCo
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
 function resume() { state.running = true; armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); render(); }
-function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
+function reset() { clearInterval(state.tickTimer); stopComboLoop(); clearFinale(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
 // "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1
@@ -1164,7 +1208,26 @@ el.startBtn.addEventListener("click", () => {
   else if (!state.running && state.phase === "done") { reset(); start(); }
   else pause();
 });
-el.resetBtn.addEventListener("click", reset);
+// Mid-session (or on the finish screen) the restart icon means "run it back":
+// reset AND start again, without leaving fullscreen. Only on the normal ready
+// screen does Reset keep its plain meaning.
+el.resetBtn.addEventListener("click", () => {
+  if (state.phase === "ready") { reset(); return; }
+  reset(); start();
+});
+// The one door out of the fullscreen session — back to settings. Also releases
+// browser fullscreen, which pause/restart deliberately hold on to.
+function leaveFullscreenSession() {
+  reset();
+  try {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
+      const p = exit.call(document);
+      if (p && p.catch) p.catch(() => {});
+    }
+  } catch (e) {}
+}
+if (el.exitBtn) el.exitBtn.addEventListener("click", leaveFullscreenSession);
 reset();
 
 // Register the service worker so Combify works offline after the first visit.

@@ -253,7 +253,18 @@ body {
 .app[data-focus="1"] .btn--primary.is-running {
   background-color: rgba(73, 149, 146, 0.3);
   border-color: rgba(73, 149, 146, 0.55);
+  /* Play triangle: shown while PAUSED and on the finish screen ("go again") —
+     the button's next action, not its current state. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8.5 5.2v13.6c0 .9 1 1.5 1.8 1L21 13c.7-.45.7-1.55 0-2L10.3 4.2c-.8-.5-1.8.1-1.8 1z' fill='%23e9f4f3'/%3E%3C/svg%3E");
+}
+.app[data-focus="1"] .btn--primary.is-running {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6' y='4' width='4.4' height='16' rx='1.6' fill='%23e9f4f3'/%3E%3Crect x='13.6' y='4' width='4.4' height='16' rx='1.6' fill='%23e9f4f3'/%3E%3C/svg%3E");
+}
+/* The exit door only exists inside the fullscreen session. */
+#exitBtn { display: none; }
+.app[data-focus="1"] #exitBtn {
+  display: block;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23dfe7e6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 14h6v6'/%3E%3Cpath d='M20 10h-6V4'/%3E%3Cpath d='M14 10l7-7'/%3E%3Cpath d='M3 21l7-7'/%3E%3C/svg%3E");
 }
 .app[data-focus="1"] #resetBtn {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-6-6c1.66 0 3.15.68 4.24 1.76L13 11h7V4l-2.35 2.35z' fill='%23dfe7e6'/%3E%3C/svg%3E");
@@ -569,10 +580,15 @@ label,
   from { opacity: 0; transform: translateY(8px) scale(0.97); }
   to   { opacity: 1; transform: none; }
 }
-.stage[data-phase="done"] .combo {
+/* :not(.is-finale) matters: during the staged finale these elements are held
+   invisible by a transition, and an ANIMATION (which beats normal declarations
+   in the cascade) was forcing them visible through the centre-stage hold. The
+   staged path reveals them with its own slide; this rise covers the
+   reduced-motion/unstaged path only. */
+.stage[data-phase="done"]:not(.is-finale) .combo {
   animation: finishRise 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
 }
-.stage[data-phase="done"] .stats { animation: finishRise 0.55s 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; }
+.stage[data-phase="done"]:not(.is-finale) .stats { animation: finishRise 0.55s 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; }
 
 /* A single ring breathing outward behind the clock — celebratory without
    turning into confetti. */
@@ -832,3 +848,23 @@ label,
   cursor: pointer;
 }
 .install__dismiss:hover { color: var(--text); }
+
+
+/* ==========================================================================
+   The finish finale (js: startFinale). Act 1: dial alone at dead centre (a
+   measured transform set inline), ripple blooming. Act 2: the glide back.
+   Act 3: headline then numbers, staggered. Under reduced motion none of these
+   classes are ever applied and everything simply appears.
+   ========================================================================== */
+.stage.is-finale .stage__main > * {
+  opacity: 0;
+  transform: translateY(22px);   /* enough travel that the slide reads as a slide */
+}
+.stage.is-finale.is-finale-reveal .stage__main > * {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.65s ease, transform 0.65s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Headline first, the counting numbers a beat later — time to take each in. */
+.stage.is-finale.is-finale-reveal .combo { transition-delay: 0.2s; }
+.stage.is-finale.is-finale-reveal .stats { transition-delay: 0.55s; }

@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.10.0",
+    date: "2026-07-23",
+    size: "minor",
+    title: "A finish worth watching",
+    notes: [
+      "Finishing a session is now a moment: the timer circle holds the centre of the screen while the ripple plays, then drifts aside and your numbers slide in one by one — instead of everything appearing at once.",
+      "The whole session stays fullscreen now, including the finish screen and while paused. A new exit button (next to pause and restart) is how you leave and get back to settings.",
+      "The restart icon now restarts the session on the spot instead of dropping you back to the settings screen.",
+    ],
+  },
+  {
     v: "1.9.2",
     date: "2026-07-23",
     size: "patch",

@@ -269,19 +269,30 @@ async function runDevice(dev) {
   check("12-move combo doesn't collide with the clock", m.overlaps.length === 0, m.overlaps.join(", "));
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-longcombo.png`) });
 
-  // ---- Pause returns the settings ----
+  // ---- Pause stays fullscreen; the exit icon is present and reachable ----
   await tap(page);
   await page.waitForTimeout(250);
-  await settled(page, false);
   m = await page.evaluate(probe);
-  check("pausing brings settings back", m.settingsVisible, "settings still hidden");
-  check("pausing leaves focus mode", m.focus !== "1", `focus=${m.focus}`);
+  check("pausing stays in focus mode", m.focus === "1", `focus=${m.focus}`);
+  check("settings stay tucked away while paused", !m.settingsVisible, "settings became visible");
+  const exitBox = await page.evaluate(() => {
+    const b = document.getElementById("exitBtn");
+    const r = b.getBoundingClientRect();
+    return { shown: getComputedStyle(b).display !== "none" && r.width > 0, right: r.right, bottom: r.bottom, w: r.width, h: r.height };
+  });
+  check("exit button is on screen in focus mode",
+    exitBox.shown && exitBox.right <= m.vw + 1 && exitBox.bottom <= m.vh + 1,
+    JSON.stringify(exitBox));
+  check("exit button is icon-sized like its siblings", exitBox.w <= 64 && exitBox.h <= 64,
+    `${Math.round(exitBox.w)}×${Math.round(exitBox.h)}`);
   check("no horizontal scroll when paused", m.docScrollW <= m.docClientW + 1, `${m.docScrollW} > ${m.docClientW}`);
 
-  // ---- Finish screen ----
+  // ---- Finish screen (fullscreen, staged finale) ----
   await tap(page);            // resume
   await reachPhase(page, "done", FAST ? 40000 : 70000);   // let the rounds run out
+  await page.waitForTimeout(3200); // finale: centre hold + glide + reveal
   m = await page.evaluate(probe);
+  check("the finish screen stays fullscreen", m.focus === "1", `focus=${m.focus}`);
   const phase = await page.textContent("#phase");
   check("session reached the finish screen", phase.trim() === "Done", phase);
   check("finish summary on screen", m.stats && m.stats.bottom <= m.vh + 1 && m.stats.h > 0,
@@ -293,6 +304,13 @@ async function runDevice(dev) {
     `clock text ${Math.round(m.clockTextW)} vs ring ${Math.round(m.dial?.w)}`);
   lines.push(`       (finish punch total ${Math.round(m.heroFont)}px)`);
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-finish.png`) });
+
+  // ---- Exit is the one door back to the settings ----
+  await tap(page, "exitBtn");
+  await page.waitForTimeout(250);
+  await settled(page, false);
+  m = await page.evaluate(probe);
+  check("exit returns to the normal screen", m.focus !== "1" && m.settingsVisible, `focus=${m.focus}`);
 
   check("no JavaScript errors on this device", errors.length === 0, errors.join(" | "));
   await ctx.close();
@@ -381,8 +399,9 @@ async function runRotation() {
   check("still showing a combo after rotating", (await page.textContent("#combo")).length > 0);
   check("no JavaScript errors while rotating", errors.length === 0, errors.join(" | "));
 
-  // Rotate on the finish screen too.
+  // Rotate on the finish screen too — after the finale has settled.
   await reachPhase(page, "done", 40000);
+  await page.waitForTimeout(3200);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
   const m2 = await page.evaluate(probe);
