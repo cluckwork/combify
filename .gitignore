@@ -5,6 +5,10 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Node (only if we add tools later)
+# Node (test tooling only — the app itself has no dependencies)
 node_modules/
 npm-debug.log*
+package-lock.json
+
+# Module copies the test harness generates at runtime
+tests/.tmp/
