@@ -198,7 +198,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null, finaleTimer: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null, wordGapTimer: null, finaleTimer: null };
 
 // ---------- Screen wake lock ----------
 // Keeps the screen on while a session runs, so a member who sets the phone
@@ -477,8 +477,41 @@ function synthBlip(rate) {
     osc.start(t); osc.stop(t + 0.06);
   });
 }
+// Blips prefer Web Audio: HTMLAudio scheduling jitters 10-40ms per play,
+// which at the count-up's 68ms cadence is audible as stutter no file format
+// fixes. A decoded buffer starts sample-accurately. Deliberate trade, unlike
+// every other sound: Web Audio is muted by the iPhone silent switch, and for
+// a decorative count embellishment that's fine — the count still steps
+// visually, and the landing hit stays on the media pipeline. Falls back to
+// the media element wherever the buffer isn't ready.
+let blipBuffer = null;
+let blipBufferLoading = false;
+function loadBlipBuffer() {
+  if (blipBuffer || blipBufferLoading) return;
+  const ctx = getAudioCtx();
+  if (!ctx || typeof fetch !== "function" || !ctx.decodeAudioData) return;
+  blipBufferLoading = true;
+  fetch(SFX_DIR + SFX_FILES.blip)
+    .then((r) => r.arrayBuffer())
+    .then((b) => new Promise((res, rej) => ctx.decodeAudioData(b, res, rej)))
+    .then((buf) => { blipBuffer = buf; })
+    .catch(() => {})
+    .finally(() => { blipBufferLoading = false; });
+}
 function playBlip(progress) {
   const rate = 0.7 + progress * 1.1; // ~0.7x → 1.8x: a clear low-to-high climb
+  if (blipBuffer && audioCtx && audioCtx.state === "running") {
+    try {
+      const src = audioCtx.createBufferSource();
+      src.buffer = blipBuffer;
+      src.playbackRate.value = rate;
+      const g = audioCtx.createGain();
+      g.gain.value = 0.9;
+      src.connect(g).connect(audioCtx.destination);
+      src.start();
+      return;
+    } catch (e) { /* fall through to the media path */ }
+  }
   playSfx("blip", () => synthBlip(rate), rate);
 }
 function synthLand() {
@@ -588,6 +621,7 @@ let audioUnlocked = false;
 let needsReprime = false;
 
 function primeElement(a) {
+  if (!a || a.paused === false) return; // never pause something mid-sound
   a.muted = true;
   const p = a.play();
   if (p && p.catch) p.catch(() => {});
@@ -635,6 +669,7 @@ function unlockAudioForMobile() {
     deepPrimePending = true;
     audioUnlocked = true;
     needsReprime = false;
+    loadBlipBuffer(); // async; ready long before any finale needs it
   } catch (e) { /* retry on the next tap */ }
 }
 // Top up the spare slots inside a later gesture, spreading the cost away from
@@ -687,9 +722,21 @@ const getWordGap = () => Math.max(40, Math.min(300, getPace() * 0.09));
 // nextCombo() never rescheduled — the combo loop died permanently for the rest
 // of the round. That's the "sound stops after a few combos" bug. Now a missing
 // event just means we advance slightly late instead of stopping forever.
+// Every live playback chain carries a generation token. stopComboLoop bumps
+// it, which instantly deadens EVERY pending callback of the old chain — gap
+// timers, watchdogs, late "ended" events. Before this, the between-words
+// setTimeout was anonymous and unowned: a chain cut landing inside a word gap
+// (backgrounding, the visibility restart, a revive) left a zombie timer that
+// revived the OLD combo next to the new one — two chains interleaving through
+// the same pools, heard as the voice stuttering. The gap windows are 3-6x
+// wider at Steady/Relaxed pace, which is why it showed there.
+let voiceChain = 0;
 function playClips(keys, onDone) {
   let i = 0;
+  const chain = ++voiceChain;
+  const chainAlive = () => chain === voiceChain;
   const playNext = () => {
+    if (!chainAlive()) return; // a newer chain owns the pools now
     clearTimeout(state.clipWatchdog);
     voice.current = null;
     if (!state.running || state.phase !== "work" || i >= keys.length) { onDone(); return; }
@@ -728,7 +775,7 @@ function playClips(keys, onDone) {
     const startedAt = Date.now();
     let moved = false;
     const once = (fn) => () => {
-      if (moved) return; // whichever fires first wins: ended, error, or watchdog
+      if (moved || !chainAlive()) return; // ended/error/watchdog — first one wins, dead chains never
       moved = true;
       clearTimeout(state.clipWatchdog);
       fn();
@@ -738,8 +785,11 @@ function playClips(keys, onDone) {
       fallback();
     };
     const afterWord = () => {
+      if (!chainAlive()) return;
       if (!state.running || state.phase !== "work") { onDone(); return; }
-      setTimeout(playNext, getWordGap());
+      // Owned by state so stopComboLoop can cancel it — an anonymous timer
+      // here was the zombie that interleaved two chains.
+      state.wordGapTimer = setTimeout(playNext, getWordGap());
     };
     const finished = once(() => {
       // Did it actually play, or just claim to? Deliberately a small ABSOLUTE
@@ -924,14 +974,22 @@ function buildFinishSummary(streak, streakBit) {
   hero.appendChild(heroNum);
   hero.appendChild(make("span", "finish__label", session.punches === 1 ? "punch" : "punches"));
   el.stats.appendChild(hero);
-  // During the finale's centre-stage hold this summary exists but is INVISIBLE
-  // (built early so the glide can measure final layout). Running the count-up
-  // then leaked its blips a second and a half before any number was on screen.
-  // Hidden build = final value instantly, no sound, no buzz; the reveal
-  // rebuilds and runs the real count-up in front of the user.
+  // Butter rules for the count-up, the app's single dopamine moment:
+  //   1. Reserve the FINAL number's width now (tabular digits + min-width in
+  //      ch), so no count step ever reflows the line — reflow per step was
+  //      visible jank on a phone.
+  //   2. Build this DOM exactly once. It used to be rebuilt at the reveal
+  //      frame, competing with the glide transition for the same frames.
+  //   3. During the finale, don't run the count here at all — startFinale
+  //      calls __runCountUp AFTER the glide has landed, so the animation,
+  //      the count and the blips each get the stage to themselves.
+  heroNum.style.fontVariantNumeric = "tabular-nums";
+  heroNum.style.display = "inline-block";
+  heroNum.style.minWidth = String(session.punches.toLocaleString().length) + "ch";
+  heroNum.style.textAlign = "center";
   const staged = el.stage.classList.contains("is-finale") && !el.stage.classList.contains("is-finale-reveal");
-  if (staged) heroNum.textContent = session.punches.toLocaleString();
-  else countUp(heroNum, session.punches, { ms: 1200, pop: true, haptics: true, sound: true });
+  el.stats.__runCountUp = () => countUp(heroNum, session.punches, { ms: 1200, pop: true, haptics: true, sound: true });
+  if (!staged) el.stats.__runCountUp();
 
   // Everything else is supporting detail on one quieter line.
   const meta = make("div", "finish__meta");
@@ -1152,9 +1210,11 @@ function reviveComboLoop() {
   startComboLoop();
 }
 function stopComboLoop() {
+  voiceChain++; // deadens every pending callback of the current chain
   clearTimeout(state.comboTimer);
   clearTimeout(state.comboFallback);
   clearTimeout(state.clipWatchdog);
+  clearTimeout(state.wordGapTimer);
   state.comboTimer = null;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (voice.current) { try { voice.current.pause(); } catch (e) {} voice.current = null; }
@@ -1223,11 +1283,13 @@ function startFinale() {
     meta.style.transition = `transform ${FINALE_GLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
     meta.style.transform = "";
     el.stage.classList.add("is-finale-reveal");
-    // Rebuild the summary so the count-up and pop run NOW, as the numbers
-    // appear — they already ran once while hidden, which nobody saw.
-    delete el.stats.dataset.finished;
-    renderStats();
-    state.finaleTimer = setTimeout(() => { meta.style.transition = ""; }, FINALE_GLIDE_MS + 80);
+    // One thing at a time: let the glide finish, then start the count-up on
+    // the ALREADY-BUILT summary. No DOM churn at the reveal frame, no count
+    // steps fighting the transform transition for frames.
+    state.finaleTimer = setTimeout(() => {
+      meta.style.transition = "";
+      if (el.stats.__runCountUp) el.stats.__runCountUp();
+    }, FINALE_GLIDE_MS + 80);
   }, FINALE_HOLD_MS);
 }
 function clearFinale() {
@@ -1361,12 +1423,34 @@ el.startBtn.addEventListener("click", () => {
   else if (!state.running && state.phase === "done") { reset(); start(); }
   else pause();
 });
-// Mid-session (or on the finish screen) the restart icon means "run it back":
-// reset AND start again, without leaving fullscreen. Only on the normal ready
-// screen does Reset keep its plain meaning.
+// Mid-session (or on the finish screen) the restart icon means "run it back".
+// Purpose-built: it must NOT pass through reset()'s ready state — that dropped
+// focus mode for one frame, so the entire settings chrome unfolded and
+// refolded (two full layouts with transitions) before the countdown even
+// began. THAT was the "massive lag spike on restart". This never leaves the
+// session screen: same fullscreen, same wake lock, fresh session.
+function restartSession() {
+  clearInterval(state.tickTimer);
+  stopComboLoop();
+  clearFinale();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  armAudio();
+  unlockAudioForMobile(); // free unless a background revoked the unlock
+  enterFullscreen();
+  resetSessionTally();
+  delete el.stats.dataset.finished; // next finish must rebuild its summary
+  state.running = true;
+  state.currentRound = 0;
+  state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
+  el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
+  el.combo.textContent = "Get ready...";
+  if (el.comboName) el.comboName.textContent = "";
+  playTick(); render();
+  state.tickTimer = setInterval(tick, 1000);
+}
 el.resetBtn.addEventListener("click", () => {
   if (state.phase === "ready") { reset(); return; }
-  reset(); start();
+  restartSession();
 });
 // The one door out of the fullscreen session — back to settings. Also releases
 // browser fullscreen, which pause/restart deliberately hold on to.

@@ -197,6 +197,12 @@ async function runDevice(dev) {
       if (!this.muted && this.src) window.__sfxLog.push({ src: this.src.split("/").pop(), t: performance.now() });
       return orig.call(this);
     };
+    // Count-up blips go through Web Audio when the decoded buffer is ready.
+    const bs = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...a) {
+      window.__sfxLog.push({ src: "blip-buffer", t: performance.now() });
+      return bs.apply(this, a);
+    };
   });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));

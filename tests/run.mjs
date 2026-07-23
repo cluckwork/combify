@@ -186,9 +186,15 @@ async function countCombos(app, ms, step = 200) {
   app.doc.dispatchEvent(new app.window.Event("visibilitychange"));
   await app.clock.advance(500);
   check("re-acquires when tab becomes visible again", app.wakeLog.filter((x) => x === "acquire").length >= 2, app.wakeLog.join(","));
+  // Restart is still a session — the screen must stay awake through it.
+  const releasesBefore = app.wakeLog.filter((x) => x === "release").length;
   app.click("resetBtn");
   await app.clock.advance(500);
-  check("released on reset", app.wakeLog.includes("release"), app.wakeLog.join(","));
+  check("restart keeps the wake lock held",
+    app.wakeLog.filter((x) => x === "release").length === releasesBefore, app.wakeLog.join(","));
+  app.click("exitBtn");
+  await app.clock.advance(500);
+  check("released on exit", app.wakeLog.includes("release"), app.wakeLog.join(","));
   app.restore();
 }
 
@@ -507,6 +513,30 @@ async function countCombos(app, ms, step = 200) {
   // must NOT repeat that burst — the re-prime jank was a reported freeze.
   check("a restart does not re-prime the audio pools", delta <= 4,
     `${delta} plays in the first 600ms of the second session`);
+  app.restore();
+}
+
+// ---------------------------- 10n. chain cut inside a word gap must not stutter
+{
+  section("10n. A chain cut mid-gap leaves no zombie behind");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
+  app.setSeg("pace", "3000"); // relaxed: the widest word gaps, the reported case
+  app.click("startBtn");
+  await app.clock.advance(5000 + 700); // countdown, then first word (600ms) + into its gap
+  // Background + return INSIDE the inter-word gap. The old anonymous gap timer
+  // survived the cut and revived the old combo next to the new one — two
+  // chains interleaving through the same pools, heard as stuttering.
+  Object.defineProperty(app.doc, "visibilityState", { value: "hidden", configurable: true });
+  app.doc.dispatchEvent(new app.window.Event("visibilitychange"));
+  await app.clock.advance(50);
+  Object.defineProperty(app.doc, "visibilityState", { value: "visible", configurable: true });
+  app.doc.dispatchEvent(new app.window.Event("visibilitychange"));
+  await app.clock.advance(20000);
+  check("only one chain speaks (no interleaved zombie)", app.stats.maxVoiceConcurrent <= 1,
+    `max ${app.stats.maxVoiceConcurrent} at once`);
+  check("no overlap events at all", app.stats.overlapEvents.length === 0,
+    JSON.stringify(app.stats.overlapEvents.slice(0, 3)));
   app.restore();
 }
 

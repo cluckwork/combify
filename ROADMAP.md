@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.11.3 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.11.4 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,27 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.11.4** — **Voice-stutter root cause + count-up butter pass.**
+  The stutter on Steady/Relaxed: the between-words setTimeout was anonymous —
+  stopComboLoop couldn't cancel it, so a chain cut landing inside a word gap
+  (backgrounding, visibility restart, revive) left a zombie timer that revived
+  the OLD combo beside the new one; two chains interleaving through the same
+  pools is a stutter, and the gap windows are 3-6x wider at slow paces. Every
+  chain now carries a generation token that stopComboLoop bumps, deadening all
+  stale callbacks (gap timers, watchdogs, late ended events); the gap timer is
+  state-owned; priming skips elements that are currently sounding (the deferred
+  deep-prime could pause a clip mid-word). Restart is purpose-built in place —
+  reset()+start() passed through the ready state for one frame, unfolding and
+  refolding the entire chrome (the restart lag spike); it now keeps fullscreen
+  and the wake lock. Count-up: blips through a decoded Web Audio buffer
+  (sample-accurate; HTMLAudio jitters 10-40ms per play — deliberate trade: the
+  silent switch mutes decorative blips, informational sounds stay on media),
+  summary DOM built exactly once (was rebuilt at the reveal frame), count
+  starts after the glide lands (one thing at a time), hero digits tabular with
+  reserved width (no per-step reflow), numPop no longer animates text-shadow
+  (per-frame glyph repaints). Tests: zombie-chain regression (10n), wake-lock
+  held through restart, buffer-source blips instrumented. 191 behaviour + 262
+  layout green.
 - **2026-07-23 — v1.11.3** — **Idempotent hot paths.** The per-second render
   rewrote clock/phase/round text and three dataset attributes even when
   identical, and the 60fps ring loop re-set the constant dasharray every frame

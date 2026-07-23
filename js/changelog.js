@@ -21,6 +21,18 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.11.4",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Smooth like butter",
+    notes: [
+      "Fixed the voice stuttering on Steady and Relaxed pace — a leftover timer could make two combo callouts talk over each other after leaving and returning to the app.",
+      "The finish count-up was rebuilt for total smoothness: the circle glides, then the numbers count, each with the screen to itself — and the digits no longer nudge the layout as they climb.",
+      "Count-up blips now use a jitter-free audio path, so the rising rhythm is even.",
+      "Restarting a session no longer flashes through the settings screen — it restarts in place, instantly.",
+    ],
+  },
+  {
     v: "1.11.3",
     date: "2026-07-23",
     size: "patch",
