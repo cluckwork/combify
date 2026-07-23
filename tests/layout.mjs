@@ -88,7 +88,7 @@ const probe = () => {
     docClientW: document.documentElement.clientWidth,
     focus: q(".app").dataset.focus,
     stage: box("#stage"), combo: box("#combo"), clock: box("#clock"),
-    controls: box(".controls"), stats: box("#stats"),
+    controls: box(".controls"), stats: box("#stats"), startBtn: box("#startBtn"),
     comboFont: fs("#combo"), clockFont: fs("#clock"),
     heroFont: fs(".finish__hero .stat-num"),
     comboText: q("#combo").textContent,
@@ -153,7 +153,10 @@ for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(O
   check("top bar hidden mid-round", !m.topbarVisible);
   check("pause button still reachable", m.controlsVisible && m.controls.bottom <= m.vh + 1,
     `controls bottom ${m.controls?.bottom} vs vh ${m.vh}`);
-  check("stage fills most of the screen", m.stage.h >= m.vh * 0.55, `stage ${Math.round(m.stage.h)} of ${m.vh}`);
+  check("stage is genuinely edge-to-edge", m.stage.h >= m.vh * 0.95 && m.stage.w >= m.vw - 1,
+    `stage ${Math.round(m.stage.w)}×${Math.round(m.stage.h)} vs screen ${m.vw}×${m.vh}`);
+  check("controls are compact icons mid-round", m.startBtn && m.startBtn.w <= 64 && m.startBtn.h <= 64,
+    `start button ${Math.round(m.startBtn?.w)}×${Math.round(m.startBtn?.h)}`);
   check("no horizontal scrolling mid-round", m.docScrollW <= m.docClientW + 1, `${m.docScrollW} > ${m.docClientW}`);
   check("combo text not clipped horizontally", m.comboScrollW <= m.comboClientW + 1,
     `combo scrollW ${m.comboScrollW} > clientW ${m.comboClientW}`);
@@ -238,6 +241,11 @@ if (!ONLY || "rotating mid-session".includes(ONLY.toLowerCase())) {
   await page.goto(base, { waitUntil: "networkidle" });
   await startSession(page, { work: 30, rest: 10, rounds: 2 });
   await page.waitForTimeout(3600);
+  // The app goes properly fullscreen on start, and Chromium refuses to resize
+  // a fullscreen window. Rotation here is simulated BY resizing, so drop out
+  // of fullscreen first — the focus-mode layout is identical either way.
+  await page.evaluate(() => document.exitFullscreen && document.exitFullscreen().catch(() => {}));
+  await page.waitForTimeout(150);
 
   const clockBefore = await page.textContent("#clock");
   const comboBefore = await page.textContent("#combo");
@@ -265,7 +273,8 @@ if (!ONLY || "rotating mid-session".includes(ONLY.toLowerCase())) {
     check(`${label}: stage content fits`, m.stageScrollH <= m.stageClientH + 2, `${m.stageScrollH} > ${m.stageClientH}`);
     check(`${label}: pause button still on screen`, m.controlsVisible && m.controls.bottom <= m.vh + 1,
       `bottom ${m.controls?.bottom} vs ${m.vh}`);
-    check(`${label}: stage still fills the screen`, m.stage.h >= m.vh * 0.5, `${Math.round(m.stage.h)} of ${m.vh}`);
+    check(`${label}: stage still edge-to-edge`, m.stage.h >= m.vh * 0.95 && m.stage.w >= m.vw - 1,
+      `${Math.round(m.stage.w)}×${Math.round(m.stage.h)} of ${m.vw}×${m.vh}`);
     check(`${label}: nothing overlaps`, m.overlaps.length === 0, m.overlaps.join(", "));
     lines.push(`       (${label}: combo ${Math.round(m.comboFont)}px, stage ${Math.round(m.stage.h)}/${m.vh})`);
   }

@@ -873,7 +873,7 @@ function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned
 function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
 function finish() {
   state.phase = "done"; state.running = false;
-  stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3);
+  stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); exitFullscreen(); ringBell(3);
   // The streak lives in the summary below; repeating it here in display type
   // read as a bug rather than a flourish.
   el.combo.textContent = "Nice work.";
@@ -927,11 +927,39 @@ function tick() {
   render();
 }
 
+// ---------- Full-screen while training ----------
+// A visible URL bar mid-session reads as "website", not "app". Where the
+// platform allows it (Android Chrome, desktop browsers), take the whole
+// screen for the session and give it back when the session ends. iPhone
+// Safari has no fullscreen API for plain elements — there the answer is
+// installing to the home screen, which manifest.json (display: standalone)
+// already covers. Deliberately kept through pause: flicking in and out of
+// fullscreen on a quick pause/resume is worse than the bar staying away.
+// Enter must be called synchronously from a tap — it needs user activation.
+function enterFullscreen() {
+  const root = document.documentElement;
+  const request = root.requestFullscreen || root.webkitRequestFullscreen;
+  if (!request || document.fullscreenElement || document.webkitFullscreenElement) return;
+  try {
+    const p = request.call(root, { navigationUI: "hide" });
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) {}
+}
+function exitFullscreen() {
+  if (!(document.fullscreenElement || document.webkitFullscreenElement)) return;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  try {
+    const p = exit && exit.call(document);
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) {}
+}
+
 // ---------- Start / pause / reset ----------
 function start() {
   audioCtx = getAudioCtx();
   if (audioCtx.state === "suspended") audioCtx.resume();
   unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
+  enterFullscreen();
   state.running = true;
   acquireWakeLock();
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
@@ -943,8 +971,8 @@ function start() {
   state.tickTimer = setInterval(tick, 1000);
 }
 function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
-function resume() { state.running = true; el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); render(); }
-function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
+function resume() { state.running = true; enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); render(); }
+function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); exitFullscreen(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
 el.startBtn.addEventListener("click", () => {

@@ -134,6 +134,29 @@ body {
 .stage[data-phase="done"] .dial__track { stroke: rgba(255, 255, 255, 0.03); }
 .dial__center { text-align: center; z-index: 1; max-width: 84%; }
 
+/* Countdown pulse: a translucent wave that fills the dial from the centre out
+   to the ring, once per "get ready" second — three fast waves that say "it's
+   about to start" without a word. Sits under the centre text (z-index above). */
+.dial__pulse {
+  position: absolute;
+  inset: 5%;                /* the ring circle is r=54 in a 120-unit viewBox */
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  transform: scale(0);
+  pointer-events: none;
+}
+.stage[data-phase="countdown"] .dial__pulse {
+  /* The countdown is 3s: one 1s wave per second, expansion fast (first ~45%),
+     then it dissolves at full size while the next second arms. */
+  animation: dialPulse 1s cubic-bezier(0.16, 0.8, 0.3, 1) 3;
+}
+@keyframes dialPulse {
+  0%   { transform: scale(0); opacity: 0.34; }
+  45%  { transform: scale(1); opacity: 0.2; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
 /* ==========================================================================
    FOCUS MODE — while a session is actually running.
    Mid-round nobody needs the settings; they need to read the combo from across
@@ -158,7 +181,14 @@ body {
   pointer-events: none;
   transition: opacity 0.18s ease, max-height 0.3s ease;
 }
-.app[data-focus="1"] { gap: 14px; padding-bottom: 20px; }
+/* ACTUALLY full screen: no column max-width, no page padding, no card chrome —
+   the stage IS the screen. The controls float over it as icons (below), so not
+   a single pixel band is reserved for buttons. */
+.app[data-focus="1"] {
+  max-width: none;
+  padding: 0;
+  gap: 0;
+}
 .app[data-focus="1"] .stage {
   flex: 1 1 auto;
   display: flex;
@@ -166,16 +196,59 @@ body {
   align-items: center;
   justify-content: space-evenly;
   gap: clamp(14px, 3.5vh, 34px);
-  padding: clamp(24px, 6vh, 64px) 20px;
+  border: 0;
+  border-radius: 0;
+  /* The bottom reserve is where the floating controls live (52px + margins),
+     so a long combo can never slide under them. Safe-area terms keep content
+     off the notch/home bar when there's genuinely no browser chrome. */
+  padding: calc(clamp(20px, 5vh, 56px) + env(safe-area-inset-top, 0px))
+           calc(18px + env(safe-area-inset-right, 0px))
+           calc(clamp(68px, 12vh, 100px) + env(safe-area-inset-bottom, 0px))
+           calc(18px + env(safe-area-inset-left, 0px));
+}
+/* Mid-session the two buttons shrink to floating glass squircles over the
+   stage. Rounded squares, not circles — they echo the card radius everywhere
+   else, and a lone teal circle read as a record button. The text label is
+   still in the DOM (font-size 0) for screen readers; the glyph is the icon. */
+.app[data-focus="1"] .controls {
+  position: fixed;
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 6;
+  gap: 10px;
+}
+.app[data-focus="1"] .btn {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 16px;
+  font-size: 0;
+  border: 1px solid var(--hairline);
+  background-color: rgba(255, 255, 255, 0.07);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 20px 20px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.app[data-focus="1"] .btn--primary,
+.app[data-focus="1"] .btn--primary.is-running {
+  background-color: rgba(73, 149, 146, 0.3);
+  border-color: rgba(73, 149, 146, 0.55);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6' y='4' width='4.4' height='16' rx='1.6' fill='%23e9f4f3'/%3E%3Crect x='13.6' y='4' width='4.4' height='16' rx='1.6' fill='%23e9f4f3'/%3E%3C/svg%3E");
+}
+.app[data-focus="1"] #resetBtn {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-6-6c1.66 0 3.15.68 4.24 1.76L13 11h7V4l-2.35 2.35z' fill='%23dfe7e6'/%3E%3C/svg%3E");
 }
 .app[data-focus="1"] .stage__meta,
 .app[data-focus="1"] .stage__main { width: 100%; max-width: 100%; }
-.app[data-focus="1"] .dial { width: min(74vw, 46vh, 100%); }
+.app[data-focus="1"] .dial { width: min(78vw, 48vh, 100%); }
 .app[data-focus="1"] .phase { letter-spacing: 0.28em; opacity: 0.9; }
 .app[data-focus="1"] .round { letter-spacing: 0.16em; }
-.app[data-focus="1"] .clock { font-size: clamp(40px, 11.5vw, 88px); }
+.app[data-focus="1"] .clock { font-size: clamp(44px, 12.5vw, 96px); }
 .app[data-focus="1"] .combo {
-  font-size: calc(clamp(42px, 14vw, 108px) * var(--fit, 1));
+  font-size: calc(clamp(46px, 15.5vw, 120px) * var(--fit, 1));
   line-height: 1.06;
   margin-top: 0;
 }
@@ -195,17 +268,30 @@ body {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
     align-items: center;
     gap: clamp(14px, 3vw, 48px);
-    padding: clamp(10px, 2.5vh, 36px) clamp(16px, 3.5vw, 48px);
+    /* The right gutter is where the floating controls column lives. */
+    padding: calc(clamp(10px, 2.5vh, 36px) + env(safe-area-inset-top, 0px))
+             calc(clamp(16px, 3vw, 40px) + 72px + env(safe-area-inset-right, 0px))
+             calc(clamp(10px, 2.5vh, 36px) + env(safe-area-inset-bottom, 0px))
+             calc(clamp(16px, 3.5vw, 48px) + env(safe-area-inset-left, 0px));
     min-height: 0;
   }
   .app[data-focus="1"] .stage__meta,
   .app[data-focus="1"] .stage__main { min-width: 0; min-height: 0; }
   .app[data-focus="1"] .stage__main { max-width: none; }
-  .app[data-focus="1"] .dial { width: min(30vw, 74vh, 100%); }
+  /* On a side: the controls stack on the right edge, centred where a thumb
+     naturally rests, out of both columns' way thanks to the gutter above. */
+  .app[data-focus="1"] .controls {
+    flex-direction: column;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+    right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+  .app[data-focus="1"] .dial { width: min(32vw, 78vh, 100%); }
   /* Sized off height as well as width, so it fits the ~390px a phone gives you
      on its side rather than wrapping into the controls. */
-  .app[data-focus="1"] .clock { font-size: clamp(24px, min(4.8vw, 13.5vh), 72px); }
-  .app[data-focus="1"] .combo { font-size: calc(clamp(24px, min(6vw, 15vh), 84px) * var(--fit, 1)); }
+  .app[data-focus="1"] .clock { font-size: clamp(26px, min(5.2vw, 15vh), 80px); }
+  .app[data-focus="1"] .combo { font-size: calc(clamp(26px, min(6.6vw, 16.5vh), 92px) * var(--fit, 1)); }
   .app[data-focus="1"] .combo-name { font-size: 10px; margin-bottom: 0; }
   .app[data-focus="1"] .round { font-size: 11px; }
 }
@@ -239,10 +325,9 @@ body {
 /* Big screens: a Mac has the room for genuinely large type, and this gets read
    from further away than a phone. */
 @media (min-width: 900px) {
-  .app[data-focus="1"] { max-width: 1200px; }
-  .app[data-focus="1"] .dial { width: min(30vw, 62vh, 100%); }
-  .app[data-focus="1"] .clock { font-size: clamp(40px, min(5.6vw, 16vh), 104px); }
-  .app[data-focus="1"] .combo { font-size: calc(clamp(48px, min(9vw, 22vh), 132px) * var(--fit, 1)); }
+  .app[data-focus="1"] .dial { width: min(32vw, 66vh, 100%); }
+  .app[data-focus="1"] .clock { font-size: clamp(44px, min(6vw, 17.5vh), 116px); }
+  .app[data-focus="1"] .combo { font-size: calc(clamp(52px, min(9.8vw, 24vh), 148px) * var(--fit, 1)); }
 }
 
 .phase {
@@ -543,7 +628,8 @@ label,
   .stage[data-phase="done"] .stats,
   .stage[data-phase="done"]::after,
   .flame,
-  .stat-num.is-pop { animation: none; }
+  .stat-num.is-pop,
+  .stage[data-phase="countdown"] .dial__pulse { animation: none; }
   .stage[data-phase="done"]::after { display: none; }
 }
 

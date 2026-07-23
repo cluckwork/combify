@@ -161,6 +161,17 @@ export async function boot(cfg = {}) {
     },
   };
 
+  // Fullscreen spy: the app takes the screen for the session and gives it back
+  // when the session ends. jsdom implements none of the API, so unless a test
+  // opts out (cfg.noFullscreen — e.g. iPhone Safari), stub enough to observe.
+  const fsLog = [];
+  let fsElement = null;
+  Object.defineProperty(window.document, "fullscreenElement", { get: () => fsElement, configurable: true });
+  if (!cfg.noFullscreen) {
+    window.document.documentElement.requestFullscreen = function () { fsLog.push("enter"); fsElement = this; return Promise.resolve(); };
+    window.document.exitFullscreen = function () { fsLog.push("exit"); fsElement = null; return Promise.resolve(); };
+  }
+
   const speechLog = [];
   const speech = {
     speaking: false,
@@ -254,7 +265,7 @@ export async function boot(cfg = {}) {
 
   const doc = window.document;
   const api = {
-    dom, window, doc, clock, stats, wakeLog, speechLog, cfg, synth, vibrations,
+    dom, window, doc, clock, stats, wakeLog, speechLog, fsLog, cfg, synth, vibrations,
     set(id, v) { doc.getElementById(id).dataset.value = String(v); },
     setSeg(id, v) { doc.getElementById(id).dataset.value = v; },
     click(id) { doc.getElementById(id).dispatchEvent(new window.MouseEvent("click", { bubbles: true })); },

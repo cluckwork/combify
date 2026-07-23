@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-22 · **Current version:** v1.5.1 (live on GitHub Pages)
+> **Last updated:** 2026-07-22 · **Current version:** v1.6.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,21 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.6.0** — **True fullscreen sessions.** Starting a session now
+  requests real browser fullscreen where the platform allows it (Android
+  Chrome, desktops; iPhone Safari has no fullscreen API — there the installed
+  PWA covers it), and focus mode is edge-to-edge: no page padding, no card
+  border, the stage IS the screen. Pause/Reset shrink to floating glass
+  squircle icons (bottom-right in portrait, right-edge centred in landscape/
+  desktop) so no pixel band is reserved for buttons, and the clock/combo type
+  scaled up ~10% to use the reclaimed space. Countdown now fires a translucent
+  teal pulse that fills the dial from the centre out once per "get ready"
+  second. Removed the manifest's portrait orientation lock, which contradicted
+  the purpose-built landscape layouts on installed phones. Tests: fullscreen
+  lifecycle (enters on start, survives pause, exits at finish; clean no-API
+  fallback), edge-to-edge stage assertions, icon-sized-controls check; the
+  rotation suite now drops out of fullscreen before resizing (Chromium refuses
+  to resize a fullscreen window). 225 layout + 136 behaviour checks green.
 - **2026-07-22 — v1.5.1** — **Smooth ring drain + landscape ready/finish fix.**
   The progress ring now drains continuously (redrawn every frame from the same
   real-time deadline the timer uses) instead of stepping once a second;

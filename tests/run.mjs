@@ -197,6 +197,39 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// ------------------------------------------------- 10b. fullscreen lifecycle
+{
+  section("10b. Fullscreen follows the session");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 10); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(4000); // through the countdown, into work
+  check("fullscreen requested on start", app.fsLog[0] === "enter", app.fsLog.join(","));
+  app.click("startBtn"); // pause
+  await app.clock.advance(500);
+  check("pause keeps fullscreen (no in/out flicker)", !app.fsLog.includes("exit"), app.fsLog.join(","));
+  app.click("startBtn"); // resume
+  await app.clock.advance(500);
+  check("resume doesn't re-request while already fullscreen",
+    app.fsLog.filter((x) => x === "enter").length === 1, app.fsLog.join(","));
+  await app.clock.advance(15000); // work runs out → done
+  check("fullscreen released when the session finishes", app.fsLog.includes("exit"), app.fsLog.join(","));
+  app.restore();
+}
+
+// ------------------------------------- 10c. no fullscreen API (iPhone Safari)
+{
+  section("10c. Browser without a fullscreen API");
+  const app = await boot({ duration: 0.6, noFullscreen: true });
+  app.set("rounds", 1); app.set("workSec", 30); app.set("restSec", 5);
+  app.setSeg("pace", "1500");
+  app.click("startBtn");
+  const { n } = await countCombos(app, 20000);
+  check("app runs normally without a fullscreen API", n >= 2, `${n} combos`);
+  check("no fullscreen calls attempted", app.fsLog.length === 0, app.fsLog.join(","));
+  app.restore();
+}
+
 // ------------------------------------------------------ 11. element count sanity
 {
   section("11. Audio element count (iOS decoder pressure)");
