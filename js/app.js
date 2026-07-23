@@ -497,6 +497,9 @@ function playClips(keys, onDone) {
     clearTimeout(state.clipWatchdog);
     voice.current = null;
     if (!state.running || state.phase !== "work" || i >= keys.length) { onDone(); return; }
+    // Highlight here, not inside playWord: this runs exactly once per move,
+    // whereas playWord re-enters on a retry and would re-pop the same word.
+    highlightMove(i);
     playWord(keys[i++], 0);
   };
 
@@ -820,7 +823,14 @@ function showCombo(combo) {
     // "1 -" stays together; the space BETWEEN tokens is a plain text node, which
     // is the only place a line may break. Without that separate text node there
     // is no break opportunity at all and the combo runs off the screen.
-    t.textContent = MOVES[key].label + (last ? "" : " -");
+    // The move itself is wrapped separately from its separator so the callout
+    // highlight lands on the move alone — colouring "2 -" as one unit made the
+    // marker look wider than the thing it marks. textContent is unaffected.
+    const label = document.createElement("span");
+    label.className = "mv__label";
+    label.textContent = MOVES[key].label;
+    t.appendChild(label);
+    if (!last) t.appendChild(document.createTextNode(" -"));
     frag.appendChild(t);
     if (!last) frag.appendChild(document.createTextNode(" "));
   });
@@ -829,20 +839,22 @@ function showCombo(combo) {
   // the size a 3-move one wants to be.
   const n = combo.length;
   el.combo.style.setProperty("--fit", n <= 4 ? "1" : n <= 6 ? "0.88" : n <= 9 ? "0.78" : "0.68");
-  popCombo();
 }
 
-// Each new combo lands with a small pop. Watching from across the room the
-// text alone changes too quietly — especially when two combos share moves —
-// so the movement, not the reading, is what says "next one". The reflow is
-// required: without it the class is removed and re-added inside one frame and
-// the browser never restarts the animation, so a fast pace would pop once and
-// then sit still. Opt-out lives in CSS (prefers-reduced-motion), which is why
-// the class is added unconditionally here.
-function popCombo() {
-  el.combo.classList.remove("is-pop");
-  void el.combo.offsetWidth;
-  el.combo.classList.add("is-pop");
+// Mark the ONE move being called right now, so the screen tracks the voice
+// instead of just displaying the whole combo at once — you can glance down
+// mid-combo and see where you are. Popping the entire combo on arrival (what
+// this replaced) drew the eye at exactly the moment there was nothing new to
+// read. Styling is in CSS so prefers-reduced-motion can drop the movement and
+// keep the colour, which is the part that actually carries the information.
+function highlightMove(idx) {
+  if (!el.combo) return;
+  const moves = el.combo.querySelectorAll(".mv");
+  for (const m of moves) m.classList.remove("is-now");
+  const cur = moves[idx];
+  if (!cur) return;
+  void cur.offsetWidth; // restart the animation rather than inherit a finished one
+  cur.classList.add("is-now");
 }
 
 // ---------- Combo calling (only during work) ----------

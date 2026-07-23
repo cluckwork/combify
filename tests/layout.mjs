@@ -21,6 +21,25 @@ const ONLY = (() => { const i = process.argv.indexOf("--only"); return i > -1 ? 
 // --fast shortens the in-session waits; enough to reach every screen, not
 // enough to sit through realistic rounds.
 const FAST = process.argv.includes("--fast");
+// How many devices run at once. The suite is dominated by WAITING (a 3s
+// countdown, a round playing out) rather than CPU, so overlapping devices
+// collapses the wall clock even on a 2-core box. --jobs 1 restores the old
+// serial behaviour if a run ever needs isolating.
+const JOBS = (() => {
+  const i = process.argv.indexOf("--jobs");
+  const n = i > -1 ? parseInt(process.argv[i + 1], 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 6; // 6 = every device at once
+})();
+
+// Fixed-size worker pool preserving input order in the results.
+async function pool(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i]);
+  }));
+  return out;
+}
 const shotDir = path.join(HERE, ".shots");
 
 let pass = 0, fail = 0;
@@ -132,6 +151,14 @@ const settled = (page, hidden) => page.waitForFunction(
     .every((e) => { const h = e.getBoundingClientRect().height; return want ? h < 1 : h > 1; }),
   hidden, { timeout: 5000 }).catch(() => {});
 
+// Wait for the app to actually REACH a phase instead of sleeping a guessed
+// duration. Returns the moment it happens rather than always burning the
+// worst case, and because waitForFunction polls on animation frames it keeps
+// the renderer awake — headless otherwise throttles it, freezing the very
+// timers and transitions being waited on.
+const reachPhase = (page, want, timeout) => page.waitForFunction(
+  (w) => document.getElementById("stage").dataset.phase === w, want, { timeout }).catch(() => {});
+
 // Drive a session to a given phase, with the clock sped up so it's quick.
 async function startSession(page, { work = 8, rest = 5, rounds = 2 } = {}) {
   await page.evaluate(({ work, rest, rounds }) => {
@@ -145,7 +172,16 @@ async function startSession(page, { work = 8, rest = 5, rounds = 2 } = {}) {
   await tap(page);
 }
 
-for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONLY.toLowerCase()))) {
+// One device, self-contained: its own tallies so devices can run concurrently
+// without interleaving each other's output. `check` and `lines` deliberately
+// shadow the module-level ones.
+async function runDevice(dev) {
+  let pass = 0, fail = 0;
+  const lines = [];
+  const check = (name, cond, detail = "") => {
+    if (cond) { pass++; lines.push(`    ✅ ${name}`); }
+    else { fail++; lines.push(`    ❌ ${name}${detail ? "  → " + detail : ""}`); }
+  };
   lines.push(`\n── ${dev.name} (${dev.width}×${dev.height}) ──`);
   const ctx = await browser.newContext({
     viewport: { width: dev.width, height: dev.height },
@@ -178,7 +214,7 @@ for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(O
   // renderer, so the 3s countdown either freezes or fires in a burst that the
   // app's real-time catch-up correctly skips through — neither of which says
   // anything about the ring. The virtual clock in jsdom answers it exactly.
-  await page.waitForTimeout(3600); // countdown done, into work
+  await reachPhase(page, "work", 15000); // countdown done, into work
   await settled(page, true);
   m = await page.evaluate(probe);
   check("focus mode engaged", m.focus === "1", `focus=${m.focus}`);
@@ -244,7 +280,7 @@ for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(O
 
   // ---- Finish screen ----
   await tap(page);            // resume
-  await page.waitForTimeout(FAST ? 16000 : 30000);   // let the rounds run out
+  await reachPhase(page, "done", FAST ? 40000 : 70000);   // let the rounds run out
   m = await page.evaluate(probe);
   const phase = await page.textContent("#phase");
   check("session reached the finish screen", phase.trim() === "Done", phase);
@@ -260,14 +296,20 @@ for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(O
 
   check("no JavaScript errors on this device", errors.length === 0, errors.join(" | "));
   await ctx.close();
+  return { lines, pass, fail };
 }
 
 // ---------------------------------------------------------------------------
 // Rotating the phone MID-ROUND — the case most likely to break, and the one
 // jsdom can say nothing about.
 // ---------------------------------------------------------------------------
-lines.push(`\n── Rotating mid-session ──`);
-if (!ONLY || "rotating mid-session".includes(ONLY.toLowerCase())) {
+async function runRotation() {
+  let pass = 0, fail = 0;
+  const lines = [`\n── Rotating mid-session ──`];
+  const check = (name, cond, detail = "") => {
+    if (cond) { pass++; lines.push(`    ✅ ${name}`); }
+    else { fail++; lines.push(`    ❌ ${name}${detail ? "  → " + detail : ""}`); }
+  };
   // Its own browser, not a context on the shared one. Rotation is simulated by
   // setViewportSize, and Chromium refuses to resize a window left in a
   // maximized/fullscreen state — which the 1920×1080 device above puts it in.
@@ -291,8 +333,13 @@ if (!ONLY || "rotating mid-session".includes(ONLY.toLowerCase())) {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(base, { waitUntil: "networkidle" });
-  await startSession(page, { work: 30, rest: 10, rounds: 2 });
-  await page.waitForTimeout(3600);
+  // One short round: long enough that the sampling window below cannot cross
+  // a phase boundary, short enough that waiting it out costs seconds not a
+  // minute. It used to be 2 rounds of 30s and the finish was never reached —
+  // the wait expired first, so "finish screen survives rotation" was really
+  // asserting against a mid-round screen.
+  await startSession(page, { work: 12, rest: 3, rounds: 1 });
+  await reachPhase(page, "work", 15000);
 
   const clockBefore = await page.textContent("#clock");
   const comboBefore = await page.textContent("#combo");
@@ -335,14 +382,30 @@ if (!ONLY || "rotating mid-session".includes(ONLY.toLowerCase())) {
   check("no JavaScript errors while rotating", errors.length === 0, errors.join(" | "));
 
   // Rotate on the finish screen too.
-  await page.waitForTimeout(35000);
+  await reachPhase(page, "done", 40000);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
   const m2 = await page.evaluate(probe);
+  check("the session really did finish", (await page.textContent("#phase")).trim() === "Done",
+    await page.textContent("#phase"));
   check("finish screen survives rotation", m2.docScrollW <= m2.docClientW + 1, `${m2.docScrollW} > ${m2.docClientW}`);
   check("finish summary still on screen after rotating", m2.stats.bottom <= m2.vh + 1, `${m2.stats.bottom} vs ${m2.vh}`);
   await ctx.close();
   await rotBrowser.close();
+  return { lines, pass, fail };
+}
+
+// Devices run through the pool; the rotation section owns a separate browser
+// and runs alongside them, so it is never the thing everything else waits on.
+const devices = DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONLY.toLowerCase()));
+const wantRotation = !ONLY || "rotating mid-session".includes(ONLY.toLowerCase());
+const [devResults, rotResult] = await Promise.all([
+  pool(devices, JOBS, runDevice),
+  wantRotation ? runRotation() : null,
+]);
+for (const r of [...devResults, rotResult]) {
+  if (!r) continue;
+  lines.push(...r.lines); pass += r.pass; fail += r.fail;
 }
 
 await browser.close();

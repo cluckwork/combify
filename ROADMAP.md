@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-22 · **Current version:** v1.7.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.7.1 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,21 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.7.1** — **Per-move callout highlight; countdown glides
+  again; test suite ~6× faster.** The screen now tracks the voice: the single
+  move being called turns BWB teal with a small lift, so you can glance down
+  mid-combo and see where you are. It replaces the whole-combo pop, which fired
+  when there was nothing new to read. Only the move itself is marked, not its
+  "-" separator. The 3-2-1 disc glides between its per-second steps again
+  (a 0.45s transition scoped to the countdown) — the hard jumps read as blocky;
+  work and rest keep the per-frame sweep. **Testing:** the full suite went from
+  ~3m15s to **34s** for 375 checks, with no coverage removed — layout devices
+  now run concurrently (`--jobs`, default 6) and the fixed sleeps became
+  phase-condition waits, which also return as soon as the app is ready instead
+  of always burning the worst case. That change surfaced a dud assertion: the
+  rotation section's 35s sleep expired before the session ever finished, so
+  "finish screen survives rotation" had been checking a mid-round screen. It
+  now genuinely reaches the finish, and asserts it.
 - **2026-07-23 — v1.7.0** — **Combo pop, stepped countdown, and four bug fixes.**
   Every new combo now lands with a small pop, so someone watching from across
   the room sees a new one arrived instead of having to re-read the text. The

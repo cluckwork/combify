@@ -197,25 +197,31 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
-// ------------------------------------------------------ 10a. combo pop cue
+// ------------------------------------------- 10a. per-move callout highlight
 {
-  section("10a. Every new combo pops");
+  section("10a. The move being called is the one highlighted");
   const app = await boot({ duration: 0.6 });
-  app.set("rounds", 1); app.set("workSec", 40); app.set("restSec", 5);
-  app.setSeg("pace", "1500");
-  const combo = app.doc.getElementById("combo");
+  app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 5);
+  app.setSeg("pace", "3000"); // relaxed: one combo stays up long enough to watch
+  const marks = () => [...app.doc.querySelectorAll("#combo .mv")].map((e) => e.classList.contains("is-now"));
+  const litIndex = () => marks().indexOf(true);
+  const litCount = () => marks().filter(Boolean).length;
+
   app.click("startBtn");
-  await app.clock.advance(4000); // through the countdown, first combo called
-  check("first combo carries the pop class", combo.classList.contains("is-pop"),
-    `class="${combo.className}"`);
-  // The class is re-applied per combo; without the reflow in popCombo the
-  // browser would never restart the animation on the second one.
-  // Strip it and let the next combo land. Deliberately NOT asserting the text
-  // changed: combos only avoid repeating back-to-back, so the same one can
-  // legitimately come round again and that made this flake.
-  combo.classList.remove("is-pop");
-  await app.clock.advance(12000);
-  check("the next combo pops too", combo.classList.contains("is-pop"), `class="${combo.className}"`);
+  await app.clock.advance(3600); // through the countdown, first word playing
+  check("the first move lights up as it is called", litIndex() === 0, `index ${litIndex()}`);
+  check("exactly one move is lit", litCount() === 1, `${litCount()} lit`);
+
+  // Walk forward a word at a time; the mark must follow the voice.
+  const seen = [litIndex()];
+  for (let i = 0; i < 3; i++) {
+    await app.clock.advance(900); // clip (600ms) plus the gap between words
+    if (litCount() !== 1) break;
+    if (litIndex() !== seen[seen.length - 1]) seen.push(litIndex());
+  }
+  check("the highlight advances through the combo", seen.length >= 3, `sequence ${seen.join("-")}`);
+  check("it never lights two moves at once", litCount() === 1, `${litCount()} lit`);
+  check("and it only moves forward", seen.every((v, i) => i === 0 || v > seen[i - 1]), `sequence ${seen.join("-")}`);
   app.restore();
 }
 

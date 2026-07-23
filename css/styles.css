@@ -128,6 +128,15 @@ body {
      (dialLoop), and an eased transition on top of that only adds lag. */
   transition: stroke 0.3s ease;
 }
+/* The countdown is the exception. Its value only changes once a second, so
+   with no transition the disc teleports between thirds and reads as blocky.
+   Gliding each step gives back the original feel: you still get three
+   distinct per-second beats, but the movement between them is smooth. Scoped
+   to this phase only — work and rest are driven per-frame, where easing on
+   top would just add lag. */
+.stage[data-phase="countdown"] .dial__fill {
+  transition: stroke-dashoffset 0.45s linear, stroke 0.3s ease;
+}
 .stage[data-phase="rest"] .dial__fill { stroke: var(--rest); }
 .stage[data-phase="ready"] .dial__fill,
 .stage[data-phase="done"] .dial__fill { stroke: transparent; }
@@ -367,8 +376,29 @@ body {
   text-wrap: balance;          /* even line lengths instead of one orphan word */
 }
 /* One move plus its separator, kept together so a wrapped combo never starts a
-   line with a dangling hyphen. */
+   line with a dangling hyphen. inline-block because transforms do nothing on a
+   plain inline element — the pop below needs a box to scale. */
 .mv { white-space: nowrap; }
+/* The move glyph on its own, without the trailing separator. inline-block
+   because transforms do nothing to a plain inline element. */
+.mv__label {
+  display: inline-block;
+  transition: color 0.25s ease;
+}
+/* The move being called RIGHT NOW. Deliberately restrained: a small lift plus
+   the brand teal is enough to pull the eye to your place in the combo, where
+   a bigger jump would pull attention off the number you are meant to be
+   reading. The colour holds until the next word takes over, so at any instant
+   exactly one move is marked; the scale is a one-shot on arrival. */
+@keyframes movePop {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+.mv.is-now .mv__label {
+  color: var(--accent);
+  animation: movePop 0.36s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
 
 /* iOS treats two quick taps on the same spot as "zoom in", which both zoomed
    the page and swallowed the second tap — so jabbing +/- to set rounds, work
@@ -522,13 +552,6 @@ label,
    the same shape as the finish total's landing so the app has one idiom for
    "this just changed". Kept small: at display size a big scale reads as the
    text lurching. */
-@keyframes comboPop {
-  0%   { transform: scale(0.955); }
-  55%  { transform: scale(1.035); }
-  100% { transform: scale(1); }
-}
-.combo.is-pop { animation: comboPop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.35); }
-
 @keyframes finishRise {
   from { opacity: 0; transform: translateY(8px) scale(0.97); }
   to   { opacity: 1; transform: none; }
@@ -646,7 +669,7 @@ label,
   .stage[data-phase="done"] .dial::after,
   .flame,
   .stat-num.is-pop,
-  .combo.is-pop,
+  .mv.is-now .mv__label,
   .stage[data-phase="countdown"] .dial__pulse { animation: none; }
   .stage[data-phase="done"] .dial::after { display: none; }
 }
