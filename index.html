@@ -44,6 +44,9 @@
 
     <!-- Settings -->
     <section class="settings" id="settings">
+      <!-- The two settings people actually change between sessions live up top;
+           round lengths are set once and then left alone, so they sit inside
+           "More options" to keep the first screen short. -->
       <div class="field field--stack">
         <span class="field__label">Level</span>
         <div class="seg" id="level" data-value="intermediate" role="radiogroup" aria-label="Level" tabindex="0">
@@ -54,43 +57,43 @@
         </div>
       </div>
 
-      <div class="field">
-        <span>Rounds</span>
-        <div class="step" id="rounds" data-min="1" data-max="20" data-step="1" data-value="3">
-          <button class="step__btn" data-dir="-1" aria-label="Fewer rounds">&minus;</button>
-          <span class="step__val">3</span>
-          <button class="step__btn" data-dir="1" aria-label="More rounds">+</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <span>Work (seconds)</span>
-        <div class="step" id="workSec" data-min="10" data-max="600" data-step="5" data-value="120">
-          <button class="step__btn" data-dir="-1" aria-label="Less work time">&minus;</button>
-          <span class="step__val">120</span>
-          <button class="step__btn" data-dir="1" aria-label="More work time">+</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <span>Rest (seconds)</span>
-        <div class="step" id="restSec" data-min="5" data-max="300" data-step="5" data-value="30">
-          <button class="step__btn" data-dir="-1" aria-label="Less rest time">&minus;</button>
-          <span class="step__val">30</span>
-          <button class="step__btn" data-dir="1" aria-label="More rest time">+</button>
+      <div class="field field--stack">
+        <span class="field__label">Combo pace</span>
+        <div class="seg" id="pace" data-value="1500" role="radiogroup" aria-label="Combo pace" tabindex="0">
+          <span class="seg__thumb"></span>
+          <button class="seg__opt" data-value="3000">Relaxed</button>
+          <button class="seg__opt" data-value="1500">Steady</button>
+          <button class="seg__opt" data-value="500">Fast</button>
         </div>
       </div>
 
       <details class="more">
         <summary>More options</summary>
         <div class="more__body">
-          <div class="field field--stack">
-            <span class="field__label">Combo pace</span>
-            <div class="seg" id="pace" data-value="1500" role="radiogroup" aria-label="Combo pace" tabindex="0">
-              <span class="seg__thumb"></span>
-              <button class="seg__opt" data-value="3000">Relaxed</button>
-              <button class="seg__opt" data-value="1500">Steady</button>
-              <button class="seg__opt" data-value="500">Fast</button>
+          <div class="field">
+            <span>Rounds</span>
+            <div class="step" id="rounds" data-min="1" data-max="20" data-step="1" data-value="3">
+              <button class="step__btn" data-dir="-1" aria-label="Fewer rounds">&minus;</button>
+              <span class="step__val">3</span>
+              <button class="step__btn" data-dir="1" aria-label="More rounds">+</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span>Work (seconds)</span>
+            <div class="step" id="workSec" data-min="10" data-max="600" data-step="5" data-value="120">
+              <button class="step__btn" data-dir="-1" aria-label="Less work time">&minus;</button>
+              <span class="step__val">120</span>
+              <button class="step__btn" data-dir="1" aria-label="More work time">+</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <span>Rest (seconds)</span>
+            <div class="step" id="restSec" data-min="5" data-max="300" data-step="5" data-value="30">
+              <button class="step__btn" data-dir="-1" aria-label="Less rest time">&minus;</button>
+              <span class="step__val">30</span>
+              <button class="step__btn" data-dir="1" aria-label="More rest time">+</button>
             </div>
           </div>
 

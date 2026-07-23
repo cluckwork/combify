@@ -83,7 +83,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null };
 
 // ---------- Screen wake lock ----------
 // Keeps the screen on while a session runs, so a member who sets the phone
@@ -103,7 +103,9 @@ function releaseWakeLock() {
   if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
 }
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && state.running) acquireWakeLock();
+  if (document.visibilityState !== "visible" || !state.running) return;
+  acquireWakeLock();
+  tick(); // catch the clock up immediately rather than showing a stale time
 });
 
 // ---------- Shared audio context (bell + voice clips both use this) ----------
@@ -496,35 +498,56 @@ function stopComboLoop() {
 }
 
 // ---------- Phase changes ----------
-function enterWork() { state.phase = "work"; state.secondsLeft = getWork(); state.warned10 = false; ringBell(1); render(); startComboLoop(); }
-function enterRest() { state.phase = "rest"; state.secondsLeft = getRest(); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
+// Every phase records the wall-clock moment it should END, not just a countdown
+// number. tick() then derives the remaining seconds from the real clock, so the
+// timer stays honest even when the browser stops firing our interval on time.
+function beginPhase(seconds) {
+  state.secondsLeft = seconds;
+  state.phaseEndsAt = Date.now() + seconds * 1000;
+}
+function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned10 = false; ringBell(1); render(); startComboLoop(); }
+function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
 function finish() { state.phase = "done"; state.running = false; stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3); el.combo.textContent = "Session complete — nice work."; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); render(); }
 
 // ---------- The one-second heartbeat ----------
+// Reads the REAL elapsed time rather than assuming this ran exactly 1s after
+// the last one. Browsers throttle timers hard in a backgrounded tab (often to
+// once a minute), so counting ticks used to lose almost all of a round: a
+// member who switched to their music app to skip a track came back to a timer
+// that had barely moved. Deriving from Date.now() means the round keeps real
+// time no matter how irregularly this fires.
 function tick() {
+  const prev = state.secondsLeft;
+  const remaining = Math.max(0, Math.ceil((state.phaseEndsAt - Date.now()) / 1000));
+  state.secondsLeft = remaining;
+  const changed = remaining !== prev;
+  // If the tab was asleep we may have skipped several seconds at once; only
+  // fire the audio cues when we actually landed on their second, so coming
+  // back doesn't dump a pile of beeps at once.
+  const stepped = prev - remaining === 1;
+
   if (state.phase === "countdown") {
-    state.secondsLeft -= 1;
-    if (state.secondsLeft > 0) { playTick(); render(); return; }
+    if (remaining > 0) { if (changed) playTick(); render(); return; }
     state.currentRound = 1;
     enterWork();
     return;
   }
-  state.secondsLeft -= 1;
-  if (state.phase === "work" && !state.warned10 && state.secondsLeft === 10 && getWork() > 10) {
-    playWarning();
-    state.warned10 = true;
-  }
-  // Repeat the same clapper cue for each of the final 3 seconds — a quick
-  // "wrap it up" flourish leading into the bell.
-  if (state.phase === "work" && state.secondsLeft >= 1 && state.secondsLeft <= 3) {
-    playWarning();
+  if (state.phase === "work" && stepped) {
+    if (!state.warned10 && remaining === 10 && getWork() > 10) {
+      playWarning();
+      state.warned10 = true;
+    }
+    // Repeat the same clapper cue for each of the final 3 seconds — a quick
+    // "wrap it up" flourish leading into the bell.
+    if (remaining >= 1 && remaining <= 3) playWarning();
   }
   reviveComboLoop();
-  if (state.secondsLeft <= 0) {
+  if (remaining <= 0) {
     if (state.phase === "work") {
       if (state.currentRound >= getRounds()) { finish(); return; }
       enterRest();
     } else if (state.phase === "rest") { state.currentRound += 1; enterWork(); }
+    return; // enterWork/enterRest already rendered
   }
   render();
 }
@@ -537,13 +560,13 @@ function start() {
   state.running = true;
   acquireWakeLock();
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
-  state.phase = "countdown"; state.secondsLeft = 3;
+  state.phase = "countdown"; beginPhase(3);
   el.combo.textContent = "Get ready...";
   playTick(); render();
   state.tickTimer = setInterval(tick, 1000);
 }
 function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); }
-function resume() { state.running = true; el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); }
+function resume() { state.running = true; el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); }
 function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; render(); }
 
 // ---------- Wire up the buttons ----------

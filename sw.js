@@ -1,6 +1,9 @@
 // sw.js — a tiny service worker so Combify loads fast and works offline
 // once it's been opened once.
-const CACHE = "combify-v3";
+// Bump this on every deploy that must reach existing installs: the activate
+// handler deletes every cache that isn't the current name, so an old phone
+// throws away whatever it was holding instead of serving a stale app.
+const CACHE = "combify-v4";
 const ASSETS = [
   "./",
   "./index.html",
