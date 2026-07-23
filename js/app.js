@@ -83,7 +83,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, tickTimer: null, comboTimer: null, comboFallback: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null };
 
 // ---------- Shared audio context (bell + voice clips both use this) ----------
 let audioCtx = null;
@@ -274,7 +274,11 @@ preloadClips();
 // Playback later reuses those primed elements round-robin instead of cloning
 // fresh ones — same cloned-HTMLAudioElement architecture, just created (and
 // unlocked) at the right time.
-const UNLOCK_POOL_SIZE = 3;
+// 2 per word, not 3: combo playback is strictly sequential (each word waits for
+// the previous to end), so a word never needs more than one spare. Holding
+// dozens of live <audio> elements makes iOS drop media events, which is what
+// killed the chain mid-round.
+const UNLOCK_POOL_SIZE = 2;
 const clipPool = {};
 const bellPool = [];
 const poolIndex = {};
@@ -293,12 +297,12 @@ function unlockAudioForMobile() {
   if (audioUnlocked) return;
   audioUnlocked = true;
   CLIP_KEYS.forEach((key) => {
-    const pool = [];
-    for (let i = 0; i < UNLOCK_POOL_SIZE; i++) {
-      const a = new Audio(CLIP_DIR + key + CLIP_EXT);
-      primeElement(a);
-      pool.push(a);
-    }
+    // Reuse the already-preloaded element as the first slot rather than making
+    // another one — otherwise the page holds the 12 preloaded elements PLUS a
+    // fresh set per word, which is what pushed us to ~50 live elements.
+    const pool = clipCache[key] ? [clipCache[key]] : [];
+    while (pool.length < UNLOCK_POOL_SIZE) pool.push(new Audio(CLIP_DIR + key + CLIP_EXT));
+    pool.forEach(primeElement);
     clipPool[key] = pool;
   });
   for (let i = 0; i < UNLOCK_POOL_SIZE; i++) {
@@ -336,22 +340,51 @@ function getPooledBell() {
 const getWordGap = () => Math.max(40, Math.min(300, getPace() * 0.09));
 
 // Play a combo's clips one after another, then call onDone().
+//
+// Every step is guarded by a watchdog timer. Previously the chain advanced ONLY
+// on the "ended" event, so if iOS dropped a single one (it does this on reused
+// elements) playNext() was never called again, onDone() never fired, and
+// nextCombo() never rescheduled — the combo loop died permanently for the rest
+// of the round. That's the "sound stops after a few combos" bug. Now a missing
+// event just means we advance slightly late instead of stopping forever.
 function playClips(keys, onDone) {
   let i = 0;
   const playNext = () => {
+    clearTimeout(state.clipWatchdog);
     voice.current = null;
     if (!state.running || state.phase !== "work" || i >= keys.length) { onDone(); return; }
     const node = getPooledClip(keys[i++]);
     if (!node) { playNext(); return; }
-    node.currentTime = 0;
+    // Clear handlers from this element's previous use so a late event from an
+    // earlier combo can't advance the current one.
+    node.onended = null;
+    node.onerror = null;
+    try { node.currentTime = 0; } catch (e) {}
     voice.current = node;
-    node.onended = () => {
+
+    let moved = false;
+    const advance = (fn) => () => {
+      if (moved) return; // whichever fires first wins: ended, error, or watchdog
+      moved = true;
+      clearTimeout(state.clipWatchdog);
+      fn();
+    };
+    const goNextWord = advance(() => {
       if (!state.running || state.phase !== "work") { onDone(); return; }
       setTimeout(playNext, getWordGap());
-    };
-    node.onerror = playNext;
+    });
+    const skip = advance(playNext);
+
+    node.onended = goNextWord;
+    node.onerror = skip;
     const p = node.play();
-    if (p && p.catch) p.catch(() => playNext());
+    if (p && p.catch) p.catch(skip);
+
+    // Fall forward once the clip's own length has elapsed (plus slack). Falls
+    // back to a fixed guess when duration isn't known yet — common on iOS,
+    // where metadata often hasn't loaded at first play.
+    const durMs = node.duration && isFinite(node.duration) ? node.duration * 1000 : 1200;
+    state.clipWatchdog = setTimeout(goNextWord, durMs + 800);
   };
   playNext();
 }
@@ -409,6 +442,7 @@ function render() {
 // ---------- Combo calling (only during work) ----------
 function nextCombo() {
   if (!state.running || state.phase !== "work") return;
+  state.lastComboAt = Date.now(); // heartbeat, watched by tick() — see reviveComboLoop
   const combo = randomCombo(getLevel());
   el.combo.textContent = comboToText(combo);
   speakCombo(combo, () => {
@@ -416,10 +450,25 @@ function nextCombo() {
     state.comboTimer = setTimeout(nextCombo, getPace()); // pace read fresh each time
   });
 }
-function startComboLoop() { nextCombo(); }
+function startComboLoop() { state.lastComboAt = Date.now(); nextCombo(); }
+
+// Last line of defence: if we're in a work round but no combo has been called
+// for far longer than the pace allows, something in the audio chain stalled.
+// Rather than leave the member in silence for the rest of the round, kick the
+// loop back into life. The 1s tick already runs, so this costs nothing.
+function reviveComboLoop() {
+  if (!state.running || state.phase !== "work") return;
+  if (!el.voiceOn.checked) return;
+  // Generous: a long advanced combo at Relaxed pace can legitimately run ~12s.
+  const stalledFor = Date.now() - (state.lastComboAt || 0);
+  if (stalledFor < getPace() + 20000) return;
+  stopComboLoop();
+  startComboLoop();
+}
 function stopComboLoop() {
   clearTimeout(state.comboTimer);
   clearTimeout(state.comboFallback);
+  clearTimeout(state.clipWatchdog);
   state.comboTimer = null;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (voice.current) { try { voice.current.pause(); } catch (e) {} voice.current = null; }
@@ -449,6 +498,7 @@ function tick() {
   if (state.phase === "work" && state.secondsLeft >= 1 && state.secondsLeft <= 3) {
     playWarning();
   }
+  reviveComboLoop();
   if (state.secondsLeft <= 0) {
     if (state.phase === "work") {
       if (state.currentRound >= getRounds()) { finish(); return; }
