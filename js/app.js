@@ -13,6 +13,7 @@ function initSeg(id) {
     seg.style.setProperty("--i", i);
     seg.dataset.value = opts[i].dataset.value;
     opts.forEach((o, k) => o.setAttribute("aria-selected", k === i));
+    saveSettings();
   }
   const idxFromX = (x) => {
     const r = seg.getBoundingClientRect();
@@ -32,7 +33,10 @@ function initSeg(id) {
   });
 
   setIndex(Math.max(0, opts.findIndex((o) => o.dataset.value === seg.dataset.value)));
-  return { get value() { return seg.dataset.value; } };
+  return {
+    get value() { return seg.dataset.value; },
+    set(v) { const i = opts.findIndex((o) => o.dataset.value === String(v)); if (i >= 0) setIndex(i); },
+  };
 }
 
 // ---------- Stepper: tap +/-, or drag the number to scrub ----------
@@ -47,6 +51,7 @@ function initStep(id) {
     v = Math.max(min, Math.min(max, v));
     step.dataset.value = v;
     valEl.textContent = v;
+    saveSettings();
   }
   step.querySelectorAll(".step__btn").forEach((b) =>
     b.addEventListener("click", () => set(get() + (+b.dataset.dir) * st))
@@ -59,7 +64,30 @@ function initStep(id) {
   valEl.addEventListener("pointerup", stop);
   valEl.addEventListener("pointercancel", stop);
 
-  return { get value() { return get(); } };
+  return { get value() { return get(); }, set(v) { set(+v); } };
+}
+
+// ---------- Remembering settings ----------
+// The app used to open with the defaults every single time, so a member had to
+// re-set level, pace and round lengths on every visit — friction on the single
+// most repeated action there is. Settings now persist on the device (no account,
+// no server). Wrapped in try/catch because Safari private browsing throws on
+// localStorage access rather than just returning null.
+const SETTINGS_KEY = "combify.settings.v1";
+let settingsReady = false; // suppress saves while the controls are still initialising
+
+function saveSettings() {
+  if (!settingsReady) return;
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      level: levelCtl.value, pace: paceCtl.value, rounds: roundsCtl.value,
+      work: workCtl.value, rest: restCtl.value, voice: el.voiceOn.checked,
+    }));
+  } catch (e) { /* storage unavailable — settings just won't persist */ }
+}
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; }
+  catch (e) { return {}; }
 }
 
 // ---------- Wire up controls ----------
@@ -75,6 +103,19 @@ const el = {
   combo: document.getElementById("combo"), startBtn: document.getElementById("startBtn"),
   resetBtn: document.getElementById("resetBtn"), voiceOn: document.getElementById("voiceOn"),
 };
+
+// Restore whatever this member last used, then start persisting changes.
+(function restoreSettings() {
+  const s = loadSettings();
+  if (s.level) levelCtl.set(s.level);
+  if (s.pace) paceCtl.set(s.pace);
+  if (s.rounds != null) roundsCtl.set(s.rounds);
+  if (s.work != null) workCtl.set(s.work);
+  if (s.rest != null) restCtl.set(s.rest);
+  if (typeof s.voice === "boolean") el.voiceOn.checked = s.voice;
+  settingsReady = true;
+})();
+el.voiceOn.addEventListener("change", saveSettings);
 
 // Read settings through the controls
 const getLevel = () => levelCtl.value;
