@@ -319,9 +319,9 @@ document.addEventListener("touchstart", armAudio, { capture: true, passive: true
 // voice played fine. Off-until-proven was only right in the era when
 // audio/sfx/ had no files at all.
 const SFX_DIR = "audio/sfx/";
-const SFX_KEYS = ["bell", "tick", "warning", "victory"];
+const SFX_KEYS = ["bell", "tick", "warning"];
 const sfxCache = {};
-const sfx = { bell: true, tick: true, warning: true, victory: true };
+const sfx = { bell: true, tick: true, warning: true };
 function preloadSfx() {
   SFX_KEYS.forEach((key) => {
     const a = new Audio(SFX_DIR + key + ".mp3");
@@ -449,31 +449,6 @@ function synthWarning() {
 }
 function playWarning() { playSfx("warning", synthWarning); }
 
-// Session finished: a rising C-major arpeggio landing on a held chord, instead
-// of three more bell strikes — the bell means "round boundary" all session, so
-// the END deserves a sound that only ever means "you did it". Synth fallback
-// mirrors the rendered sample (audio/sfx/victory.mp3).
-function synthVictory() {
-  withAudio((ctx) => {
-    const notes = [
-      [0, 523.25, 0.30, 0.5], [0.115, 659.25, 0.30, 0.5], [0.23, 783.99, 0.33, 0.6],
-      [0.345, 1046.5, 0.42, 1.8], [0.345, 783.99, 0.19, 1.6], [0.345, 659.25, 0.17, 1.6],
-      [0.345, 523.25, 0.18, 1.7], [0.62, 1567.98, 0.10, 0.9],
-    ];
-    for (const [at, freq, amp, decay] of notes) {
-      const t = ctx.currentTime + at;
-      const osc = ctx.createOscillator(), gain = ctx.createGain();
-      osc.type = "sine"; osc.frequency.setValueAtTime(freq, t);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(amp, t + 0.006);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(t); osc.stop(t + decay + 0.05);
-    }
-  });
-}
-function playVictory() { playSfx("victory", synthVictory); }
-
 // ---------- Voice ----------
 // The app calls combos two ways, in order of preference:
 //   1. Audio CLIPS in the /audio folder — one short file per move (audio/1.mp3,
@@ -547,7 +522,7 @@ const UNLOCK_POOL_SIZE = 2;
 // 650ms apart on a sample that rings for ~2.5s, so three are genuinely sounding
 // at once. With two elements the third strike stole the first one's element and
 // cut its ring dead.
-const SFX_POOL_SIZE = { bell: 3, tick: 2, warning: 2, victory: 1 };
+const SFX_POOL_SIZE = { bell: 3, tick: 2, warning: 2 };
 const clipPool = {};
 const sfxPool = {};
 const poolIndex = {};
@@ -1073,7 +1048,10 @@ function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned
 function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
 function finish() {
   state.phase = "done"; state.running = false;
-  stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); playVictory();
+  // Three bell strikes: the traditional end of the fight. A composed victory
+  // jingle was tried here (v1.9.1) and rejected by the founder — the boxing
+  // bell IS the sound of finishing.
+  stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3);
   // The streak lives in the summary below; repeating it here in display type
   // read as a bug rather than a flourish.
   el.combo.textContent = "Nice work.";

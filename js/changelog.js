@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.9.2",
+    date: "2026-07-23",
+    size: "patch",
+    title: "The bell is back",
+    notes: [
+      "The session now ends with the classic three bell strikes again — the victory jingle didn't feel right, and nothing says the fight's over like the bell.",
+    ],
+  },
+  {
     v: "1.9.1",
     date: "2026-07-23",
     size: "patch",

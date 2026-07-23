@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.9.1 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.9.2 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,12 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.9.2** — **Session end reverted to the three-strike bell.**
+  The v1.9.1 victory jingle was rejected on listening — founder's call: the
+  boxing bell IS the sound of finishing. Jingle code, sample, precache entry
+  and tests all removed rather than left dead; a comment at finish() records
+  that the jingle was tried so it doesn't get re-proposed. The v1.9.1
+  background/return fix is unaffected and stays.
 - **2026-07-23 — v1.9.1** — **Victory jingle + clean background/return.**
   finish() plays `audio/sfx/victory.mp3` (rising C-major arpeggio into a held
   chord with the bell's reverb; synth fallback mirrors it) instead of ringBell(3)

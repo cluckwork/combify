@@ -670,11 +670,12 @@ async function countCombos(app, ms, step = 200) {
     `tick plays: ${app.stats.byKey.tick || 0}`);
   check("the round-start bell plays as a sample", (app.stats.byKey.bell || 0) >= 1,
     `bell plays: ${app.stats.byKey.bell || 0}`);
-  await app.clock.advance(25000);         // 10s warning, then the victory jingle
+  const afterStart = app.stats.byKey.bell || 0;
+  await app.clock.advance(25000);         // 10s warning, then session-over bell x3
   check("the 10-second warning plays as a sample", (app.stats.byKey.warning || 0) >= 1,
     `warning plays: ${app.stats.byKey.warning || 0}`);
-  check("the session ends with the victory jingle", (app.stats.byKey.victory || 0) >= 1,
-    `victory plays: ${app.stats.byKey.victory || 0}`);
+  check("the session-end bell rings all three strikes", (app.stats.byKey.bell || 0) >= afterStart + 3,
+    `bell plays: ${afterStart} → ${app.stats.byKey.bell || 0}`);
   // Exactly one synth sound is expected: the tick fired inside start() runs
   // before the sample's load event, so it uses the fallback. Everything after
   // must come from samples.
@@ -686,14 +687,14 @@ async function countCombos(app, ms, step = 200) {
 // ------------------------------------- 19b. sfx files missing → synth fallback
 {
   section("19b. Missing sfx files fall back to the synth");
-  const app = await boot({ duration: 0.6, missingClips: ["bell", "tick", "warning", "victory"] });
+  const app = await boot({ duration: 0.6, missingClips: ["bell", "tick", "warning"] });
   app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
   app.click("startBtn");
   await app.clock.advance(4000);
   check("ticks and bell still sound via the synth", app.synth.oscStarted > 0,
     `${app.synth.oscStarted} oscillators`);
   await app.clock.advance(25000);
-  check("the session still ends audibly via the synth jingle", app.synth.oscStarted >= 4,
+  check("the session still ends with an audible bell", app.synth.oscStarted >= 4,
     `${app.synth.oscStarted} oscillators`);
   app.restore();
 }
