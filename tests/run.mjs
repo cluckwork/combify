@@ -523,7 +523,7 @@ async function countCombos(app, ms, step = 200) {
   app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
   app.setSeg("pace", "3000"); // relaxed: the widest word gaps, the reported case
   app.click("startBtn");
-  await app.clock.advance(5000 + 2250); // countdown, first-call runway (1.6s), word 1 (600ms) → inside its gap
+  await app.clock.advance(5140 + 2250); // settle (140ms) + countdown, runway (1.6s), word 1 (600ms) → inside its gap
   // Background + return INSIDE the inter-word gap. The old anonymous gap timer
   // survived the cut and revived the old combo next to the new one — two
   // chains interleaving through the same pools, heard as stuttering.

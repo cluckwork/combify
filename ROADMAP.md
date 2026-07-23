@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.11.6 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.11.7 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,21 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.11.7** — **Settle beat, phase-aligned ticker, halo glow.**
+  Start/restart now paint the countdown state on the tap's frame and start the
+  clock 140ms later (armCountdownStart) — residual transition jank is absorbed
+  in an intentional beat instead of surfacing as "5--4-3-2-1". The first tick
+  is phase-aligned (one-shot at the real second boundary, then the interval) so
+  a busy tap frame can't offset the whole countdown. Priming lost its
+  currentTime seek (its most expensive part) and the blip decode moved off the
+  tap. The glow was rebuilt to the founder's arc — builds with the count,
+  crests at the pop, fades over 1.4s — via a radial halo layer behind the
+  digits whose OPACITY animates (compositor-free) instead of text-shadow
+  (per-frame glyph repaints); the pop keeps a brief text flash as the crest
+  accent. The countdown pulse element is force-re-armed each countdown
+  (animation reset + reflow), closing the "circle expanding stops happening
+  after reloads" report — likely mixed-cache states during rapid reload
+  testing, now structurally immune either way. 191 behaviour + 262 layout.
 - **2026-07-23 — v1.11.6** — **Footer.** Version + release date + What's new
   moved out of the About fold into an always-visible one-line footer (quiet
   mono, folds away in focus mode with the rest of the chrome). Checking "am I

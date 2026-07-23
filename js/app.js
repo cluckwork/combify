@@ -198,7 +198,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null, wordGapTimer: null, finaleTimer: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null, wordGapTimer: null, finaleTimer: null, settleTimer: null };
 
 // ---------- Screen wake lock ----------
 // Keeps the screen on while a session runs, so a member who sets the phone
@@ -626,7 +626,9 @@ function primeElement(a) {
   const p = a.play();
   if (p && p.catch) p.catch(() => {});
   a.pause();
-  try { a.currentTime = 0; } catch (e) {}
+  // No currentTime reset here: a muted play()+pause() in the same task barely
+  // advances, real playback resets the time itself, and the seek was the most
+  // expensive part of priming 17 elements inside the Start tap.
   a.muted = false;
 }
 
@@ -669,7 +671,7 @@ function unlockAudioForMobile() {
     deepPrimePending = true;
     audioUnlocked = true;
     needsReprime = false;
-    loadBlipBuffer(); // async; ready long before any finale needs it
+    setTimeout(loadBlipBuffer, 300); // off the tap; ready long before any finale
   } catch (e) { /* retry on the next tap */ }
 }
 // Top up the spare slots inside a later gesture, spreading the cost away from
@@ -905,7 +907,7 @@ function buzz(pattern) {
 // slows into the total and lands with a pop. The slowing half ticks a small
 // haptic on each change — because the changes naturally thin out as it
 // decelerates, that reads as the count "settling" rather than a buzz.
-function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = false } = {}) {
+function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = false, glow = null } = {}) {
   if (!motionOK() || to <= 0) { node.textContent = to.toLocaleString(); return; }
   // A precomputed SCHEDULE, not time-sampling. Sampling an easing curve per
   // frame meant a dropped frame skipped numbers ("the numbers skip a few
@@ -944,14 +946,26 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = fal
       next++;
       lastFire = now;
       node.textContent = value.toLocaleString();
+      // The halo brightens with the climb. Its own layer, opacity only — the
+      // GPU composites this; nothing about the glyphs repaints.
+      if (glow) glow.style.opacity = String(0.85 * frac);
       if (haptics && frac > 0.55 && now - lastBuzz > 45) { buzz(7); lastBuzz = now; }
       if (sound && next < values.length) playBlip(frac); // the landing replaces the final blip
     }
     if (next < values.length) { requestAnimationFrame(step); return; }
     node.textContent = to.toLocaleString();
+    if (glow) glow.style.opacity = "1"; // crest exactly at the landing
     if (pop) {
       node.classList.add("is-pop");
-      node.addEventListener("animationend", () => node.classList.remove("is-pop"), { once: true });
+      node.addEventListener("animationend", () => {
+        node.classList.remove("is-pop");
+        // The arc completes: ramp with the climb, crest at the pop, then a
+        // slow graceful fade — one opacity transition, compositor-composited.
+        if (glow) {
+          glow.style.transition = "opacity 1.4s ease-out";
+          glow.style.opacity = "0";
+        }
+      }, { once: true });
     }
     if (sound) playLand(); // the satisfying arrival
     if (haptics) buzz([18, 45, 30]); // the landing: two beats, firmer than the ticks
@@ -987,12 +1001,19 @@ function buildFinishSummary(streak, streakBit) {
   //   3. During the finale, don't run the count here at all — startFinale
   //      calls __runCountUp AFTER the glide has landed, so the animation,
   //      the count and the blips each get the stage to themselves.
+  // The halo is a SIBLING of the digits inside the hero span — countUp writes
+  // textContent into the digits child, which would otherwise wipe the halo.
+  const digits = make("span", "stat-digits", "0");
+  const halo = make("span", "stat-halo");
+  heroNum.textContent = "";
+  heroNum.appendChild(halo);
+  heroNum.appendChild(digits);
   heroNum.style.fontVariantNumeric = "tabular-nums";
   heroNum.style.display = "inline-block";
   heroNum.style.minWidth = String(session.punches.toLocaleString().length) + "ch";
   heroNum.style.textAlign = "center";
   const staged = el.stage.classList.contains("is-finale") && !el.stage.classList.contains("is-finale-reveal");
-  el.stats.__runCountUp = () => countUp(heroNum, session.punches, { ms: 1200, pop: true, haptics: true, sound: true });
+  el.stats.__runCountUp = () => countUp(digits, session.punches, { ms: 1200, pop: true, haptics: true, sound: true, glow: halo });
   if (!staged) el.stats.__runCountUp();
 
   // Everything else is supporting detail on one quieter line.
@@ -1402,8 +1423,50 @@ function enterFullscreen() {
 // to a browser chrome you then had to escape a second time. Leaving is the
 // user's call — Esc on a desktop, the system gesture on a phone.
 
+// The one-second heartbeat, phase-aligned. A plain setInterval started inside
+// a busy Start tap inherits that frame's delay as a permanent phase offset —
+// the first second visibly hung ("5 -- 4-3-2-1") and the catch-up rushed the
+// rest. A one-shot scheduled against the real phase deadline fires the first
+// tick on the actual second boundary, then hands over to the interval.
+// clearInterval clears either kind of id, so every existing teardown works.
+function alignedTicker() {
+  const untilBoundary = Math.max(50, ((state.phaseEndsAt - Date.now()) % 1000) || 1000);
+  return setTimeout(() => {
+    tick();
+    state.tickTimer = setInterval(tick, 1000);
+  }, untilBoundary);
+}
+
 // ---------- Start / pause / reset ----------
 const COUNTDOWN_SECONDS = 5;
+
+// Both entrances to a session end here. The countdown state paints on THIS
+// frame; the clock starts one settle beat later, so any residual layout or
+// device jank from the transition is absorbed inside an intentional pause
+// instead of surfacing as "5 -- 4-3-2-1". The countdown itself is the loading
+// screen — this just makes sure it starts on a clean frame. The pulse element
+// is re-armed by force: a CSS animation only restarts on an attribute CHANGE,
+// so this guarantees the five waves fire every time regardless of the
+// attribute's history.
+function armCountdownStart() {
+  state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
+  el.combo.textContent = "Get ready...";
+  if (el.comboName) el.comboName.textContent = "";
+  render();
+  const pulse = el.stage.querySelector(".dial__pulse");
+  if (pulse) {
+    pulse.style.animation = "none";
+    void pulse.offsetWidth; // reflow — the next animation start is guaranteed fresh
+    pulse.style.removeProperty("animation");
+  }
+  clearTimeout(state.settleTimer);
+  state.settleTimer = setTimeout(() => {
+    beginPhase(COUNTDOWN_SECONDS); // re-anchor: the 5 seconds start NOW, post-settle
+    playTick();
+    render();
+    state.tickTimer = alignedTicker();
+  }, 140);
+}
 
 function start() {
   armAudio();
@@ -1412,21 +1475,17 @@ function start() {
   state.running = true;
   acquireWakeLock();
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
-  state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
   resetSessionTally();
-  el.combo.textContent = "Get ready...";
-  if (el.comboName) el.comboName.textContent = "";
-  playTick(); render();
-  state.tickTimer = setInterval(tick, 1000);
+  armCountdownStart();
 }
-function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
+function pause() { state.running = false; clearInterval(state.tickTimer); clearTimeout(state.settleTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
 // Resuming is a tap like any other, so it is also the moment to re-arm audio:
 // whatever suspended the context while you were paused (a call, a lock screen,
 // switching apps) is exactly the thing that used to leave the rest of the
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
-function resume() { state.running = true; armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); render(); }
-function reset() { clearInterval(state.tickTimer); stopComboLoop(); clearFinale(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
+function resume() { state.running = true; armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
+function reset() { clearInterval(state.tickTimer); clearTimeout(state.settleTimer); stopComboLoop(); clearFinale(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
 // "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1
@@ -1447,6 +1506,7 @@ el.startBtn.addEventListener("click", () => {
 // session screen: same fullscreen, same wake lock, fresh session.
 function restartSession() {
   clearInterval(state.tickTimer);
+  clearTimeout(state.settleTimer);
   stopComboLoop();
   clearFinale();
   if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -1457,12 +1517,8 @@ function restartSession() {
   delete el.stats.dataset.finished; // next finish must rebuild its summary
   state.running = true;
   state.currentRound = 0;
-  state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
-  el.combo.textContent = "Get ready...";
-  if (el.comboName) el.comboName.textContent = "";
-  playTick(); render();
-  state.tickTimer = setInterval(tick, 1000);
+  armCountdownStart();
 }
 el.resetBtn.addEventListener("click", () => {
   if (state.phase === "ready") { reset(); return; }

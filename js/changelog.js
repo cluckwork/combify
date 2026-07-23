@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.11.7",
+    date: "2026-07-23",
+    size: "patch",
+    title: "The last of the stutters",
+    notes: [
+      "The countdown now starts on a perfectly clean beat — no more \"5... then rushing\" when starting or restarting.",
+      "The glow behind the punch total now builds as the number climbs, peaks with the pop, and fades away naturally — without costing any smoothness.",
+      "The countdown's expanding pulse can no longer silently go missing.",
+    ],
+  },
+  {
     v: "1.11.6",
     date: "2026-07-23",
     size: "patch",
