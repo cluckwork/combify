@@ -1,12 +1,13 @@
 {
   "name": "combify",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "Combify — round timer + boxing combo caller, by Boxing With Bakr",
   "type": "module",
   "scripts": {
     "test": "node tests/run.mjs",
     "test:layout": "node tests/layout.mjs",
+    "test:layout:fast": "node tests/layout.mjs --fast",
     "test:layout:shots": "node tests/layout.mjs --shots"
   },
   "devDependencies": {

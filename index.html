@@ -32,10 +32,21 @@
     <!-- Two groups so the stage can stack in portrait and sit side-by-side in
          landscape, where vertical space is scarce. -->
     <main class="stage" id="stage">
+      <!-- The ring drains as the round runs down, so how much is left reads at a
+           glance without parsing digits — and it gives the screen a centre of
+           gravity instead of text floating in an empty box. -->
       <div class="stage__meta">
-        <p class="phase" id="phase">Ready</p>
-        <p class="clock" id="clock">00:00</p>
-        <p class="round" id="round">Round 0 / 0</p>
+        <div class="dial">
+          <svg class="dial__ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="dial__track" cx="60" cy="60" r="54" />
+            <circle class="dial__fill" id="dialFill" cx="60" cy="60" r="54" />
+          </svg>
+          <div class="dial__center">
+            <p class="phase" id="phase">Ready</p>
+            <p class="clock" id="clock">00:00</p>
+            <p class="round" id="round">Round 0 / 0</p>
+          </div>
+        </div>
       </div>
       <div class="stage__main">
         <p class="combo-name" id="comboName"></p>

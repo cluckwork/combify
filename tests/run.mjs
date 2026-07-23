@@ -531,6 +531,12 @@ async function collectSpokenVsShown(app, ms) {
   const app = await boot({ duration: 0.6 });
   const shown = app.doc.getElementById("appVersion")?.textContent || "";
   check("version is rendered into the About section", shown.includes(version), `About shows "${shown}"`);
+  // A module missing from the precache list only bites offline, and only after
+  // a fresh install — easy to add a file and never notice.
+  const sw = read("sw.js");
+  const modules = fs.readdirSync(path.join(repo, "js")).filter((f) => f.endsWith(".js"));
+  const missing = modules.filter((f) => !sw.includes(`./js/${f}`));
+  check("every js module is precached for offline use", missing.length === 0, missing.join(", "));
   results.push(`     (showing "${shown}")`);
   app.restore();
 }
@@ -732,8 +738,8 @@ async function collectSpokenVsShown(app, ms) {
   check("2-day streak shown", /2 days in a row/.test(stats2.textContent), `"${stats2.textContent}"`);
   check("flame appears on a real streak", !!stats2.querySelector(".flame"), "no flame");
   check("flame is decorative only", stats2.querySelector(".flame")?.getAttribute("aria-hidden") === "true");
-  check("flame has its three layers", stats2.querySelectorAll(".flame i").length === 3,
-    String(stats2.querySelectorAll(".flame i").length));
+  check("flame is a drawn shape, not stacked boxes", stats2.querySelectorAll(".flame path").length === 2,
+    String(stats2.querySelectorAll(".flame path").length));
   results.push(`     (day 2: "${stats2.textContent}")`);
   b.restore();
   clearStore();
@@ -835,13 +841,17 @@ async function collectSpokenVsShown(app, ms) {
   const repo = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "..");
   const css = fs.readFileSync(path.join(repo, "css/styles.css"), "utf8");
   check("landscape gets its own layout", /@media\s*\(orientation:\s*landscape\)/.test(css));
-  check("landscape switches to a side-by-side stage", /orientation:\s*landscape\)[\s\S]{0,400}flex-direction:\s*row/.test(css));
+  // Grid with minmax(0,...) tracks, not flex: a flex item's basis is its content
+  // width, so the combo column never narrowed and overlapped the clock.
+  check("landscape uses constrained grid columns",
+    /orientation:\s*landscape\)[\s\S]{0,600}grid-template-columns:\s*minmax\(0/.test(css));
   check("big screens get their own sizing", /@media\s*\(min-width:\s*900px\)/.test(css));
   check("stage can grow to fill the screen", /\.app\[data-focus="1"\]\s*\.stage[\s\S]{0,200}flex:\s*1/.test(css));
   check("app is at least a full viewport tall", /min-height:\s*100dvh/.test(css));
   // The combo is the thing read from across the room: it must scale with the
   // viewport, not sit at a fixed size.
-  check("combo text scales with the viewport", /\.app\[data-focus="1"\]\s*\.combo[\s\S]{0,160}font-size:\s*clamp\(/.test(css));
+  check("combo text scales with the viewport", /\.app\[data-focus="1"\]\s*\.combo[\s\S]{0,200}font-size:\s*calc\(clamp\(/.test(css));
+  check("long combos are scaled down to fit", /var\(--fit/.test(css));
   check("motion still opt-out", /prefers-reduced-motion/.test(css));
 }
 

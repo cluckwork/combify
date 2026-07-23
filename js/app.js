@@ -1,6 +1,6 @@
 // app.js — the brain of the trainer: settings controls, timer, bell, and voice.
 
-import { randomCombo, comboToText, comboToSpeech, comboName } from "./combos.js";
+import { randomCombo, comboToText, comboToSpeech, comboName, MOVES } from "./combos.js";
 import { VERSION, RELEASED } from "./version.js";
 import { loadHistory, saveHistory, recordRound, currentStreak, trainedToday, formatDuration } from "./stats.js";
 
@@ -134,6 +134,7 @@ const el = {
   stats: document.getElementById("stats"),
   comboName: document.getElementById("comboName"),
   app: document.querySelector(".app"),
+  dialFill: document.getElementById("dialFill"),
 };
 
 // Restore whatever this member last used, then start persisting changes.
@@ -690,10 +691,21 @@ function buildFinishSummary(streak, streakBit) {
     // Any streak gets the flame. Gating it at 2+ meant a member finishing their
     // first ever session — the moment most worth rewarding — saw nothing.
     if (streak >= 1) {
-      const flame = make("span", "flame");
-      flame.setAttribute("aria-hidden", "true");
-      for (let i = 0; i < 3; i++) flame.appendChild(document.createElement("i"));
-      wrap.appendChild(flame);
+      // Drawn as a real path rather than stacked CSS teardrops: at this size
+      // the CSS version rendered as an orange smudge sitting on the number.
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "flame");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("aria-hidden", "true");
+      const outer = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      outer.setAttribute("class", "flame__outer");
+      outer.setAttribute("d", "M13.5 1.5c.6 3.2-1.1 4.7-2.6 6.2C9.2 9.4 7.6 11 7.6 14a6.4 6.4 0 0 0 12.8 0c0-3.6-2.1-5.6-3.9-7.6-1.1-1.2-2.1-2.4-3-4.9Z");
+      const inner = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      inner.setAttribute("class", "flame__inner");
+      inner.setAttribute("d", "M14 11.2c.4 1.8-.6 2.6-1.4 3.4-.9.9-1.7 1.8-1.7 3.3a3.1 3.1 0 0 0 6.2 0c0-1.9-1.1-3-2-4-.6-.7-1-1.3-1.1-2.7Z");
+      svg.appendChild(outer);
+      svg.appendChild(inner);
+      wrap.appendChild(svg);
     }
     wrap.appendChild(make("span", null, streakBit));
     meta.appendChild(wrap);
@@ -746,7 +758,47 @@ function render() {
   el.stage.dataset.phase = state.phase;
   el.phase.textContent = state.phase === "work" ? "Work" : state.phase === "rest" ? "Rest" : state.phase === "done" ? "Done" : state.phase === "countdown" ? "Get Ready" : "Ready";
   el.round.textContent = state.phase === "countdown" ? `Round 1 / ${getRounds()}` : `Round ${state.currentRound} / ${getRounds()}`;
+  renderProgress();
   renderStats();
+}
+
+// The ring empties as the phase runs down. r=54 in the SVG's own units, so the
+// circumference is 2*pi*54; we draw that much dash and push the offset toward a
+// full circle as time runs out.
+const DIAL_CIRCUMFERENCE = 2 * Math.PI * 54;
+function renderProgress() {
+  if (!el.dialFill) return;
+  const total = state.phase === "work" ? getWork() : state.phase === "rest" ? getRest() : state.phase === "countdown" ? 3 : 0;
+  const running = total > 0 && (state.phase === "work" || state.phase === "rest" || state.phase === "countdown");
+  const left = running ? Math.max(0, Math.min(1, state.secondsLeft / total)) : 0;
+  el.dialFill.style.strokeDasharray = String(DIAL_CIRCUMFERENCE);
+  el.dialFill.style.strokeDashoffset = String(DIAL_CIRCUMFERENCE * (1 - left));
+}
+
+// Render a combo as separate move tokens rather than one string. Each token
+// keeps its trailing separator and never breaks internally, so a wrapped combo
+// can't start a line with a dangling "-" — which is what a plain string did on
+// a phone. textContent is unchanged ("1 - 2 - slip"), so everything reading the
+// combo off screen still sees exactly what the voice says.
+function showCombo(combo) {
+  el.combo.textContent = "";
+  const frag = document.createDocumentFragment();
+  combo.forEach((key, i) => {
+    const last = i === combo.length - 1;
+    const t = document.createElement("span");
+    t.className = "mv";
+    // "1 -" stays together; the space BETWEEN tokens is a plain text node, which
+    // is the only place a line may break. Without that separate text node there
+    // is no break opportunity at all and the combo runs off the screen.
+    t.textContent = MOVES[key].label + (last ? "" : " -");
+    frag.appendChild(t);
+    if (!last) frag.appendChild(document.createTextNode(" "));
+  });
+  el.combo.appendChild(frag);
+  // Long combos get stepped down so a 12-move one doesn't fill the screen at
+  // the size a 3-move one wants to be.
+  const n = combo.length;
+  el.combo.style.setProperty("--fit", n <= 4 ? "1" : n <= 6 ? "0.88" : n <= 9 ? "0.78" : "0.68");
 }
 
 // ---------- Combo calling (only during work) ----------
@@ -756,7 +808,7 @@ function nextCombo() {
   const combo = randomCombo(getLevel());
   session.pendingPunches += combo.filter(isPunch).length;
   if (el.comboName) el.comboName.textContent = comboName(combo) || "";
-  el.combo.textContent = comboToText(combo);
+  showCombo(combo);
   speakCombo(combo, () => {
     if (!state.running || state.phase !== "work") return;
     state.comboTimer = setTimeout(nextCombo, getPace()); // pace read fresh each time
@@ -799,8 +851,11 @@ function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2);
 function finish() {
   state.phase = "done"; state.running = false;
   stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3);
-  const streak = currentStreak(history);
-  el.combo.textContent = streak > 1 ? `${streak} days in a row.` : "Session complete — nice work.";
+  // The streak lives in the summary below; repeating it here in display type
+  // read as a bug rather than a flourish.
+  el.combo.textContent = "Nice work.";
+  el.combo.style.removeProperty("--fit");
+  if (el.comboName) el.comboName.textContent = "";
   el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running");
   render();
 }

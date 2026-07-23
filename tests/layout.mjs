@@ -15,6 +15,12 @@ import http from "node:http";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..");
 const SHOTS = process.argv.includes("--shots");
+// --only <substring> runs a single device, which turns a ~5 minute full sweep
+// into ~30 seconds when you already know which layout you're fixing.
+const ONLY = (() => { const i = process.argv.indexOf("--only"); return i > -1 ? process.argv[i + 1] : null; })();
+// --fast shortens the in-session waits; enough to reach every screen, not
+// enough to sit through realistic rounds.
+const FAST = process.argv.includes("--fast");
 const shotDir = path.join(HERE, ".shots");
 
 let pass = 0, fail = 0;
@@ -59,7 +65,24 @@ const probe = () => {
     const st = getComputedStyle(e); const r = e.getBoundingClientRect();
     return st.display !== "none" && st.visibility !== "hidden" && parseFloat(st.opacity) > 0.01 && r.width > 0 && r.height > 0;
   };
+  // Do any two things that should never touch actually overlap? Measuring
+  // "nothing overflows" missed a landscape screen where the clock sat directly
+  // on top of the combo — each box was inside the stage, they just collided.
+  const overlaps = [];
+  const pairs = [["#clock", "#combo"], ["#clock", "#comboName"], ["#round", "#combo"],
+                 ["#phase", "#combo"], [".stage__meta", ".stage__main"], ["#combo", ".controls"],
+                 ["#stats", ".controls"]];
+  for (const [a, b] of pairs) {
+    const ea = q(a), eb = q(b);
+    if (!ea || !eb) continue;
+    const ra = ea.getBoundingClientRect(), rb = eb.getBoundingClientRect();
+    if (!ra.width || !rb.width || !ra.height || !rb.height) continue;
+    const hit = ra.left < rb.right - 1 && rb.left < ra.right - 1 &&
+                ra.top < rb.bottom - 1 && rb.top < ra.bottom - 1;
+    if (hit) overlaps.push(`${a}×${b}`);
+  }
   return {
+    overlaps,
     vw: window.innerWidth, vh: window.innerHeight,
     docScrollW: document.documentElement.scrollWidth,
     docClientW: document.documentElement.clientWidth,
@@ -70,6 +93,9 @@ const probe = () => {
     heroFont: fs(".finish__hero .stat-num"),
     comboText: q("#combo").textContent,
     comboScrollW: q("#combo").scrollWidth, comboClientW: q("#combo").clientWidth,
+    clockScrollW: q("#clock").scrollWidth, clockClientW: q("#clock").clientWidth,
+    dial: box(".dial"), meta: box(".stage__meta"),
+    clockTextW: (() => { const r = document.createRange(); r.selectNodeContents(q("#clock")); return r.getBoundingClientRect().width; })(),
     stageScrollH: q("#stage").scrollHeight, stageClientH: q("#stage").clientHeight,
     settingsVisible: vis("#settings"), topbarVisible: vis(".topbar"),
     controlsVisible: vis(".controls"),
@@ -94,7 +120,7 @@ async function startSession(page, { work = 8, rest = 5, rounds = 2 } = {}) {
   await page.click("#startBtn");
 }
 
-for (const dev of DEVICES) {
+for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONLY.toLowerCase()))) {
   lines.push(`\n── ${dev.name} (${dev.width}×${dev.height}) ──`);
   const ctx = await browser.newContext({
     viewport: { width: dev.width, height: dev.height },
@@ -113,7 +139,7 @@ for (const dev of DEVICES) {
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-ready.png`) });
 
   // ---- Mid-round (focus mode) ----
-  await startSession(page);
+  await startSession(page, FAST ? { work: 4, rest: 2, rounds: 1 } : undefined);
   await page.waitForTimeout(3600); // countdown done, into work
   m = await page.evaluate(probe);
   check("focus mode engaged", m.focus === "1", `focus=${m.focus}`);
@@ -128,13 +154,31 @@ for (const dev of DEVICES) {
   check("stage content not overflowing its own box", m.stageScrollH <= m.stageClientH + 2,
     `stage scrollH ${m.stageScrollH} > clientH ${m.stageClientH}`);
   check("combo is genuinely large", m.comboFont >= (dev.height < 500 ? 28 : 34), `${m.comboFont}px`);
+  check("nothing overlaps mid-round", m.overlaps.length === 0, m.overlaps.join(", "));
+  check("clock fits its own column", m.clockScrollW <= m.clockClientW + 1, `clock ${m.clockScrollW} > ${m.clockClientW}`);
+  // The ring must stay inside its column, and the time inside the ring.
+  check("dial stays within its column", !m.dial || !m.meta || m.dial.w <= m.meta.w + 1,
+    `dial ${Math.round(m.dial?.w)} > column ${Math.round(m.meta?.w)}`);
+  check("time fits inside the ring", !m.dial || m.clockTextW <= m.dial.w * 0.86,
+    `clock text ${Math.round(m.clockTextW)} vs ring ${Math.round(m.dial?.w)}`);
   check("combo bigger than it was before focus", m.comboFont > 30, `${m.comboFont}px`);
   lines.push(`       (combo ${Math.round(m.comboFont)}px, clock ${Math.round(m.clockFont)}px, stage ${Math.round(m.stage.h)}px of ${m.vh})`);
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-work.png`) });
 
   // ---- Longest combo must still fit ----
   await page.evaluate(() => {
-    document.getElementById("combo").textContent = "1 - 2 - 3 - 2 - 1 - 1 - 2 - slip - 2 - 3 - 2 - roll";
+    const keys = ["1","2","3","2","1","1","2","slip","2","3","2","roll"];
+    const c = document.getElementById("combo");
+    c.textContent = "";
+    keys.forEach((k, i) => {
+      const s = document.createElement("span");
+      s.className = "mv";
+      s.textContent = k + (i < keys.length - 1 ? " -" : "");
+      c.appendChild(s);
+      if (i < keys.length - 1) c.appendChild(document.createTextNode(" "));
+    });
+    c.style.setProperty("--fit", "0.54");
+    document.getElementById("comboName").textContent = "The 10";
   });
   await page.waitForTimeout(120);
   m = await page.evaluate(probe);
@@ -144,6 +188,7 @@ for (const dev of DEVICES) {
     `stage scrollH ${m.stageScrollH} > clientH ${m.stageClientH}`);
   check("no horizontal page scroll with the long combo", m.docScrollW <= m.docClientW + 1,
     `${m.docScrollW} > ${m.docClientW}`);
+  check("12-move combo doesn't collide with the clock", m.overlaps.length === 0, m.overlaps.join(", "));
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-longcombo.png`) });
 
   // ---- Pause returns the settings ----
@@ -156,7 +201,7 @@ for (const dev of DEVICES) {
 
   // ---- Finish screen ----
   await page.click("#startBtn");            // resume
-  await page.waitForTimeout(30000);          // let both rounds run out
+  await page.waitForTimeout(FAST ? 7000 : 30000);   // let the rounds run out
   m = await page.evaluate(probe);
   const phase = await page.textContent("#phase");
   check("session reached the finish screen", phase.trim() === "Done", phase);
@@ -164,6 +209,7 @@ for (const dev of DEVICES) {
     `stats bottom ${m.stats?.bottom} vs ${m.vh}`);
   check("punch total is large and readable", m.heroFont >= (dev.height < 500 ? 34 : 42), `${m.heroFont}px`);
   check("no horizontal scroll on the finish screen", m.docScrollW <= m.docClientW + 1, `${m.docScrollW} > ${m.docClientW}`);
+  check("nothing overlaps on the finish screen", m.overlaps.length === 0, m.overlaps.join(", "));
   lines.push(`       (finish punch total ${Math.round(m.heroFont)}px)`);
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-finish.png`) });
 
@@ -176,7 +222,7 @@ for (const dev of DEVICES) {
 // jsdom can say nothing about.
 // ---------------------------------------------------------------------------
 lines.push(`\n── Rotating mid-session ──`);
-{
+if (!ONLY || "rotating mid-session".includes(ONLY.toLowerCase())) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
   const errors = [];
@@ -199,6 +245,7 @@ lines.push(`\n── Rotating mid-session ──`);
     check(`${label}: pause button still on screen`, m.controlsVisible && m.controls.bottom <= m.vh + 1,
       `bottom ${m.controls?.bottom} vs ${m.vh}`);
     check(`${label}: stage still fills the screen`, m.stage.h >= m.vh * 0.5, `${Math.round(m.stage.h)} of ${m.vh}`);
+    check(`${label}: nothing overlaps`, m.overlaps.length === 0, m.overlaps.join(", "));
     lines.push(`       (${label}: combo ${Math.round(m.comboFont)}px, stage ${Math.round(m.stage.h)}/${m.vh})`);
   }
 

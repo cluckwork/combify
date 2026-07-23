@@ -13,6 +13,9 @@
   --accent-ink: #010101;   /* text placed on a solid accent background */
   --work: var(--accent);
   --rest: #6f9d6a;         /* muted sage — reads as "rest" without breaking the palette */
+  --streak: #ffb347;       /* the ONE warm accent, used only for the streak */
+  --streak-deep: #ff8a1f;  /* base of the flame */
+  --streak-hot: #ffd166;   /* highlight inside the flame */
   --hairline: rgba(255, 255, 255, 0.1);
   --radius: 16px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -91,6 +94,44 @@ body {
 .stage[data-phase="rest"] { border-color: var(--rest); }
 .stage__meta, .stage__main { min-width: 0; }
 
+/* The dial: a ring that empties as the phase runs down, with the time inside.
+   This is the screen's centre of gravity — without it the stage was text
+   floating in a large empty box. Colour follows the phase, so work and rest
+   read differently from across the room. */
+.dial {
+  position: relative;
+  width: min(62vw, 240px, 100%);
+  max-width: 100%;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+}
+.dial__ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);   /* start the sweep at 12 o'clock */
+}
+.dial__track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 3;
+}
+.dial__fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.45s linear, stroke 0.3s ease;
+}
+.stage[data-phase="rest"] .dial__fill { stroke: var(--rest); }
+.stage[data-phase="ready"] .dial__fill,
+.stage[data-phase="done"] .dial__fill { stroke: transparent; }
+.stage[data-phase="done"] .dial__track { stroke: rgba(255, 255, 255, 0.03); }
+.dial__center { text-align: center; z-index: 1; max-width: 84%; }
+
 /* ==========================================================================
    FOCUS MODE — while a session is actually running.
    Mid-round nobody needs the settings; they need to read the combo from across
@@ -121,38 +162,48 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: clamp(12px, 4vh, 40px);
+  justify-content: space-evenly;
+  gap: clamp(14px, 3.5vh, 34px);
+  padding: clamp(24px, 6vh, 64px) 20px;
 }
-.app[data-focus="1"] .clock { font-size: clamp(48px, 15vw, 104px); }
+.app[data-focus="1"] .stage__meta,
+.app[data-focus="1"] .stage__main { width: 100%; max-width: 100%; }
+.app[data-focus="1"] .dial { width: min(74vw, 46vh, 100%); }
+.app[data-focus="1"] .phase { letter-spacing: 0.28em; opacity: 0.9; }
+.app[data-focus="1"] .round { letter-spacing: 0.16em; }
+.app[data-focus="1"] .clock { font-size: clamp(40px, 11.5vw, 88px); }
 .app[data-focus="1"] .combo {
-  font-size: clamp(38px, 12vw, 92px);
+  font-size: calc(clamp(42px, 14vw, 108px) * var(--fit, 1));
   line-height: 1.06;
   margin-top: 0;
 }
-.app[data-focus="1"] .phase { font-size: 13px; }
+.app[data-focus="1"] .phase { font-size: clamp(12px, 1.15vw, 17px); }
+.app[data-focus="1"] .round { font-size: clamp(11px, 1vw, 15px); }
 
 /* Landscape — phone on its side, or any desktop window. Vertical space is the
    scarce thing here, so the clock and the combo sit side by side instead of
    stacking, and the type is sized off height as much as width. */
 @media (orientation: landscape) {
+  /* GRID, not flex. A flex item's basis resolves to its content width, so the
+     combo column never actually narrowed — it kept its full text width and
+     justify-content shoved it straight over the clock. minmax(0, Nfr) tracks
+     genuinely constrain, so the text wraps inside its own column. */
   .app[data-focus="1"] .stage {
-    flex-direction: row;
-    justify-content: space-around;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
     align-items: center;
-    gap: clamp(16px, 4vw, 56px);
+    gap: clamp(14px, 3vw, 48px);
     padding: clamp(10px, 2.5vh, 36px) clamp(16px, 3.5vw, 48px);
-    min-height: 0;             /* flex items default to min-height:auto and refuse
-                                  to shrink, which pushed the pause button off */
+    min-height: 0;
   }
-  /* The combo needs the wider share: it's long text, and wrapping it to three
-     lines is what made the stage overflow the screen. */
-  .app[data-focus="1"] .stage__meta { flex: 0 1 34%; min-width: 0; min-height: 0; }
-  .app[data-focus="1"] .stage__main { flex: 1 1 auto; min-width: 0; min-height: 0; }
+  .app[data-focus="1"] .stage__meta,
+  .app[data-focus="1"] .stage__main { min-width: 0; min-height: 0; }
+  .app[data-focus="1"] .stage__main { max-width: none; }
+  .app[data-focus="1"] .dial { width: min(30vw, 74vh, 100%); }
   /* Sized off height as well as width, so it fits the ~390px a phone gives you
      on its side rather than wrapping into the controls. */
-  .app[data-focus="1"] .clock { font-size: clamp(34px, min(7vw, 19vh), 96px); }
-  .app[data-focus="1"] .combo { font-size: clamp(24px, min(5.4vw, 13vh), 84px); }
+  .app[data-focus="1"] .clock { font-size: clamp(24px, min(4.8vw, 13.5vh), 72px); }
+  .app[data-focus="1"] .combo { font-size: calc(clamp(24px, min(6vw, 15vh), 84px) * var(--fit, 1)); }
   .app[data-focus="1"] .combo-name { font-size: 10px; margin-bottom: 0; }
   .app[data-focus="1"] .round { font-size: 11px; }
 }
@@ -164,10 +215,11 @@ body {
 @media (orientation: landscape) and (max-height: 520px) {
   .app { padding: 8px 16px 14px; gap: 8px; }
   .stage { padding: 10px 16px; }
+  .dial { width: min(24vh, 110px); }
   .phase { font-size: 11px; }
   .clock { font-size: 32px; margin: 0; }
   .round { font-size: 11px; }
-  .combo { font-size: 18px; margin-top: 8px; min-height: 22px; }
+  .combo { font-size: calc(18px * var(--fit, 1)); margin-top: 8px; min-height: 22px; }
   .combo-name { font-size: 10px; min-height: 12px; margin-bottom: 0; }
   .stats { margin-top: 6px; }
   .btn { padding: 10px; font-size: 15px; }
@@ -181,8 +233,9 @@ body {
    from further away than a phone. */
 @media (min-width: 900px) {
   .app[data-focus="1"] { max-width: 1200px; }
-  .app[data-focus="1"] .clock { font-size: clamp(64px, min(10vw, 26vh), 150px); }
-  .app[data-focus="1"] .combo { font-size: clamp(48px, min(9vw, 22vh), 132px); }
+  .app[data-focus="1"] .dial { width: min(30vw, 62vh, 100%); }
+  .app[data-focus="1"] .clock { font-size: clamp(40px, min(5.6vw, 16vh), 104px); }
+  .app[data-focus="1"] .combo { font-size: calc(clamp(48px, min(9vw, 22vh), 132px) * var(--fit, 1)); }
 }
 
 .phase {
@@ -212,12 +265,16 @@ body {
 
 .combo {
   margin-top: 20px;
-  font-size: 30px;
+  font-size: calc(30px * var(--fit, 1));
   font-weight: 800;
   min-height: 40px;
   color: var(--text);
   letter-spacing: 1px;
+  text-wrap: balance;          /* even line lengths instead of one orphan word */
 }
+/* One move plus its separator, kept together so a wrapped combo never starts a
+   line with a dangling hyphen. */
+.mv { white-space: nowrap; }
 
 /* iOS treats two quick taps on the same spot as "zoom in", which both zoomed
    the page and swallowed the second tap — so jabbing +/- to set rounds, work
@@ -299,8 +356,8 @@ label,
   z-index: 1;
   background: none; border: none;
   color: var(--muted);
-  font: inherit; font-weight: 700; font-size: 13.5px;
-  padding: 10px 6px;
+  font: inherit; font-weight: 700; font-size: clamp(11px, 3.1vw, 13.5px);
+  padding: 10px 4px;
   cursor: pointer;
   transition: color .2s;
   /* Grid items default to min-width:auto, so "Intermediate" refused to shrink
@@ -314,7 +371,7 @@ label,
 /* Narrowest phones still in use (iPhone SE 1st gen and similar). */
 @media (max-width: 360px) {
   .app { padding-left: 14px; padding-right: 14px; }
-  .seg__opt { font-size: 12px; padding: 10px 3px; }
+  .seg__opt { padding: 10px 2px; }
   .step__btn { width: 36px; height: 36px; }
   .step__val { min-width: 52px; }
   .field > span, .field__label { font-size: 14px; }
@@ -350,6 +407,16 @@ label,
 }
 .stage[data-phase="done"] .stats { color: var(--accent); }
 
+/* Before a session there's no combo to show, so the placeholder shouldn't sit
+   at the same weight as one. */
+.stage[data-phase="ready"] .combo,
+.stage[data-phase="done"] .combo {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
 /* ---- Finish celebration ----
    The end of a session is the only moment the app asks someone to feel good
    about what they just did, so it gets the one flourish in the whole UI.
@@ -363,7 +430,6 @@ label,
 }
 .stage[data-phase="done"] .combo {
   animation: finishRise 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
-  text-shadow: 0 0 26px rgba(73, 149, 146, 0.45);
 }
 .stage[data-phase="done"] .stats { animation: finishRise 0.55s 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; }
 
@@ -436,29 +502,30 @@ label,
    the total feel earned rather than just displayed. */
 @keyframes numPop {
   0%   { transform: scale(1); }
-  35%  { transform: scale(1.42); color: #ffb347; text-shadow: 0 0 20px rgba(255, 179, 71, 0.75); }
+  35%  { transform: scale(1.42); color: var(--accent); text-shadow: 0 0 20px rgba(73, 149, 146, 0.75); }
   70%  { transform: scale(0.96); }
   100% { transform: scale(1); }
 }
 .stat-num.is-pop { animation: numPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
-.streak { display: inline-flex; align-items: center; gap: 5px; color: #ffb347; }
+/* Warm orange appears ONLY on the streak — nowhere else in the app. Being the
+   single exception to the BWB teal is exactly what makes it read as "this is
+   the thing you earned"; in teal the flame just looked like another droplet. */
+.streak { display: inline-flex; align-items: center; gap: 6px; color: var(--streak); white-space: nowrap; }
 
-/* Flame: three stacked teardrops, each flickering on its own beat. Pure CSS —
-   no image, no library, nothing to load. */
-.flame { position: relative; display: inline-block; width: 13px; height: 16px; }
-.flame i {
-  position: absolute;
-  left: 50%; bottom: 0;
-  border-radius: 50% 50% 22% 50%;
-  transform: translateX(-50%) rotate(-45deg);
-  animation: flicker 0.9s ease-in-out infinite alternate;
+/* Flame: a drawn path, not stacked CSS shapes — at 13px the CSS version
+   collapsed into an orange smudge overlapping the streak number. */
+.flame {
+  width: 1.15em; height: 1.15em;
+  flex: none;
+  filter: drop-shadow(0 0 5px rgba(255, 122, 0, 0.45));
+  animation: flicker 1.6s ease-in-out infinite alternate;
+  transform-origin: 50% 85%;
 }
-.flame i:nth-child(1) { width: 13px; height: 13px; background: linear-gradient(to top right, #ff6a00, #ff9d2e); filter: drop-shadow(0 0 6px rgba(255, 122, 0, 0.55)); }
-.flame i:nth-child(2) { width: 9px;  height: 9px;  background: linear-gradient(to top right, #ff9d2e, #ffc857); animation-delay: 0.15s; }
-.flame i:nth-child(3) { width: 5px;  height: 5px;  background: #ffe9a8; animation-delay: 0.3s; }
+.flame__outer { fill: var(--streak-deep); }
+.flame__inner { fill: var(--streak-hot); }
 @keyframes flicker {
-  from { transform: translateX(-50%) rotate(-45deg) scale(0.92); opacity: 0.85; }
-  to   { transform: translateX(-50%) rotate(-45deg) scale(1.08); opacity: 1; }
+  from { transform: scale(0.94) rotate(-1.5deg); opacity: 0.92; }
+  to   { transform: scale(1.05) rotate(1.5deg); opacity: 1; }
 }
 
 /* Anyone who has asked their phone to calm down gets no motion at all. */
@@ -466,7 +533,7 @@ label,
   .stage[data-phase="done"] .combo,
   .stage[data-phase="done"] .stats,
   .stage[data-phase="done"]::after,
-  .flame i,
+  .flame,
   .stat-num.is-pop { animation: none; }
   .stage[data-phase="done"]::after { display: none; }
 }

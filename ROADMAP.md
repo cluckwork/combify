@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-22 · **Current version:** v1.4.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-22 · **Current version:** v1.5.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -392,6 +392,21 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-22 — v1.5.0** — **Visual pass, driven by actually looking at
+  screenshots.** Added a progress ring around the clock (the screen had no
+  centre of gravity — text floating in an empty box). Combo now renders as
+  per-move tokens so a wrapped combo never starts a line with a dangling "-",
+  and long combos scale down to fit. Finish screen rebuilt around the punch
+  total. Warm orange formalised as `--streak` tokens, used ONLY for the streak;
+  everything else stays BWB teal. Fixed: clock overlapping the combo in
+  landscape and on desktop (flex-basis resolves to content width — now a grid
+  with `minmax(0,1fr)`), the ring collapsing to text width (a `100%` resolving
+  against a shrink-to-fit parent), "Intermediate" truncated on a normal iPhone,
+  a glow halo around the finish text, and the streak printed twice.
+  Layout tests gained overlap detection between element pairs — 206 checks
+  passed while the screen was visibly broken, because nothing measured whether
+  two things occupied the same space. Also `--only <device>` and `--fast`
+  flags: a single-device run is ~18s instead of a ~5min sweep.
 - **2026-07-22 — v1.4.0** — **Full-screen focus mode.** While a session runs the
   stage takes the whole screen and the chrome folds away, so the combo can be
   read from across the room; pausing brings the settings back, which is how you
