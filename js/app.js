@@ -996,7 +996,18 @@ function renderStats() {
     bits.push(`${history.totals.sessions} session${history.totals.sessions === 1 ? "" : "s"}`);
   }
   if (history.totals.punches > 0) bits.push(`${history.totals.punches.toLocaleString()} punches`);
-  el.stats.textContent = bits.length ? bits.join(" · ") : "";
+  setText(el.stats, bits.length ? bits.join(" · ") : "");
+}
+
+// Write-if-changed helpers. render() runs every second (and around phase
+// changes); rewriting identical text nodes and attributes still costs style
+// and layout work in the browser. Skipping no-op writes makes the steady
+// state genuinely idle between ticks.
+function setText(node, text) {
+  if (node && node.textContent !== text) node.textContent = text;
+}
+function setData(node, key, value) {
+  if (node && node.dataset[key] !== value) node.dataset[key] = value;
 }
 
 function render() {
@@ -1006,13 +1017,13 @@ function render() {
   // versions dropped out on pause and on finishing; the founder wanted the
   // session to be one continuous fullscreen thing you explicitly leave.)
   if (el.app) {
-    el.app.dataset.focus = state.phase !== "ready" ? "1" : "0";
-    el.app.dataset.phase = state.phase; // lets CSS pick the right icon per state
+    setData(el.app, "focus", state.phase !== "ready" ? "1" : "0");
+    setData(el.app, "phase", state.phase); // lets CSS pick the right icon per state
   }
-  el.clock.textContent = state.phase === "countdown" ? String(state.secondsLeft) : format(state.secondsLeft);
-  el.stage.dataset.phase = state.phase;
-  el.phase.textContent = state.phase === "work" ? "Work" : state.phase === "rest" ? "Rest" : state.phase === "done" ? "Done" : state.phase === "countdown" ? "Get Ready" : "Ready";
-  el.round.textContent = state.phase === "countdown" ? `Round 1 / ${getRounds()}` : `Round ${state.currentRound} / ${getRounds()}`;
+  setText(el.clock, state.phase === "countdown" ? String(state.secondsLeft) : format(state.secondsLeft));
+  setData(el.stage, "phase", state.phase);
+  setText(el.phase, state.phase === "work" ? "Work" : state.phase === "rest" ? "Rest" : state.phase === "done" ? "Done" : state.phase === "countdown" ? "Get Ready" : "Ready");
+  setText(el.round, state.phase === "countdown" ? `Round 1 / ${getRounds()}` : `Round ${state.currentRound} / ${getRounds()}`);
   renderProgress();
   renderStats();
   startDialLoop();
@@ -1037,10 +1048,13 @@ function phaseFractionLeft() {
   const left = stepped ? state.secondsLeft / total : (state.phaseEndsAt - Date.now()) / 1000 / total;
   return Math.max(0, Math.min(1, left));
 }
+let dialArraySet = false;
 function renderProgress() {
   if (!el.dialFill) return;
-  el.dialFill.style.strokeDasharray = String(DIAL_CIRCUMFERENCE);
-  el.dialFill.style.strokeDashoffset = String(DIAL_CIRCUMFERENCE * (1 - phaseFractionLeft()));
+  if (!dialArraySet) { el.dialFill.style.strokeDasharray = String(DIAL_CIRCUMFERENCE); dialArraySet = true; }
+  const offset = String(DIAL_CIRCUMFERENCE * (1 - phaseFractionLeft()));
+  // Written every frame by dialLoop; skip the no-op frames (paused, ready).
+  if (el.dialFill.style.strokeDashoffset !== offset) el.dialFill.style.strokeDashoffset = offset;
 }
 // Redraw the ring every frame during work and rest, so it drains seamlessly
 // instead of ticking down in one-second steps. NOT during the countdown —

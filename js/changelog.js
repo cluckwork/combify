@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.11.3",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Leaner under the hood",
+    notes: [
+      "The app now does strictly nothing between timer ticks — screen updates only happen when something actually changed. Same look, less work for the phone.",
+    ],
+  },
+  {
     v: "1.11.2",
     date: "2026-07-23",
     size: "patch",

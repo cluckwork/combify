@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.11.2 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.11.3 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,17 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.11.3** — **Idempotent hot paths.** The per-second render
+  rewrote clock/phase/round text and three dataset attributes even when
+  identical, and the 60fps ring loop re-set the constant dasharray every frame
+  — each no-op write still costs style/layout work. All hot-path DOM writes now
+  skip when unchanged (setText/setData helpers, dasharray set once, ready-line
+  guarded). Behaviour identical; steady state is now genuinely idle between
+  ticks. Note for posterity: headless Chromium's longtask/rAF instruments
+  report the countdown as a multi-second "freeze" that is provably not real
+  (the clock advances through it; screenshots render) — compositor-driven
+  animation starves main-thread BeginFrames in headless only. Real-device lag
+  verification belongs on the real device.
 - **2026-07-23 — v1.11.2** — **Anti-lag engineering.** Three reported lags, three
   mechanisms: (1) tick/blip/land re-shipped as WAV — LAME puts ~50ms of encoder
   silence at the front of an MP3, stretched further by the 0.7x pitch bend, so
