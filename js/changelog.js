@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.11.5",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Clean bells, calm starts",
+    notes: [
+      "The bell no longer fights the voice: the round-start bell rings clean before the first callout, and the end-of-round bell lands in silence instead of cutting a word off mid-syllable.",
+      "After the bell, you now get a moment to get your hands up before the first combo is called.",
+      "The glow is back on the punch total's pop — rebuilt so it stays smooth.",
+    ],
+  },
+  {
     v: "1.11.4",
     date: "2026-07-23",
     size: "patch",

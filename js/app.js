@@ -740,6 +740,10 @@ function playClips(keys, onDone) {
     clearTimeout(state.clipWatchdog);
     voice.current = null;
     if (!state.running || state.phase !== "work" || i >= keys.length) { onDone(); return; }
+    // Round's nearly over: starting one more word now means it gets cut by the
+    // bell mid-syllable — the reported end-bell "glitch". Go quiet instead;
+    // the bell's first strike lands in clean air.
+    if (i > 0 && state.phaseEndsAt - Date.now() < 450) { onDone(); return; }
     // Highlight here, not inside playWord: this runs exactly once per move,
     // whereas playWord re-enters on a retry and would re-pop the same word.
     highlightMove(i);
@@ -1194,7 +1198,19 @@ function nextCombo() {
     state.comboTimer = setTimeout(nextCombo, getPace()); // pace read fresh each time
   });
 }
-function startComboLoop() { state.lastComboAt = Date.now(); nextCombo(); }
+// The first combo never starts on top of the bell. Two reasons, two delays:
+// calling the first word at the same instant as the bell attack collided two
+// full-volume samples (heard as the bell "glitching"), and a round that starts
+// shouting the moment the clock starts gives nobody time to get their hands
+// up. A fresh ROUND gets a proper runway (bell → breathe → first call);
+// resume and the return-from-background restart use a shorter beat, because
+// the member was already mid-flow.
+const FIRST_CALL_DELAY = 1600;
+const RESUME_CALL_DELAY = 650;
+function startComboLoop(delay = RESUME_CALL_DELAY) {
+  state.lastComboAt = Date.now();
+  state.comboTimer = setTimeout(nextCombo, delay);
+}
 
 // Last line of defence: if we're in a work round but no combo has been called
 // for far longer than the pace allows, something in the audio chain stalled.
@@ -1228,8 +1244,8 @@ function beginPhase(seconds) {
   state.secondsLeft = seconds;
   state.phaseEndsAt = Date.now() + seconds * 1000;
 }
-function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned10 = false; ringBell(1); render(); startComboLoop(); }
-function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
+function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned10 = false; ringBell(1); render(); startComboLoop(FIRST_CALL_DELAY); }
+function enterRest() { state.phase = "rest"; beginPhase(getRest()); stopComboLoop(); ringBell(2); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
 // The headline when a session ends — one of these, never the same twice in a
 // row. Coach's voice: short, earned, no exclamation points. All of them fit on
 // one or two lines at display size (each is shorter than "Press start to

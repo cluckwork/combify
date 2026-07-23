@@ -683,7 +683,13 @@ label,
   70%  { transform: scale(0.96); }
   100% { transform: scale(1); }
 }
-.stat-num.is-pop { animation: numPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
+.stat-num.is-pop {
+  animation: numPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+  /* The glow rides the pop as a constant, not a keyframe: interpolating
+     text-shadow repaints the glyphs every frame, but switching it on for the
+     pop's 500ms costs two paints total. Same flash, none of the jank. */
+  text-shadow: 0 0 20px rgba(73, 149, 146, 0.75);
+}
 /* Warm orange appears ONLY on the streak — nowhere else in the app. Being the
    single exception to the BWB teal is exactly what makes it read as "this is
    the thing you earned"; in teal the flame just looked like another droplet. */

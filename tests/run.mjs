@@ -221,7 +221,7 @@ async function countCombos(app, ms, step = 200) {
   const litCount = () => marks().filter(Boolean).length;
 
   app.click("startBtn");
-  await app.clock.advance(5600); // countdown (5s) + ~600ms: first word playing
+  await app.clock.advance(7200); // countdown 5s + 1.6s first-call runway + ~600ms: first word playing
   check("the first move lights up as it is called", litIndex() === 0, `index ${litIndex()}`);
   check("exactly one move is lit", litCount() === 1, `${litCount()} lit`);
 
@@ -523,7 +523,7 @@ async function countCombos(app, ms, step = 200) {
   app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
   app.setSeg("pace", "3000"); // relaxed: the widest word gaps, the reported case
   app.click("startBtn");
-  await app.clock.advance(5000 + 700); // countdown, then first word (600ms) + into its gap
+  await app.clock.advance(5000 + 2250); // countdown, first-call runway (1.6s), word 1 (600ms) → inside its gap
   // Background + return INSIDE the inter-word gap. The old anonymous gap timer
   // survived the cut and revived the old combo next to the new one — two
   // chains interleaving through the same pools, heard as stuttering.

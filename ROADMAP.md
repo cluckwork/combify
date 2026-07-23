@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.11.4 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.11.5 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,18 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.11.5** — **Bell clearance + first-call runway + glow back.**
+  Both reported bell "glitches" were collisions with the voice: at round start
+  the first word began during the bell's attack (two full-volume samples at
+  once), and at round end the first strike of the bell fired the same instant
+  the mid-word clip was cut. Now: a fresh round waits 1.6s after the bell
+  before the first call (bell → breathe → hands up → call; resume and
+  background-return use a 650ms beat), enterRest stops the voice BEFORE
+  ringing, and the chain refuses to start a word inside the round's final
+  450ms so the end bell lands in clean air. The pop's glow returned as a
+  constant shadow during the 500ms pop (two paints total) rather than a
+  keyframed text-shadow (per-frame glyph repaints — the jank that got it
+  removed). 191 behaviour + 262 layout green.
 - **2026-07-23 — v1.11.4** — **Voice-stutter root cause + count-up butter pass.**
   The stutter on Steady/Relaxed: the between-words setTimeout was anonymous —
   stopComboLoop couldn't cancel it, so a chain cut landing inside a word gap
