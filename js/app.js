@@ -428,29 +428,54 @@ function playClips(keys, onDone) {
     clearTimeout(state.clipWatchdog);
     voice.current = null;
     if (!state.running || state.phase !== "work" || i >= keys.length) { onDone(); return; }
-    const node = getPooledClip(keys[i++]);
+    playWord(keys[i++], 0);
+  };
+
+  // One word, with one retry. A clip sometimes reports "ended" almost instantly
+  // without having made a sound (a decode that quietly failed on a reused
+  // element). The chain treated that as spoken, so a combo shown as 1-2-3-4 was
+  // heard as "1 _ 3 4" — a silent hole where a punch should be. We now notice
+  // an impossibly-short playback and try the word once more on the pool's other
+  // element before moving on.
+  const playWord = (key, attempt) => {
+    const node = getPooledClip(key); // round-robin: a retry lands on a different element
     if (!node) { playNext(); return; }
     // Clear handlers from this element's previous use so a late event from an
     // earlier combo can't advance the current one.
     node.onended = null;
     node.onerror = null;
+    node.muted = false; // priming mutes elements; never inherit that into playback
     try { node.currentTime = 0; } catch (e) {}
     voice.current = node;
 
+    const startedAt = Date.now();
     let moved = false;
-    const advance = (fn) => () => {
+    const once = (fn) => () => {
       if (moved) return; // whichever fires first wins: ended, error, or watchdog
       moved = true;
       clearTimeout(state.clipWatchdog);
       fn();
     };
-    const goNextWord = advance(() => {
+    const retryOr = (fallback) => {
+      if (attempt < 1) { playWord(key, attempt + 1); return; }
+      fallback();
+    };
+    const afterWord = () => {
       if (!state.running || state.phase !== "work") { onDone(); return; }
       setTimeout(playNext, getWordGap());
+    };
+    const finished = once(() => {
+      // Did it actually play, or just claim to? Anything far shorter than the
+      // clip's own length never reached the speaker.
+      const durMs = node.duration && isFinite(node.duration) && node.duration > 0 ? node.duration * 1000 : 0;
+      const elapsed = Date.now() - startedAt;
+      const tooFastToBeReal = durMs ? elapsed < durMs * 0.4 : elapsed < 100;
+      if (tooFastToBeReal) { retryOr(afterWord); return; }
+      afterWord();
     });
-    const skip = advance(playNext);
+    const skip = once(() => retryOr(playNext));
 
-    node.onended = goNextWord;
+    node.onended = finished;
     node.onerror = skip;
     const p = node.play();
     if (p && p.catch) p.catch(skip);
@@ -459,8 +484,9 @@ function playClips(keys, onDone) {
     // back to a fixed guess when duration isn't known yet — common on iOS,
     // where metadata often hasn't loaded at first play.
     const durMs = node.duration && isFinite(node.duration) ? node.duration * 1000 : 1200;
-    state.clipWatchdog = setTimeout(goNextWord, durMs + 800);
+    state.clipWatchdog = setTimeout(finished, durMs + 800);
   };
+
   playNext();
 }
 

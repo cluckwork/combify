@@ -41,7 +41,7 @@ export class Clock {
 
 // ---------- Fake audio ----------
 export function makeAudioFactory(clock, cfg) {
-  const stats = { created: 0, plays: 0, byKey: {}, live: [], maxConcurrent: 0, playing: 0, voicePlaying: 0, maxVoiceConcurrent: 0, overlapEvents: [], missingPlayAttempts: [] };
+  const stats = { created: 0, plays: 0, byKey: {}, live: [], maxConcurrent: 0, playing: 0, voicePlaying: 0, maxVoiceConcurrent: 0, overlapEvents: [], missingPlayAttempts: [], phantoms: [], audible: [] };
   class FakeAudio {
     constructor(src = "") {
       this.src = src; this.preload = ""; this.muted = false; this.paused = true;
@@ -81,6 +81,18 @@ export function makeAudioFactory(clock, cfg) {
       }
       stats.plays++;
       stats.byKey[this.key] = (stats.byKey[this.key] || 0) + 1;
+      // phantomEnded: the element reports "ended" almost immediately without
+      // ever producing audio — a decode that quietly failed. The chain thinks
+      // the word was spoken, so the listener hears a gap where a punch should
+      // be. Modelled separately from `plays` so tests can assert AUDIBLE words.
+      const phantom = typeof cfg.phantomEnded === "function" ? cfg.phantomEnded(this) : false;
+      if (phantom) {
+        stats.phantoms.push({ t: clock.now, key: this.key });
+        if (this._endTimer) clock.clear(this._endTimer);
+        this._endTimer = clock.setTimeout(() => { this._endTimer = null; this._emit("ended"); }, 10);
+        return Promise.resolve();
+      }
+      stats.audible.push({ t: clock.now, key: this.key });
       if (this.paused) {
         this.paused = false; stats.playing++;
         stats.maxConcurrent = Math.max(stats.maxConcurrent, stats.playing);

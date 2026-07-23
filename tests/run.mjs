@@ -433,6 +433,71 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// ------------------------------ 22. every punch in a combo is actually spoken
+// Records which combo was on screen and which clips were genuinely audible,
+// then checks they match word for word. A move's on-screen label is identical
+// to its clip key, so the displayed text can be compared directly.
+async function collectSpokenVsShown(app, ms) {
+  const shown = [];
+  let last = app.combo();
+  for (let t = 0; t < ms; t += 50) {
+    await app.clock.advance(50);
+    const c = app.combo();
+    if (c !== last) { shown.push({ t: app.clock.now, combo: c }); last = c; }
+  }
+  const rows = [];
+  for (let k = 0; k < shown.length - 1; k++) {
+    const { t, combo } = shown[k];
+    if (!combo.includes(" - ")) continue;
+    const expected = combo.split(" - ");
+    // The first word plays in the same instant the text updates, which this
+    // 50ms sampler can only notice afterwards — so shift the window back a
+    // little (still far inside the >=500ms gap between combos) and compare
+    // only as many words as this combo actually has.
+    const LAG = 200;
+    const heard = app.stats.audible.filter((a) => a.t >= t - LAG && a.t < shown[k + 1].t - LAG)
+      .map((a) => a.key).slice(0, expected.length);
+    rows.push({ expected, heard });
+  }
+  return rows;
+}
+{
+  section("22. Every punch in a combo is actually spoken");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
+  app.setSeg("pace", "1500"); app.setSeg("level", "intermediate");
+  app.click("startBtn");
+  const rows = await collectSpokenVsShown(app, 45000);
+  const bad = rows.filter((r) => r.expected.join(",") !== r.heard.join(","));
+  check("normal playback speaks every word, in order",
+    rows.length >= 4 && bad.length === 0,
+    bad.length ? `e.g. shown ${bad[0].expected.join("-")} but heard ${bad[0].heard.join("-") || "(nothing)"}` : `only ${rows.length} combos`);
+  app.restore();
+}
+{
+  section("23. A clip that dies silently must not leave a hole in the combo");
+  // Half the pool elements report "ended" instantly without making a sound —
+  // the failure behind "shown 1-2-3-4, heard 1 _ 3 4".
+  const order = new Map();
+  const app = await boot({
+    duration: 0.6,
+    phantomEnded: (el) => {
+      if (!order.has(el)) order.set(el, order.size);
+      return order.get(el) % 2 === 1;
+    },
+  });
+  app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
+  app.setSeg("pace", "1500"); app.setSeg("level", "intermediate");
+  app.click("startBtn");
+  const rows = await collectSpokenVsShown(app, 45000);
+  const bad = rows.filter((r) => r.expected.join(",") !== r.heard.join(","));
+  check("silent clips are retried so no punch is skipped",
+    rows.length >= 3 && bad.length === 0,
+    bad.length ? `${bad.length}/${rows.length} combos had holes, e.g. shown ${bad[0].expected.join("-")} heard ${bad[0].heard.join("-") || "(nothing)"}` : `only ${rows.length} combos`);
+  results.push(`     (${rows.length} combos checked; ${app.stats.phantoms.length} silent clips recovered)`);
+  app.restore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);
