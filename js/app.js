@@ -85,6 +85,27 @@ const getRest = () => restCtl.value;
 
 const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, tickTimer: null, comboTimer: null, comboFallback: null, clipWatchdog: null };
 
+// ---------- Screen wake lock ----------
+// Keeps the screen on while a session runs, so a member who sets the phone
+// down mid-round doesn't have the screen (and with it, JS timers/audio) go to
+// sleep partway through. The lock is auto-released by the browser whenever
+// the tab is hidden (app-switch, screen off via power button, etc.), so we
+// re-acquire it on visibilitychange if the session is still running.
+let wakeLock = null;
+async function acquireWakeLock() {
+  if (!("wakeLock" in navigator) || !state.running) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => { wakeLock = null; });
+  } catch (e) { wakeLock = null; } // e.g. denied, or tab not visible — non-fatal
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.running) acquireWakeLock();
+});
+
 // ---------- Shared audio context (bell + voice clips both use this) ----------
 let audioCtx = null;
 function getAudioCtx() {
@@ -477,7 +498,7 @@ function stopComboLoop() {
 // ---------- Phase changes ----------
 function enterWork() { state.phase = "work"; state.secondsLeft = getWork(); state.warned10 = false; ringBell(1); render(); startComboLoop(); }
 function enterRest() { state.phase = "rest"; state.secondsLeft = getRest(); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
-function finish() { state.phase = "done"; state.running = false; stopComboLoop(); clearInterval(state.tickTimer); ringBell(3); el.combo.textContent = "Session complete — nice work."; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); render(); }
+function finish() { state.phase = "done"; state.running = false; stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3); el.combo.textContent = "Session complete — nice work."; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); render(); }
 
 // ---------- The one-second heartbeat ----------
 function tick() {
@@ -514,15 +535,16 @@ function start() {
   if (audioCtx.state === "suspended") audioCtx.resume();
   unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
   state.running = true;
+  acquireWakeLock();
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
   state.phase = "countdown"; state.secondsLeft = 3;
   el.combo.textContent = "Get ready...";
   playTick(); render();
   state.tickTimer = setInterval(tick, 1000);
 }
-function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); }
-function resume() { state.running = true; el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); }
-function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; render(); }
+function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); }
+function resume() { state.running = true; el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); }
+function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; render(); }
 
 // ---------- Wire up the buttons ----------
 el.startBtn.addEventListener("click", () => {
