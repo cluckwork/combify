@@ -55,7 +55,10 @@ export function makeAudioFactory(clock, cfg) {
       // Faithful to the real repo: a file that isn't on disk behaves like a
       // 404 (never loads, play() rejects). This is what catches "the code
       // points at an audio file that doesn't exist".
-      this.exists = fs.existsSync(path.join(REPO, src.replace(/^\.?\//, "")));
+      // cfg.missingClips lets a test knock out specific words ("7") to prove one
+      // bad file doesn't take the other eleven down with it.
+      this.exists = fs.existsSync(path.join(REPO, src.replace(/^\.?\//, "")))
+        && !(cfg.missingClips || []).includes(this.key);
       stats.created++; stats.live.push(this);
       // deferMetadata simulates mobile Safari refusing to load anything until
       // a play attempt — so NO load events fire at all, success or failure.
@@ -234,13 +237,37 @@ export async function boot(cfg = {}) {
   if (cfg.noSpeech) { delete window.speechSynthesis; g.speechSynthesis = undefined; }
   // Counts oscillators actually started, so tests can tell whether the synth
   // bell/tick/warning genuinely made a sound.
-  const synth = { oscStarted: 0 };
+  // An AudioContext that can be suspended, the way a real one is whenever the
+  // phone locks, a call arrives, or another app takes audio focus. `heard`
+  // counts oscillators started while the context was actually RUNNING; `lost`
+  // counts those started against a suspended context, which in a real browser
+  // is a sound the user never hears. That distinction is the whole point —
+  // the old code happily created oscillators into a suspended context and
+  // reported no error while the app sat there silent.
+  const synth = { oscStarted: 0, lost: 0, resumes: 0, ctx: null };
   window.AudioContext = g.AudioContext = class {
-    constructor() { this.state = "running"; this.sampleRate = 44100; this.currentTime = 0; this.destination = {}; }
-    resume() { this.state = "running"; return Promise.resolve(); }
+    constructor() {
+      this.state = cfg.audioSuspended ? "suspended" : "running";
+      this.sampleRate = 44100; this.currentTime = 0; this.destination = {};
+      synth.ctx = this;
+    }
+    resume() {
+      synth.resumes++;
+      if (cfg.audioResumeFails) return Promise.reject(new Error("NotAllowedError"));
+      this.state = "running";
+      return Promise.resolve();
+    }
+    suspend() { this.state = "suspended"; return Promise.resolve(); }
     createBuffer(ch, len, rate) { return { getChannelData: () => new Float32Array(len) }; }
     createConvolver() { return { buffer: null, connect: (n) => n }; }
-    createOscillator() { return { type: "", frequency: { setValueAtTime() {} }, connect: (n) => n, start() { synth.oscStarted++; }, stop() {} }; }
+    createOscillator() {
+      const ctx = this;
+      return {
+        type: "", frequency: { setValueAtTime() {} }, connect: (n) => n,
+        start() { if (ctx.state === "running") synth.oscStarted++; else synth.lost++; },
+        stop() {},
+      };
+    }
     createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: (n) => n }; }
   };
 

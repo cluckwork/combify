@@ -219,11 +219,65 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ---------- Shared audio context (bell + voice clips both use this) ----------
+//
+// EVERY synthesized sound goes through withAudio(). Nothing may call
+// ctx.createOscillator() directly, because an AudioContext does not stay
+// running by itself: the OS suspends it whenever the phone locks, a call
+// arrives, another app takes audio focus, or the tab is backgrounded. It used
+// to be resumed in exactly one place — inside start() — so after any of those
+// interruptions the ticks, bells and warnings were silent for the REST OF THE
+// SESSION with nothing to bring them back.
+//
+// The second half of that bug: resume() is asynchronous. start() called it and
+// then immediately played the first countdown tick, which got scheduled against
+// a context that was still suspended, so the tick was simply lost. That is why
+// the countdown sometimes "never started firing".
 let audioCtx = null;
 function getAudioCtx() {
-  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-  return audioCtx;
+  try {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    audioCtx = audioCtx || new Ctor();
+    return audioCtx;
+  } catch (e) { return null; }
 }
+
+// Nudge the context back to running. Safe to call as often as you like — from a
+// tap, on visibilitychange, before any sound. Never throws.
+function armAudio() {
+  const ctx = getAudioCtx();
+  if (!ctx || ctx.state === "running") return ctx;
+  try {
+    const p = ctx.resume();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) {}
+  return ctx;
+}
+
+// Play something through the audio context, guaranteeing it is running first.
+// If the context is suspended we resume and play when it actually starts, so a
+// sound arrives a few milliseconds late instead of never arriving at all.
+function withAudio(play) {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const go = () => { try { play(ctx); } catch (e) {} };
+  if (ctx.state === "running") { go(); return; }
+  try {
+    const p = ctx.resume();
+    if (p && p.then) p.then(go, go); // play even if resume() reports failure
+    else go();
+  } catch (e) { go(); }
+}
+
+// Re-arm on every plausible "the user is back" signal. A suspended context can
+// only be resumed from a user gesture on some browsers, so any tap anywhere
+// counts — this is why it listens on the document in the capture phase rather
+// than on the buttons.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") armAudio();
+});
+document.addEventListener("pointerdown", armAudio, { capture: true, passive: true });
+document.addEventListener("touchstart", armAudio, { capture: true, passive: true });
 
 // ---------- Bell: a real recorded ring bell, falling back to a synth tone ----------
 // Same pattern as the voice clips: prefer a real sample (audio/sfx/bell.mp3),
@@ -308,10 +362,9 @@ function bellStrike(ctx, t) {
   modulator.stop(t + 2.5); carrier.stop(t + 2.5);
 }
 function synthBell(times = 1) {
-  try {
-    audioCtx = getAudioCtx();
-    for (let i = 0; i < times; i++) bellStrike(audioCtx, audioCtx.currentTime + i * 0.65);
-  } catch (e) { /* audio unavailable — timer still works */ }
+  withAudio((ctx) => {
+    for (let i = 0; i < times; i++) bellStrike(ctx, ctx.currentTime + i * 0.65);
+  });
 }
 
 // Ring the real bell sample `times` in a row (1 = round start, 3 = session over).
@@ -334,8 +387,7 @@ function ringBell(times = 1) {
 // Short dry tick for the pre-round "3, 2, 1" countdown — deliberately NOT
 // bell-like, so it can never be mistaken for "go."
 function playTick() {
-  try {
-    const ctx = getAudioCtx();
+  withAudio((ctx) => {
     const t = ctx.currentTime;
     const osc = ctx.createOscillator(), gain = ctx.createGain();
     osc.type = "square"; osc.frequency.setValueAtTime(1500, t);
@@ -344,13 +396,12 @@ function playTick() {
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
     osc.connect(gain).connect(ctx.destination);
     osc.start(t); osc.stop(t + 0.07);
-  } catch (e) {}
+  });
 }
 
 // Two-beep "10 seconds left" cue — distinct from both the tick and the bell.
 function playWarning() {
-  try {
-    const ctx = getAudioCtx();
+  withAudio((ctx) => {
     for (let i = 0; i < 2; i++) {
       const t = ctx.currentTime + i * 0.18;
       const osc = ctx.createOscillator(), gain = ctx.createGain();
@@ -361,7 +412,7 @@ function playWarning() {
       osc.connect(gain).connect(ctx.destination);
       osc.start(t); osc.stop(t + 0.15);
     }
-  } catch (e) {}
+  });
 }
 
 // ---------- Voice ----------
@@ -392,12 +443,26 @@ const clipCache = {};
 // the "silent + 10-20 seconds per combo" bug on phones.
 const voice = { useClips: true, current: null };
 
+// Clips that failed to load. ONE bad file used to switch the whole app to
+// robotic text-to-speech for the rest of the session — a single flaky request
+// for, say, audio/7.mp3 cost you all twelve voices. Now a failure is recorded
+// per word: that word alone falls back (see playWord), and clips are only
+// abandoned wholesale when enough have failed that the set is clearly not
+// there at all, which is the case this fallback actually exists for.
+const failedClips = new Set();
+const CLIPS_GIVE_UP_AT = 4;
 function preloadClips() {
   CLIP_KEYS.forEach((key) => {
     const a = new Audio(CLIP_DIR + key + CLIP_EXT);
     a.preload = "auto";
     clipCache[key] = a;
-    a.addEventListener("error", () => { voice.useClips = false; }, { once: true });
+    a.addEventListener("error", () => {
+      failedClips.add(key);
+      if (failedClips.size >= CLIPS_GIVE_UP_AT) voice.useClips = false;
+    }, { once: true });
+    // A file that later loads fine clears its own black mark, so one bad
+    // moment on a phone's connection isn't permanent.
+    a.addEventListener("canplaythrough", () => failedClips.delete(key), { once: true });
   });
 }
 preloadClips();
@@ -433,32 +498,43 @@ function primeElement(a) {
   a.muted = false;
 }
 
+// Runs on EVERY start and resume, not just the first tap. Two reasons: iOS can
+// revoke the unlock after an audio interruption (a call, another app taking
+// focus), and the first tap may have happened before the files finished
+// loading, leaving a half-built pool that nothing ever repaired. Priming is a
+// muted play/pause — silent and cheap — so doing it again costs nothing.
+// The flag is set at the END and the whole thing is wrapped: if it throws
+// half-way, the next tap retries instead of leaving the pool broken forever.
 function unlockAudioForMobile() {
-  if (audioUnlocked) return;
-  audioUnlocked = true;
-  CLIP_KEYS.forEach((key) => {
-    // Reuse the already-preloaded element as the first slot rather than making
-    // another one — otherwise the page holds the 12 preloaded elements PLUS a
-    // fresh set per word, which is what pushed us to ~50 live elements.
-    const pool = clipCache[key] ? [clipCache[key]] : [];
-    while (pool.length < UNLOCK_POOL_SIZE) pool.push(new Audio(CLIP_DIR + key + CLIP_EXT));
-    pool.forEach(primeElement);
-    clipPool[key] = pool;
-  });
-  // Only worth priming if a real sample actually loaded; the synth bell needs
-  // no unlocking (it goes through the AudioContext resumed in this same tap).
-  if (sfx.useSamples) {
-    for (let i = 0; i < UNLOCK_POOL_SIZE; i++) {
-      const a = new Audio(SFX_DIR + "bell.mp3");
-      primeElement(a);
-      bellPool.push(a);
+  try {
+    CLIP_KEYS.forEach((key) => {
+      // Reuse the already-preloaded element as the first slot rather than making
+      // another one — otherwise the page holds the 12 preloaded elements PLUS a
+      // fresh set per word, which is what pushed us to ~50 live elements.
+      const pool = clipPool[key] && clipPool[key].length
+        ? clipPool[key]
+        : (clipCache[key] ? [clipCache[key]] : []);
+      while (pool.length < UNLOCK_POOL_SIZE) pool.push(new Audio(CLIP_DIR + key + CLIP_EXT));
+      pool.forEach(primeElement);
+      clipPool[key] = pool;
+    });
+    // Only worth priming if a real sample actually loaded; the synth bell needs
+    // no unlocking (it goes through the AudioContext armed in this same tap).
+    if (sfx.useSamples) {
+      while (bellPool.length < UNLOCK_POOL_SIZE) bellPool.push(new Audio(SFX_DIR + "bell.mp3"));
+      bellPool.forEach(primeElement);
     }
-  }
+    audioUnlocked = true;
+  } catch (e) { /* leave the flag false so the next tap tries again */ }
 }
 
 // Round-robin a primed element for `key`, falling back to a plain clone if
 // the pool isn't ready yet (e.g. voice toggled on before Start was tapped).
 function getPooledClip(key) {
+  // A word whose file is known bad has a pool like any other — the elements
+  // exist, they just have nothing to play. Returning null here is what routes
+  // it to the spoken fallback instead of burning a retry on silence.
+  if (failedClips.has(key)) return null;
   const pool = clipPool[key];
   if (!pool || !pool.length) {
     const src = clipCache[key];
@@ -511,7 +587,10 @@ function playClips(keys, onDone) {
   // element before moving on.
   const playWord = (key, attempt) => {
     const node = getPooledClip(key); // round-robin: a retry lands on a different element
-    if (!node) { playNext(); return; }
+    // No element for this word — its file is missing or failed. Say it with
+    // text-to-speech rather than leaving a silent hole where a punch should
+    // be. The chain continues either way; a missing clip must never stop it.
+    if (!node) { sayOneWord(key, playNext); return; }
     // Never let two clips sound at once. Without this a retry (or a late
     // event) could start the next word on top of one still playing, which is
     // heard as words cutting each other off and the cadence going ragged.
@@ -568,6 +647,24 @@ function playClips(keys, onDone) {
   };
 
   playNext();
+}
+
+// Speak a SINGLE move, used only when that word's clip is unavailable. Always
+// calls back exactly once — on end, on error, or on a watchdog — because the
+// combo chain is waiting on it and must never be left hanging.
+function sayOneWord(key, done) {
+  let finished = false;
+  const finish = () => { if (finished) return; finished = true; done(); };
+  const move = MOVES[key];
+  if (!move || !window.speechSynthesis || !el.voiceOn.checked) { finish(); return; }
+  try {
+    const u = new SpeechSynthesisUtterance(move.say);
+    if (chosenVoice) u.voice = chosenVoice;
+    u.onend = finish;
+    u.onerror = finish;
+    window.speechSynthesis.speak(u);
+    setTimeout(finish, 1600); // iOS drops onend often enough to need this
+  } catch (e) { finish(); }
 }
 
 // -- Text-to-speech fallback --
@@ -986,8 +1083,7 @@ function enterFullscreen() {
 
 // ---------- Start / pause / reset ----------
 function start() {
-  audioCtx = getAudioCtx();
-  if (audioCtx.state === "suspended") audioCtx.resume();
+  armAudio();
   unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
   enterFullscreen();
   state.running = true;
@@ -1001,7 +1097,12 @@ function start() {
   state.tickTimer = setInterval(tick, 1000);
 }
 function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
-function resume() { state.running = true; enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); render(); }
+// Resuming is a tap like any other, so it is also the moment to re-arm audio:
+// whatever suspended the context while you were paused (a call, a lock screen,
+// switching apps) is exactly the thing that used to leave the rest of the
+// session silent. unlockAudioForMobile() repairs the clip pool too if the
+// first attempt happened before the files had loaded.
+function resume() { state.running = true; armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); render(); }
 function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------

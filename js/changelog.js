@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.8.1",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Sound that doesn't drop out",
+    notes: [
+      "Fixed the countdown beeps sometimes not playing at all when you pressed Start.",
+      "Fixed all sound going dead for the rest of a session after your phone locked, a call came in, or you switched apps — it now comes back the moment you return.",
+      "If one voice clip ever fails to load, only that word falls back to the phone's voice instead of the whole app switching over.",
+    ],
+  },
+  {
     v: "1.8.0",
     date: "2026-07-23",
     size: "minor",

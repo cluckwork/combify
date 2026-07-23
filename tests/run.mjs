@@ -312,6 +312,91 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// ============================================================================
+// 10f–10i. AUDIO RESILIENCE. Every one of these was silent-in-the-real-world
+// before: the app carried on perfectly, the timer ran, and no error was
+// raised — it just made no sound.
+// ============================================================================
+
+// --------------------------------- 10f. context suspended when you hit Start
+{
+  section("10f. Audio context suspended at Start");
+  // Browsers hand you a suspended context until a gesture resumes it, and
+  // resume() is ASYNC. start() used to fire the first countdown tick straight
+  // after asking for a resume, so the tick was scheduled against a suspended
+  // context and never made a sound.
+  const app = await boot({ duration: 0.6, audioSuspended: true });
+  app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(1200);
+  check("the first countdown tick is actually heard", app.synth.oscStarted > 0,
+    `heard ${app.synth.oscStarted}, lost ${app.synth.lost}`);
+  check("no sound was fired into a suspended context", app.synth.lost === 0, `${app.synth.lost} lost`);
+  await app.clock.advance(3000);
+  check("the round-start bell is heard too", app.synth.oscStarted > 1, `${app.synth.oscStarted}`);
+  app.restore();
+}
+
+// ------------------------- 10g. the phone locks / a call comes in mid-round
+{
+  section("10g. Context suspended mid-round (phone locked, call, app switch)");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(4000);
+  const before = app.synth.oscStarted;
+  // The OS suspends the context. Nothing in the app used to notice, and every
+  // tick, bell and warning was silent for the remainder of the session.
+  app.synth.ctx.state = "suspended";
+  Object.defineProperty(app.doc, "visibilityState", { value: "visible", configurable: true });
+  app.doc.dispatchEvent(new app.window.Event("visibilitychange"));
+  await app.clock.advance(500);
+  check("coming back re-arms the audio context", app.synth.ctx.state === "running", app.synth.ctx.state);
+  await app.clock.advance(52000); // run out the round: warning beeps + end bell
+  check("sound returns for the rest of the session", app.synth.oscStarted > before,
+    `${before} → ${app.synth.oscStarted}`);
+  check("nothing was lost to the suspended context", app.synth.lost === 0, `${app.synth.lost} lost`);
+  app.restore();
+}
+
+// -------------------------------------- 10h. suspended while paused, then resumed
+{
+  section("10h. Suspended while paused, then resumed");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(4000);
+  app.click("startBtn");                    // pause
+  app.synth.ctx.state = "suspended";        // ...and the OS pulls audio away
+  const before = app.synth.oscStarted;
+  app.click("startBtn");                    // resume — a real user gesture
+  await app.clock.advance(200);
+  check("resuming re-arms the context", app.synth.ctx.state === "running", app.synth.ctx.state);
+  await app.clock.advance(58000);
+  check("bells ring again after resuming", app.synth.oscStarted > before, `${before} → ${app.synth.oscStarted}`);
+  app.restore();
+}
+
+// ------------------------------------------- 10i. one clip file is missing
+{
+  section("10i. A single missing clip");
+  // One bad file used to flip the WHOLE app to robotic text-to-speech.
+  // Knock out the two most common moves so a combo containing one is a
+  // certainty rather than a dice roll, while staying under the threshold that
+  // abandons clips altogether.
+  const app = await boot({ duration: 0.6, missingClips: ["1", "2"] });
+  app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
+  app.setSeg("pace", "1500"); app.setSeg("level", "advanced");
+  app.click("startBtn");
+  await app.clock.advance(60000);
+  const spokenKeys = Object.keys(app.stats.byKey).filter((k) => k !== "bell" && k !== "1" && k !== "2");
+  check("the other words still play from their clips", spokenKeys.length >= 3, spokenKeys.join(","));
+  check("combos keep advancing despite the missing word", app.stats.plays > 10, `${app.stats.plays} plays`);
+  check("the missing word is spoken instead of skipped silently",
+    app.speechLog.some((l) => l.startsWith("speak:")), app.speechLog.slice(0, 3).join(" | "));
+  app.restore();
+}
+
 // ------------------------------------------------------ 11. element count sanity
 {
   section("11. Audio element count (iOS decoder pressure)");
@@ -827,13 +912,23 @@ async function collectSpokenVsShown(app, ms) {
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 200); app.set("restSec", 5);
   app.setSeg("pace", "500"); app.setSeg("level", "advanced");
-  app.click("startBtn");
-  let sawName = false;
-  for (let t = 0; t < 120000 && !sawName; t += 100) {
-    await app.clock.advance(100);
-    if (app.doc.getElementById("comboName").textContent === "The 10") sawName = true;
-  }
-  check("name appears on screen when the combo comes up", sawName, "never displayed");
+  // Force the pick rather than hoping. "The 10" is 1 of 9 advanced combos, so
+  // waiting for it to turn up randomly failed roughly one run in seven — a
+  // test that fails on a dice roll teaches you to ignore it. Alternating two
+  // values matters: randomCombo() re-rolls while it matches the last pick, so
+  // a constant would spin forever.
+  const realRandom = Math.random;
+  let n = 0;
+  Math.random = () => (n++ % 2 === 0 ? 0 : 0.5); // 0 selects "The 10"
+  try {
+    app.click("startBtn");
+    let sawName = false;
+    for (let t = 0; t < 30000 && !sawName; t += 100) {
+      await app.clock.advance(100);
+      if (app.doc.getElementById("comboName").textContent === "The 10") sawName = true;
+    }
+    check("name appears on screen when the combo comes up", sawName, "never displayed");
+  } finally { Math.random = realRandom; }
   app.click("resetBtn");
   await app.clock.advance(200);
   check("name cleared when the session resets", app.doc.getElementById("comboName").textContent === "",

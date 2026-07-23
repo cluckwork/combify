@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.8.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.8.1 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,29 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.8.1** — **Bulletproofed the audio.** Two reported symptoms,
+  one shared root cause: `audioCtx.resume()` was called in exactly one place
+  (inside `start()`), fire-and-forget. Because `resume()` is async and the first
+  countdown tick fired synchronously right after it, that tick was scheduled
+  against a still-suspended context and lost — "the countdown bells don't even
+  start firing". Worse, an AudioContext is suspended by the OS whenever the
+  phone locks, a call arrives, another app takes audio focus or the tab is
+  backgrounded, and *nothing* resumed it afterwards: every tick, bell and
+  warning was silent for the rest of the session, with no error raised. Now all
+  synthesized sound goes through `withAudio()`, which guarantees a running
+  context and plays a few ms late rather than never; `armAudio()` re-arms on
+  visibilitychange, on any pointerdown/touchstart (some browsers only allow
+  resume from a gesture), and on resume(). `unlockAudioForMobile()` now runs on
+  every start AND resume (iOS revokes the unlock after an interruption), repairs
+  a half-built pool, and sets its flag last so a throw mid-way retries instead
+  of breaking playback permanently. Separately, ONE failed clip used to switch
+  the whole app to robotic TTS for the session; failures are now tracked per
+  word, that word alone is spoken via TTS, a later successful load clears the
+  mark, and clips are only abandoned once 4+ have failed. Clip playback itself
+  (cloned HTMLAudioElement) is untouched. Four new test sections inject a
+  suspended context at Start, mid-round, and across pause/resume, plus a missing
+  clip — all previously silent-with-no-error. Also made two randomness-dependent
+  tests deterministic; one failed roughly one run in seven.
 - **2026-07-23 — v1.8.0** — **A changelog anyone can read, and a versioning
   rule.** Added `changelog.html`, its own page rather than a panel inside About
   because the list only grows and the app screen should stay short enough that
