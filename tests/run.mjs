@@ -618,6 +618,49 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
+// ------------------------------------------------ 28. hold +/- to run the value
+{
+  section("28. Press and hold the steppers");
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  const doc = app.doc;
+  const plus = doc.querySelectorAll("#workSec .step__btn")[1];
+  const minus = doc.querySelectorAll("#workSec .step__btn")[0];
+  const val = () => +doc.getElementById("workSec").dataset.value;
+  const down = (b) => b.dispatchEvent(new app.window.MouseEvent("pointerdown", { bubbles: true, clientX: 10 }));
+  const up = (b) => b.dispatchEvent(new app.window.MouseEvent("pointerup", { bubbles: true }));
+  const click = (b) => b.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+
+  // A quick tap must still move exactly one step (5s), not two.
+  const start = val();
+  down(plus); up(plus); click(plus);
+  check("a quick tap moves exactly one step", val() === start + 5, `${start} → ${val()}`);
+
+  // Holding should run, and accelerate rather than crawl.
+  const beforeHold = val();
+  down(plus);
+  await app.clock.advance(2000);
+  up(plus); click(plus);
+  const afterHold = val();
+  check("holding + runs the value up", afterHold > beforeHold + 20, `${beforeHold} → ${afterHold} in 2s`);
+  results.push(`     (2s hold moved ${beforeHold}s → ${afterHold}s)`);
+
+  // Releasing must actually stop it.
+  const atRelease = val();
+  await app.clock.advance(3000);
+  check("releasing stops the run", val() === atRelease, `kept moving to ${val()}`);
+
+  // Same downward, and it must respect the minimum.
+  down(minus);
+  await app.clock.advance(20000);
+  up(minus); click(minus);
+  check("holding - runs down and clamps at the minimum", val() === 10, `landed on ${val()}`);
+
+  check("held value is persisted", !!peekStore()["combify.settings.v1"], "nothing stored");
+  app.restore();
+  clearStore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);

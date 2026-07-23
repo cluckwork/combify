@@ -55,9 +55,36 @@ function initStep(id) {
     valEl.textContent = v;
     saveSettings();
   }
-  step.querySelectorAll(".step__btn").forEach((b) =>
-    b.addEventListener("click", () => set(get() + (+b.dataset.dir) * st))
-  );
+  // Tap to nudge, or press and hold to run. Work time steps in 5s, so going
+  // from 120s to 180s was twelve separate taps — holding accelerates instead.
+  step.querySelectorAll(".step__btn").forEach((b) => {
+    const dir = +b.dataset.dir;
+    const bump = () => set(get() + dir * st);
+    let delayTimer = null, repeatTimer = null, fromPointer = false;
+    const stopHold = () => {
+      clearTimeout(delayTimer); clearTimeout(repeatTimer);
+      delayTimer = repeatTimer = null;
+    };
+
+    b.addEventListener("pointerdown", (e) => {
+      fromPointer = true; // so the click that follows doesn't double-count
+      try { b.setPointerCapture(e.pointerId); } catch (err) {} // keeps the hold alive if the finger slides off
+      bump();
+      let gap = 260; // starts gentle, speeds up so long jumps don't take all day
+      delayTimer = setTimeout(function again() {
+        bump();
+        gap = Math.max(55, gap * 0.8);
+        repeatTimer = setTimeout(again, gap);
+      }, 450); // long enough that a normal tap never repeats
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => b.addEventListener(ev, stopHold));
+
+    // Keyboard (Enter/Space) arrives as a click with no pointerdown before it.
+    b.addEventListener("click", () => {
+      if (fromPointer) { fromPointer = false; return; }
+      bump();
+    });
+  });
 
   let sx = 0, sv = 0, drag = false;
   valEl.addEventListener("pointerdown", (e) => { drag = true; sx = e.clientX; sv = get(); valEl.setPointerCapture(e.pointerId); });
