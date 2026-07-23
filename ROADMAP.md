@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.10.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.10.1 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,16 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.10.1** — **Fullscreen uses the whole phone.** Reported as
+  "the maximum size of my iPhone isn't being utilized" — the body applied
+  safe-area padding globally, so in focus mode the stage's surface never
+  reached the notch strip or the bottom corners, and the #0d0d0d-on-#010101
+  colour difference made the dead bands visible. `body:has(.app[data-focus="1"])
+  { padding: 0 }` drops it during sessions; the stage's own env() padding keeps
+  CONTENT clear of the notch while the background fills every corner. Also
+  measured and fixed: the landscape composition sat ~34px left of centre (the
+  72px controls gutter had no left counterweight — now symmetric). Content
+  centre now measures exactly 0px off on every device and orientation.
 - **2026-07-23 — v1.10.0** — **Staged finish finale; the session is one
   fullscreen thing.** The finish is now three acts: the dial alone at the DEAD
   CENTRE of the screen (a measured FLIP transform — exact in any orientation)

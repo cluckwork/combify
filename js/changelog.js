@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.10.1",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Every last pixel",
+    notes: [
+      "During a session the app now truly fills the phone — the strips at the notch and the bottom corners that stayed empty are used now.",
+      "The timer and combo sit properly centred on the screen when the phone is on its side (they sat slightly left before).",
+    ],
+  },
+  {
     v: "1.10.0",
     date: "2026-07-23",
     size: "minor",

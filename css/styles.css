@@ -36,6 +36,14 @@ body {
   min-height: 100dvh;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+/* Fullscreen means the PHYSICAL screen. The body's safe-area padding is right
+   for the normal screen (keeps controls out of the notch), but in focus mode
+   it left dead bands at the notch and home-bar corners — the stage's surface
+   never reached the edges of the phone. Drop it there: the stage carries its
+   own env() padding, so CONTENT still respects the notch while the background
+   fills every corner. (:has is fine — every browser new enough to install the
+   app has it; elsewhere this just behaves as before.) */
+body:has(.app[data-focus="1"]) { padding: 0; }
 
 .app {
   max-width: 560px;
@@ -297,10 +305,13 @@ body {
     align-items: center;
     gap: clamp(14px, 3vw, 48px);
     /* The right gutter is where the floating controls column lives. */
+    /* Same 72px on the left as the controls gutter on the right: measured, the
+       content centre sat ~34px left of the screen centre — visibly off once
+       the stage truly reaches the edges. */
     padding: calc(clamp(10px, 2.5vh, 36px) + env(safe-area-inset-top, 0px))
              calc(clamp(16px, 3vw, 40px) + 72px + env(safe-area-inset-right, 0px))
              calc(clamp(10px, 2.5vh, 36px) + env(safe-area-inset-bottom, 0px))
-             calc(clamp(16px, 3.5vw, 48px) + env(safe-area-inset-left, 0px));
+             calc(clamp(16px, 3vw, 40px) + 72px + env(safe-area-inset-left, 0px));
     min-height: 0;
   }
   .app[data-focus="1"] .stage__meta,
