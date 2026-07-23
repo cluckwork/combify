@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.11.0",
+    date: "2026-07-23",
+    size: "minor",
+    title: "Hear your total climb",
+    notes: [
+      "The punch count now sounds like it feels: rising blips as your total climbs, and a solid landing hit when it arrives.",
+      "The get-ready countdown is now 5 seconds instead of 3 — time to actually get your hands up.",
+    ],
+  },
+  {
     v: "1.10.2",
     date: "2026-07-23",
     size: "patch",

@@ -320,9 +320,9 @@ document.addEventListener("touchstart", armAudio, { capture: true, passive: true
 // voice played fine. Off-until-proven was only right in the era when
 // audio/sfx/ had no files at all.
 const SFX_DIR = "audio/sfx/";
-const SFX_KEYS = ["bell", "tick", "warning"];
+const SFX_KEYS = ["bell", "tick", "warning", "blip", "land"];
 const sfxCache = {};
-const sfx = { bell: true, tick: true, warning: true };
+const sfx = { bell: true, tick: true, warning: true, blip: true, land: true };
 function preloadSfx() {
   SFX_KEYS.forEach((key) => {
     const a = new Audio(SFX_DIR + key + ".mp3");
@@ -400,11 +400,18 @@ function synthBell(times = 1) {
 // Play one sfx sample, or run its synth fallback. A play() rejection runs the
 // fallback for THIS sound but doesn't disable the sample — a one-off rejection
 // (momentary focus loss) shouldn't cost the whole session its real bell.
-function playSfx(key, fallback) {
+function playSfx(key, fallback, rate = 1) {
   if (!sfx[key]) { fallback(); return; }
   const node = getPooledSfx(key);
   if (!node) { fallback(); return; }
   try { node.currentTime = 0; } catch (e) {}
+  // playbackRate with preservesPitch off is a pitch bend — one blip file
+  // becomes the whole rising scale of the count-up.
+  try {
+    node.preservesPitch = false;
+    node.webkitPreservesPitch = false;
+    node.playbackRate = rate;
+  } catch (e) {}
   const p = node.play();
   if (p && p.catch) p.catch(fallback);
 }
@@ -449,6 +456,47 @@ function synthWarning() {
   });
 }
 function playWarning() { playSfx("warning", synthWarning); }
+
+// Count-up sounds: rising blips while the punch total climbs, and a landing
+// hit when it arrives.
+function synthBlip(rate) {
+  withAudio((ctx) => {
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = "sine"; osc.frequency.setValueAtTime(1000 * rate, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.18, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t); osc.stop(t + 0.06);
+  });
+}
+function playBlip(progress) {
+  const rate = 0.7 + progress * 1.1; // ~0.7x → 1.8x: a clear low-to-high climb
+  playSfx("blip", () => synthBlip(rate), rate);
+}
+function synthLand() {
+  withAudio((ctx) => {
+    const t = ctx.currentTime;
+    const thump = ctx.createOscillator(), tg = ctx.createGain();
+    thump.type = "sine";
+    thump.frequency.setValueAtTime(180, t);
+    thump.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+    tg.gain.setValueAtTime(0.0001, t);
+    tg.gain.exponentialRampToValueAtTime(0.7, t + 0.006);
+    tg.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    thump.connect(tg).connect(ctx.destination);
+    thump.start(t); thump.stop(t + 0.4);
+    const ping = ctx.createOscillator(), pg = ctx.createGain();
+    ping.type = "sine"; ping.frequency.setValueAtTime(1568, t + 0.02);
+    pg.gain.setValueAtTime(0.0001, t + 0.02);
+    pg.gain.exponentialRampToValueAtTime(0.3, t + 0.025);
+    pg.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    ping.connect(pg).connect(ctx.destination);
+    ping.start(t + 0.02); ping.stop(t + 0.5);
+  });
+}
+function playLand() { playSfx("land", synthLand); }
 
 // ---------- Voice ----------
 // The app calls combos two ways, in order of preference:
@@ -523,7 +571,8 @@ const UNLOCK_POOL_SIZE = 2;
 // 650ms apart on a sample that rings for ~2.5s, so three are genuinely sounding
 // at once. With two elements the third strike stole the first one's element and
 // cut its ring dead.
-const SFX_POOL_SIZE = { bell: 3, tick: 2, warning: 2 };
+// blip gets 3: the count-up fires them ~60ms apart while each rings ~70ms.
+const SFX_POOL_SIZE = { bell: 3, tick: 2, warning: 2, blip: 3, land: 1 };
 const clipPool = {};
 const sfxPool = {};
 const poolIndex = {};
@@ -777,11 +826,12 @@ function buzz(pattern) {
 // slows into the total and lands with a pop. The slowing half ticks a small
 // haptic on each change — because the changes naturally thin out as it
 // decelerates, that reads as the count "settling" rather than a buzz.
-function countUp(node, to, { ms = 900, pop = false, haptics = false } = {}) {
+function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = false } = {}) {
   if (!motionOK() || to <= 0) { node.textContent = to.toLocaleString(); return; }
   const started = performance.now();
   let shown = -1;
   let lastBuzz = 0;
+  let lastBlip = 0;
   const step = (now) => {
     const p = Math.min(1, (now - started) / ms);
     // ease-in-out cubic: accelerate away from 0, decelerate into the total
@@ -792,6 +842,9 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false } = {}) {
       node.textContent = value.toLocaleString();
       // Only in the second half, and never faster than the skin can tell apart.
       if (haptics && p > 0.55 && now - lastBuzz > 45) { buzz(7); lastBuzz = now; }
+      // The audible climb. Rate-limited like the haptics so a big total is a
+      // rising trill, not a machine gun; pitch tracks the eased progress.
+      if (sound && now - lastBlip > 55) { playBlip(eased); lastBlip = now; }
     }
     if (p < 1) { requestAnimationFrame(step); return; }
     node.textContent = to.toLocaleString();
@@ -799,6 +852,7 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false } = {}) {
       node.classList.add("is-pop");
       node.addEventListener("animationend", () => node.classList.remove("is-pop"), { once: true });
     }
+    if (sound) playLand(); // the satisfying arrival
     if (haptics) buzz([18, 45, 30]); // the landing: two beats, firmer than the ticks
   };
   requestAnimationFrame(step);
@@ -823,7 +877,7 @@ function buildFinishSummary(streak, streakBit) {
   hero.appendChild(heroNum);
   hero.appendChild(make("span", "finish__label", session.punches === 1 ? "punch" : "punches"));
   el.stats.appendChild(hero);
-  countUp(heroNum, session.punches, { ms: 1200, pop: true, haptics: true });
+  countUp(heroNum, session.punches, { ms: 1200, pop: true, haptics: true, sound: true });
 
   // Everything else is supporting detail on one quieter line.
   const meta = make("div", "finish__meta");
@@ -923,7 +977,7 @@ const DIAL_CIRCUMFERENCE = 2 * Math.PI * 54;
 // the disc jumps 3 → 2 → 1 in hard steps. Three big chunks read as "get
 // ready" far better than a smooth sweep, which just looks like a short round.
 function phaseFractionLeft() {
-  const total = state.phase === "work" ? getWork() : state.phase === "rest" ? getRest() : state.phase === "countdown" ? 3 : 0;
+  const total = state.phase === "work" ? getWork() : state.phase === "rest" ? getRest() : state.phase === "countdown" ? COUNTDOWN_SECONDS : 0;
   if (!(total > 0)) return 0;
   const stepped = state.phase === "countdown" || !state.running;
   const left = stepped ? state.secondsLeft / total : (state.phaseEndsAt - Date.now()) / 1000 / total;
@@ -1200,6 +1254,8 @@ function enterFullscreen() {
 // user's call — Esc on a desktop, the system gesture on a phone.
 
 // ---------- Start / pause / reset ----------
+const COUNTDOWN_SECONDS = 5;
+
 function start() {
   armAudio();
   unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
@@ -1207,7 +1263,7 @@ function start() {
   state.running = true;
   acquireWakeLock();
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
-  state.phase = "countdown"; beginPhase(3);
+  state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
   resetSessionTally();
   el.combo.textContent = "Get ready...";
   if (el.comboName) el.comboName.textContent = "";

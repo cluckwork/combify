@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.10.2 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.11.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,14 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.11.0** — **Audible count-up + 5-second countdown.** The
+  finish count-up plays rising blips (one rendered file, pitch bent per step
+  via playbackRate with preservesPitch off — 0.7x→1.8x tracking the eased
+  progress, rate-limited to 55ms like the haptics) and lands with a rendered
+  thump-plus-ping. Both ship as sfx samples through the silent-switch-proof
+  pipeline with synth fallbacks, both precached. Countdown extended 3s→5s
+  (one COUNTDOWN_SECONDS constant; the dial-pulse wave count follows it, and
+  16 countdown-crossing test waits were re-timed).
 - **2026-07-23 — v1.10.2** — **Rotating finish headlines.** Ten coach-voice
   lines ("Strong finish.", "Well earned.", "In the bank."…) picked at random,
   never the same twice in a row within a visit. All shorter than "Press start

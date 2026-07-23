@@ -102,7 +102,7 @@ async function countCombos(app, ms, step = 200) {
   app.set("rounds", 2); app.set("workSec", 15); app.set("restSec", 10);
   app.setSeg("pace", "1500");
   app.click("startBtn");
-  await app.clock.advance(4000);                    // countdown done
+  await app.clock.advance(6500);                    // countdown done
   check("round 1 is Work", app.phase() === "Work", app.phase());
   await app.clock.advance(15000);                   // into rest
   check("goes to Rest after work", app.phase() === "Rest", app.phase());
@@ -168,7 +168,7 @@ async function countCombos(app, ms, step = 200) {
   const duringRound = app.stats.plays - afterPriming;
   check("combos still displayed with voice off", n >= 4, `${n}`);
   check("no VOICE clips played during round with voice off",
-    Object.keys(app.stats.byKey).filter((k) => !["bell", "tick", "warning"].includes(k)).every((k) => app.stats.byKey[k] <= 2),
+    Object.keys(app.stats.byKey).filter((k) => !["bell", "tick", "warning", "blip", "land"].includes(k)).every((k) => app.stats.byKey[k] <= 2),
     `plays during round: ${duringRound}, byKey=${JSON.stringify(app.stats.byKey)}`);
   app.restore();
 }
@@ -215,7 +215,7 @@ async function countCombos(app, ms, step = 200) {
   const litCount = () => marks().filter(Boolean).length;
 
   app.click("startBtn");
-  await app.clock.advance(3600); // through the countdown, first word playing
+  await app.clock.advance(5600); // countdown (5s) + ~600ms: first word playing
   check("the first move lights up as it is called", litIndex() === 0, `index ${litIndex()}`);
   check("exactly one move is lit", litCount() === 1, `${litCount()} lit`);
 
@@ -257,7 +257,7 @@ async function countCombos(app, ms, step = 200) {
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 10); app.set("restSec", 5);
   app.click("startBtn");
-  await app.clock.advance(4000); // through the countdown, into work
+  await app.clock.advance(6500); // through the countdown, into work
   check("fullscreen requested on start", app.fsLog[0] === "enter", app.fsLog.join(","));
   app.click("startBtn"); // pause
   await app.clock.advance(500);
@@ -288,13 +288,13 @@ async function countCombos(app, ms, step = 200) {
   await app.clock.advance(2000);
   check("countdown freezes while paused", app.clockText() === pausedAt, `${pausedAt} → ${app.clockText()}`);
   app.click("startBtn");                   // resume — used to be a dead button
-  await app.clock.advance(4000);
+  await app.clock.advance(6500);
   check("resume from the countdown reaches Work", app.phase() === "Work", app.phase());
   // And the ordinary case still works.
   app.click("startBtn");
   await app.clock.advance(500);
   app.click("startBtn");
-  await app.clock.advance(3000);
+  await app.clock.advance(5500);
   check("resume from Work keeps running", app.phase() === "Work" && app.clockText() !== "00:30", app.clockText());
   app.restore();
 }
@@ -349,7 +349,7 @@ async function countCombos(app, ms, step = 200) {
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 5);
   app.click("startBtn");
-  await app.clock.advance(4000);
+  await app.clock.advance(6500);
   const before = app.stats.audible.length;
   // The OS suspends the context. Nothing in the app used to notice, and every
   // tick, bell and warning was silent for the remainder of the session.
@@ -371,7 +371,7 @@ async function countCombos(app, ms, step = 200) {
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 5);
   app.click("startBtn");
-  await app.clock.advance(4000);
+  await app.clock.advance(6500);
   app.click("startBtn");                    // pause
   app.synth.ctx.state = "suspended";        // ...and the OS pulls audio away
   const before = app.stats.audible.length;
@@ -511,7 +511,7 @@ async function countCombos(app, ms, step = 200) {
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 10);
   app.click("startBtn");
-  await app.clock.advance(3000);                    // countdown
+  await app.clock.advance(5500);                    // countdown
   const startClock = app.clockText();
   await app.clock.advance(30000);
   const endClock = app.clockText();
@@ -556,7 +556,7 @@ async function countCombos(app, ms, step = 200) {
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 180); app.set("restSec", 10);
   app.click("startBtn");
-  await app.clock.advance(3000);
+  await app.clock.advance(5500);
   const before = app.clockText();
   // Simulate throttling: push the 1s interval out so it only fires once a minute.
   for (let min = 0; min < 3; min++) {
@@ -577,7 +577,7 @@ async function countCombos(app, ms, step = 200) {
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 180); app.set("restSec", 10);
   app.click("startBtn");
-  await app.clock.advance(3000);
+  await app.clock.advance(5500);
   const before = app.clockText();
   for (const t of app.clock.q) if (t.every === 1000) t.time = app.clock.now + 90000;
   await app.clock.advance(45000);          // 45s passes with no tick at all
@@ -636,7 +636,7 @@ async function countCombos(app, ms, step = 200) {
     String(b.doc.getElementById("voiceOn").checked));
   // and the restored settings must actually drive the session
   b.click("startBtn");
-  await b.clock.advance(4000);
+  await b.clock.advance(6500);
   check("restored rounds used by the session", b.doc.getElementById("round").textContent.includes("/ 5"),
     b.doc.getElementById("round").textContent);
   b.restore();
@@ -665,7 +665,7 @@ async function countCombos(app, ms, step = 200) {
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
   app.click("startBtn");
-  await app.clock.advance(4000);          // 3 countdown ticks, then round 1 bell
+  await app.clock.advance(6500);          // 3 countdown ticks, then round 1 bell
   check("the countdown ticks play as samples", (app.stats.byKey.tick || 0) >= 2,
     `tick plays: ${app.stats.byKey.tick || 0}`);
   check("the round-start bell plays as a sample", (app.stats.byKey.bell || 0) >= 1,
@@ -690,7 +690,7 @@ async function countCombos(app, ms, step = 200) {
   const app = await boot({ duration: 0.6, missingClips: ["bell", "tick", "warning"] });
   app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
   app.click("startBtn");
-  await app.clock.advance(4000);
+  await app.clock.advance(6500);
   check("ticks and bell still sound via the synth", app.synth.oscStarted > 0,
     `${app.synth.oscStarted} oscillators`);
   await app.clock.advance(25000);
@@ -709,7 +709,7 @@ async function countCombos(app, ms, step = 200) {
   app.setSeg("pace", "1500");
   app.click("startBtn");
   const before = app.synth.oscStarted;
-  await app.clock.advance(4000);
+  await app.clock.advance(6500);
   check("bell still rings with zero load events",
     (app.stats.byKey.bell || 0) >= 1 || app.synth.oscStarted > 0,
     `bell samples ${app.stats.byKey.bell || 0}, oscillators ${app.synth.oscStarted}`);
@@ -935,7 +935,7 @@ async function collectSpokenVsShown(app, ms) {
   check("ready screen is empty before any training", app.doc.getElementById("stats").textContent === "",
     `"${app.doc.getElementById("stats").textContent}"`);
   app.click("startBtn");
-  await app.clock.advance(4000);
+  await app.clock.advance(6500);
   check("stats hidden during a round", app.doc.getElementById("stats").textContent === "",
     `"${app.doc.getElementById("stats").textContent}"`);
   await app.clock.advance(60000); // run both rounds out
@@ -1171,7 +1171,7 @@ async function collectSpokenVsShown(app, ms) {
   app.click("startBtn");
   await app.clock.advance(500);
   check("expands during the countdown", appEl.dataset.focus === "1", `focus=${appEl.dataset.focus}`);
-  await app.clock.advance(4000);
+  await app.clock.advance(6500);
   check("stays expanded through work", appEl.dataset.focus === "1" && app.phase() === "Work", app.phase());
   await app.clock.advance(20000);
   check("stays expanded through rest", appEl.dataset.focus === "1" && app.phase() === "Rest", app.phase());
