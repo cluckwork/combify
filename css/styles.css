@@ -118,6 +118,22 @@ body {
   letter-spacing: 1px;
 }
 
+/* iOS treats two quick taps on the same spot as "zoom in", which both zoomed
+   the page and swallowed the second tap — so jabbing +/- to set rounds, work
+   or rest fought the browser instead of changing the number. `manipulation`
+   opts controls out of double-tap zoom while leaving pinch-to-zoom on the page
+   alone, so the app stays zoomable for anyone who needs it. */
+button,
+summary,
+label,
+.switch input {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* Controls */
 .controls { display: flex; gap: 12px; }
 .btn {

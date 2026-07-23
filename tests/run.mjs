@@ -405,6 +405,34 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// ------------------------------------- 21. no double-tap zoom on the controls
+{
+  section("21. Tapping controls must not trigger iOS double-tap zoom");
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const url = await import("node:url");
+  const repo = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "..");
+  const css = fs.readFileSync(path.join(repo, "css/styles.css"), "utf8");
+
+  // Pull out every selector whose rule sets a touch-action that suppresses
+  // double-tap zoom, then check each real control matches one of them.
+  const covered = [];
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const [, sel, body] = m;
+    if (/touch-action:\s*(manipulation|none|pan-y)/.test(body)) covered.push(sel.trim());
+  }
+  const app = await boot({ duration: 0.6 });
+  const controls = [...app.doc.querySelectorAll("button, summary, .switch input, .step__val, .seg")];
+  const uncovered = controls.filter((elm) => !covered.some((sel) => {
+    try { return elm.matches(sel); } catch (e) { return false; }
+  }));
+  check("every interactive control opts out of double-tap zoom",
+    uncovered.length === 0,
+    `uncovered: ${uncovered.map((e) => e.id || e.className || e.tagName).join(", ")}`);
+  results.push(`     (${controls.length} controls checked against ${covered.length} touch-action rules)`);
+  app.restore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);
