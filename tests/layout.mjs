@@ -188,6 +188,16 @@ async function runDevice(dev) {
     deviceScaleFactor: dev.dpr, isMobile: dev.mobile, hasTouch: dev.mobile,
   });
   const page = await ctx.newPage();
+  // Log every unmuted sfx play with a timestamp, so the finale can prove the
+  // count-up stays silent until its numbers are actually on screen.
+  await page.addInitScript(() => {
+    window.__sfxLog = [];
+    const orig = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      if (!this.muted && this.src) window.__sfxLog.push({ src: this.src.split("/").pop(), t: performance.now() });
+      return orig.call(this);
+    };
+  });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(base, { waitUntil: "networkidle" });
@@ -290,7 +300,14 @@ async function runDevice(dev) {
   // ---- Finish screen (fullscreen, staged finale) ----
   await tap(page);            // resume
   await reachPhase(page, "done", FAST ? 40000 : 70000);   // let the rounds run out
-  await page.waitForTimeout(3200); // finale: centre hold + glide + reveal
+  // Mid-hold: the dial is centre stage, the numbers are hidden — and so must
+  // be their sound. Blips leaking here was a shipped bug.
+  await page.waitForTimeout(500);
+  const earlyBlips = await page.evaluate(() => window.__sfxLog.filter((e) => e.src.startsWith("blip") || e.src.startsWith("land")).length);
+  check("count-up stays silent through the centre-stage hold", earlyBlips === 0, `${earlyBlips} early plays`);
+  await page.waitForTimeout(2700); // finale: glide + reveal + count-up
+  const lateBlips = await page.evaluate(() => window.__sfxLog.filter((e) => e.src.startsWith("blip")).length);
+  check("blips play when the numbers appear", lateBlips > 0, `${lateBlips} blips`);
   m = await page.evaluate(probe);
   check("the finish screen stays fullscreen", m.focus === "1", `focus=${m.focus}`);
   const phase = await page.textContent("#phase");

@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.11.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.11.1 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,17 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.11.1** — **Count-up audio synced to the count.** Two fixes:
+  the summary is built invisibly during the finale's centre-stage hold (so the
+  glide can measure final layout), and the count-up ran then — leaking its
+  blips ~1.7s before any number was visible. The hidden build now sets the
+  final value silently and the reveal's rebuild runs the real count-up. And
+  the display now steps at blip cadence when sound is on: a number never
+  changes without its blip and every blip belongs to exactly one number
+  (~15 audible chunks for a big total instead of a per-frame glide with a
+  detached trill). The landing hit replaces the final blip. Layout suite now
+  instruments HTMLMediaElement.play and asserts the count-up is silent through
+  the hold and blips exactly at the reveal, on every device.
 - **2026-07-23 — v1.11.0** — **Audible count-up + 5-second countdown.** The
   finish count-up plays rising blips (one rendered file, pitch bent per step
   via playbackRate with preservesPitch off — 0.7x→1.8x tracking the eased

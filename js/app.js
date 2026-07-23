@@ -837,14 +837,17 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = fal
     // ease-in-out cubic: accelerate away from 0, decelerate into the total
     const eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
     const value = Math.round(to * eased);
-    if (value !== shown) {
+    // With sound on, the DISPLAY steps at blip cadence: a number never changes
+    // without its blip, and every blip belongs to exactly one number. A big
+    // total therefore counts in audible chunks (~15 steps) instead of gliding
+    // per-frame with a detached trill underneath.
+    const stepDue = !sound || now - lastBlip >= 68 || p >= 1;
+    if (value !== shown && stepDue) {
       shown = value;
       node.textContent = value.toLocaleString();
       // Only in the second half, and never faster than the skin can tell apart.
       if (haptics && p > 0.55 && now - lastBuzz > 45) { buzz(7); lastBuzz = now; }
-      // The audible climb. Rate-limited like the haptics so a big total is a
-      // rising trill, not a machine gun; pitch tracks the eased progress.
-      if (sound && now - lastBlip > 55) { playBlip(eased); lastBlip = now; }
+      if (sound && value > 0 && p < 1) { playBlip(eased); lastBlip = now; }
     }
     if (p < 1) { requestAnimationFrame(step); return; }
     node.textContent = to.toLocaleString();
@@ -877,7 +880,14 @@ function buildFinishSummary(streak, streakBit) {
   hero.appendChild(heroNum);
   hero.appendChild(make("span", "finish__label", session.punches === 1 ? "punch" : "punches"));
   el.stats.appendChild(hero);
-  countUp(heroNum, session.punches, { ms: 1200, pop: true, haptics: true, sound: true });
+  // During the finale's centre-stage hold this summary exists but is INVISIBLE
+  // (built early so the glide can measure final layout). Running the count-up
+  // then leaked its blips a second and a half before any number was on screen.
+  // Hidden build = final value instantly, no sound, no buzz; the reveal
+  // rebuilds and runs the real count-up in front of the user.
+  const staged = el.stage.classList.contains("is-finale") && !el.stage.classList.contains("is-finale-reveal");
+  if (staged) heroNum.textContent = session.punches.toLocaleString();
+  else countUp(heroNum, session.punches, { ms: 1200, pop: true, haptics: true, sound: true });
 
   // Everything else is supporting detail on one quieter line.
   const meta = make("div", "finish__meta");
@@ -1140,9 +1150,9 @@ function finishLine() {
 const FINALE_HOLD_MS = 1700;   // one ripple bloom before the glide
 const FINALE_GLIDE_MS = 650;
 function startFinale() {
-  if (!motionOK() || !el.app || el.app.dataset.focus !== "1") return;
+  if (!motionOK() || !el.app || el.app.dataset.focus !== "1") { clearFinale(); return; }
   const meta = el.stage.querySelector(".stage__meta");
-  if (!meta) return;
+  if (!meta) { clearFinale(); return; }
   el.stage.classList.add("is-finale");
   // FLIP: the layout already holds the dial at its final resting place (the
   // stats are built, just invisible). Measure the gap to the screen centre and
@@ -1181,6 +1191,9 @@ function finish() {
   el.combo.style.removeProperty("--fit");
   if (el.comboName) el.comboName.textContent = "";
   el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running");
+  // The finale flag goes up BEFORE render: renderStats builds the summary
+  // during render, and it must know it is building a hidden one.
+  if (motionOK()) el.stage.classList.add("is-finale");
   render(); // builds the summary (hidden during the finale) so layout is final
   startFinale();
 }

@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.11.1",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Count-up timing fixes",
+    notes: [
+      "Fixed the count-up blips playing early, before the numbers were even on screen.",
+      "Every number you see now lands together with its own blip — sound and count move as one.",
+    ],
+  },
+  {
     v: "1.11.0",
     date: "2026-07-23",
     size: "minor",
