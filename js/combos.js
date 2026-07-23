@@ -34,7 +34,7 @@ export const COMBOS = {
     ["1", "2", "5"],
     ["1", "6", "3"],
     ["3", "4"],
-    ["2", "3", "2"],
+    ["1", "2", "3", "2"],
   ],
   intermediate: [
     ["1", "2", "3", "4"],
@@ -60,9 +60,19 @@ export const COMBOS = {
 };
 
 // Pick a random combo for a level. Returns the raw list of move keys.
+// Never returns the same combo twice in a row: with only ~8 combos per level a
+// plain random pick repeated about 1 call in 8, which reads as the app being
+// stuck rather than as chance.
+let lastPicked = null;
 export function randomCombo(level) {
   const list = COMBOS[level] || COMBOS.beginner;
-  return list[Math.floor(Math.random() * list.length)];
+  if (list.length < 2) return list[0];
+  let pick;
+  do {
+    pick = list[Math.floor(Math.random() * list.length)];
+  } while (pick === lastPicked);
+  lastPicked = pick;
+  return pick;
 }
 
 // Turn a combo into the text shown on screen, e.g. "1 - 2 - slip - 2"
