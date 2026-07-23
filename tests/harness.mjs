@@ -69,7 +69,7 @@ export function makeAudioFactory(clock, cfg) {
         }, 5);
       }
     }
-    get key() { const m = /([^/]+)\.mp3$/.exec(this.src); return m ? m[1] : "?"; }
+    get key() { const m = /([^/]+)\.(?:mp3|wav)$/.exec(this.src); return m ? m[1] : "?"; }
     get isVoice() { return !this.src.includes("/sfx/"); }
     addEventListener(t, fn) { (this._l[t] = this._l[t] || []).push(fn); }
     removeEventListener(t, fn) { this._l[t] = (this._l[t] || []).filter((f) => f !== fn); }

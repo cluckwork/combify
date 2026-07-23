@@ -490,6 +490,26 @@ async function countCombos(app, ms, step = 200) {
   app4.restore();
 }
 
+// ----------------------------------------------- 10m. restarts must be cheap
+{
+  section("10m. Priming happens once, not on every start");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 8); app.set("restSec", 3);
+  app.click("startBtn");
+  await app.clock.advance(20000);           // session runs out
+  app.click("exitBtn");
+  await app.clock.advance(500);
+  const before = app.stats.plays;
+  app.click("startBtn");                    // second session
+  await app.clock.advance(600);
+  const delta = app.stats.plays - before;
+  // First start primed one element per sound (~17 muted plays). A restart
+  // must NOT repeat that burst — the re-prime jank was a reported freeze.
+  check("a restart does not re-prime the audio pools", delta <= 4,
+    `${delta} plays in the first 600ms of the second session`);
+  app.restore();
+}
+
 // ------------------------------------------------------ 11. element count sanity
 {
   section("11. Audio element count (iOS decoder pressure)");
@@ -807,15 +827,14 @@ async function collectSpokenVsShown(app, ms) {
 }
 {
   section("23. A clip that dies silently must not leave a hole in the combo");
-  // Half the pool elements report "ended" instantly without making a sound —
-  // the failure behind "shown 1-2-3-4, heard 1 _ 3 4".
-  const order = new Map();
+  // Every second PLAY dies silently ("ended" with no sound) — the failure
+  // behind "shown 1-2-3-4, heard 1 _ 3 4". Per-play, not per-element: marking
+  // elements permanently silent could brick BOTH elements of a word's pool,
+  // which no real phone does and no retry could ever beat.
+  let playN = 0;
   const app = await boot({
     duration: 0.6,
-    phantomEnded: (el) => {
-      if (!order.has(el)) order.set(el, order.size);
-      return order.get(el) % 2 === 1;
-    },
+    phantomEnded: () => (playN++ % 2 === 1),
   });
   app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
   app.setSeg("pace", "1500"); app.setSeg("level", "intermediate");
@@ -864,7 +883,7 @@ async function collectSpokenVsShown(app, ms) {
     for (const f of fs.readdirSync(path.join(repo, dir))) {
       const rel = dir + "/" + f;
       if (fs.statSync(path.join(repo, rel)).isDirectory()) walkAudio(rel);
-      else if (f.endsWith(".mp3")) audioFiles.push(rel);
+      else if (/\.(mp3|wav)$/.test(f)) audioFiles.push(rel);
     }
   };
   walkAudio("audio");

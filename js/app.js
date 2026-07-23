@@ -291,13 +291,14 @@ function withAudio(play) {
 // phase has already been caught up to real time.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
+    needsReprime = true; // iOS may revoke the media unlock while we're away
     if (state.running && state.phase === "work") stopComboLoop();
     return;
   }
   armAudio();
   if (state.running && state.phase === "work" && !state.comboTimer) startComboLoop();
 });
-document.addEventListener("pointerdown", armAudio, { capture: true, passive: true });
+document.addEventListener("pointerdown", () => { armAudio(); deepPrime(); }, { capture: true, passive: true });
 document.addEventListener("touchstart", armAudio, { capture: true, passive: true });
 
 // ---------- Sound effects: real samples first, synthesis as fallback ----------
@@ -320,12 +321,17 @@ document.addEventListener("touchstart", armAudio, { capture: true, passive: true
 // voice played fine. Off-until-proven was only right in the era when
 // audio/sfx/ had no files at all.
 const SFX_DIR = "audio/sfx/";
-const SFX_KEYS = ["bell", "tick", "warning", "blip", "land"];
+// tick/blip/land are WAV, not MP3: LAME padding puts ~50ms of silence at the
+// front of an MP3, and at a 0.7x pitch bend that stretches longer — every blip
+// landed audibly late ("the blips lag"). PCM has zero decoder delay and
+// sample-exact seeks. The long sounds stay MP3; 50ms on a bell is invisible.
+const SFX_FILES = { bell: "bell.mp3", tick: "tick.wav", warning: "warning.mp3", blip: "blip.wav", land: "land.wav" };
+const SFX_KEYS = Object.keys(SFX_FILES);
 const sfxCache = {};
 const sfx = { bell: true, tick: true, warning: true, blip: true, land: true };
 function preloadSfx() {
   SFX_KEYS.forEach((key) => {
-    const a = new Audio(SFX_DIR + key + ".mp3");
+    const a = new Audio(SFX_DIR + SFX_FILES[key]);
     a.preload = "auto";
     sfxCache[key] = a;
     a.addEventListener("error", () => { sfx[key] = false; }, { once: true });
@@ -577,6 +583,9 @@ const clipPool = {};
 const sfxPool = {};
 const poolIndex = {};
 let audioUnlocked = false;
+// Set when the app is backgrounded: the only event after which iOS may have
+// revoked the element unlock. Anything else makes re-priming pure waste.
+let needsReprime = false;
 
 function primeElement(a) {
   a.muted = true;
@@ -587,39 +596,55 @@ function primeElement(a) {
   a.muted = false;
 }
 
-// Runs on EVERY start and resume, not just the first tap. Two reasons: iOS can
-// revoke the unlock after an audio interruption (a call, another app taking
-// focus), and the first tap may have happened before the files finished
-// loading, leaving a half-built pool that nothing ever repaired. Priming is a
-// muted play/pause — silent and cheap — so doing it again costs nothing.
-// The flag is set at the END and the whole thing is wrapped: if it throws
-// half-way, the next tap retries instead of leaving the pool broken forever.
+// Anti-lag priming. Playing ~35 muted elements synchronously inside the Start
+// tap froze the screen for a beat — and the timer's real-time catch-up then
+// FAST-FORWARDED the countdown to make up the lost time. So priming is now
+// tiered:
+//   - the tap that needs it primes ONE element per sound (enough to unlock
+//     the pipeline on iOS — 17 quick plays, half the old burst),
+//   - the spare pool slots are topped up on the NEXT tap anywhere (any tap is
+//     a gesture; the capture-phase listener below picks it up), and until
+//     then a blocked spare is absorbed by the playback layer's retry, which
+//     round-robins back onto the primed element.
+//   - starts that need nothing (already unlocked, never backgrounded) are a
+//     free no-op, and backgrounding only costs the 17-play repair once.
+let deepPrimePending = false;
+function eachPool(fn) {
+  CLIP_KEYS.forEach((key) => {
+    const pool = clipPool[key] && clipPool[key].length
+      ? clipPool[key]
+      : (clipCache[key] ? [clipCache[key]] : []);
+    while (pool.length < UNLOCK_POOL_SIZE) pool.push(new Audio(CLIP_DIR + key + CLIP_EXT));
+    clipPool[key] = pool;
+    fn(pool);
+  });
+  SFX_KEYS.forEach((key) => {
+    if (!sfx[key]) return;
+    const pool = sfxPool[key] && sfxPool[key].length
+      ? sfxPool[key]
+      : (sfxCache[key] ? [sfxCache[key]] : []);
+    while (pool.length < SFX_POOL_SIZE[key]) pool.push(new Audio(SFX_DIR + SFX_FILES[key]));
+    sfxPool[key] = pool;
+    fn(pool);
+  });
+}
 function unlockAudioForMobile() {
+  if (audioUnlocked && !needsReprime) return;
   try {
-    CLIP_KEYS.forEach((key) => {
-      // Reuse the already-preloaded element as the first slot rather than making
-      // another one — otherwise the page holds the 12 preloaded elements PLUS a
-      // fresh set per word, which is what pushed us to ~50 live elements.
-      const pool = clipPool[key] && clipPool[key].length
-        ? clipPool[key]
-        : (clipCache[key] ? [clipCache[key]] : []);
-      while (pool.length < UNLOCK_POOL_SIZE) pool.push(new Audio(CLIP_DIR + key + CLIP_EXT));
-      pool.forEach(primeElement);
-      clipPool[key] = pool;
-    });
-    // Only worth priming samples that actually loaded; the synth fallbacks need
-    // no unlocking (they go through the AudioContext armed in this same tap).
-    SFX_KEYS.forEach((key) => {
-      if (!sfx[key]) return;
-      const pool = sfxPool[key] && sfxPool[key].length
-        ? sfxPool[key]
-        : (sfxCache[key] ? [sfxCache[key]] : []);
-      while (pool.length < SFX_POOL_SIZE[key]) pool.push(new Audio(SFX_DIR + key + ".mp3"));
-      pool.forEach(primeElement);
-      sfxPool[key] = pool;
-    });
+    eachPool((pool) => primeElement(pool[0]));
+    deepPrimePending = true;
     audioUnlocked = true;
-  } catch (e) { /* leave the flag false so the next tap tries again */ }
+    needsReprime = false;
+  } catch (e) { /* retry on the next tap */ }
+}
+// Top up the spare slots inside a later gesture, spreading the cost away from
+// the Start tap. One shot per pending request.
+function deepPrime() {
+  if (!deepPrimePending) return;
+  deepPrimePending = false;
+  try {
+    eachPool((pool) => { for (let i = 1; i < pool.length; i++) primeElement(pool[i]); });
+  } catch (e) { deepPrimePending = true; }
 }
 
 // Round-robin a primed element for `key`, falling back to a plain clone if
@@ -828,28 +853,47 @@ function buzz(pattern) {
 // decelerates, that reads as the count "settling" rather than a buzz.
 function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = false } = {}) {
   if (!motionOK() || to <= 0) { node.textContent = to.toLocaleString(); return; }
-  const started = performance.now();
-  let shown = -1;
-  let lastBuzz = 0;
-  let lastBlip = 0;
-  const step = (now) => {
-    const p = Math.min(1, (now - started) / ms);
-    // ease-in-out cubic: accelerate away from 0, decelerate into the total
-    const eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-    const value = Math.round(to * eased);
-    // With sound on, the DISPLAY steps at blip cadence: a number never changes
-    // without its blip, and every blip belongs to exactly one number. A big
-    // total therefore counts in audible chunks (~15 steps) instead of gliding
-    // per-frame with a detached trill underneath.
-    const stepDue = !sound || now - lastBlip >= 68 || p >= 1;
-    if (value !== shown && stepDue) {
-      shown = value;
-      node.textContent = value.toLocaleString();
-      // Only in the second half, and never faster than the skin can tell apart.
-      if (haptics && p > 0.55 && now - lastBuzz > 45) { buzz(7); lastBuzz = now; }
-      if (sound && value > 0 && p < 1) { playBlip(eased); lastBlip = now; }
+  // A precomputed SCHEDULE, not time-sampling. Sampling an easing curve per
+  // frame meant a dropped frame skipped numbers ("the numbers skip a few
+  // because of lag"). Here every shown value is decided up front — small
+  // totals count every single number, big ones use uniform strides — and a
+  // late frame fires the next step LATE rather than skipping it. At most one
+  // step fires per frame, so a stall stretches the count instead of
+  // machine-gunning the tail. Each step is one number + one blip, always.
+  const MAX_STEPS = 18;
+  const values = [];
+  if (to <= MAX_STEPS) {
+    for (let v = 1; v <= to; v++) values.push(v);
+  } else {
+    for (let i = 1; i <= MAX_STEPS; i++) values.push(Math.round((to * i) / MAX_STEPS));
+  }
+  values[values.length - 1] = to;
+  // Step times follow the ease-in-out feel: solve eased(t)=i/n by bisection.
+  const easedAt = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+  const timeFor = (frac) => {
+    let lo = 0, hi = 1;
+    for (let k = 0; k < 20; k++) {
+      const mid = (lo + hi) / 2;
+      if (easedAt(mid) < frac) lo = mid; else hi = mid;
     }
-    if (p < 1) { requestAnimationFrame(step); return; }
+    return ((lo + hi) / 2) * ms;
+  };
+  const times = values.map((_, i) => timeFor((i + 1) / values.length));
+  const started = performance.now();
+  let next = 0;
+  let lastFire = 0;
+  let lastBuzz = 0;
+  const step = (now) => {
+    if (next < values.length && now - started >= times[next] && now - lastFire >= 50) {
+      const value = values[next];
+      const frac = (next + 1) / values.length;
+      next++;
+      lastFire = now;
+      node.textContent = value.toLocaleString();
+      if (haptics && frac > 0.55 && now - lastBuzz > 45) { buzz(7); lastBuzz = now; }
+      if (sound && next < values.length) playBlip(frac); // the landing replaces the final blip
+    }
+    if (next < values.length) { requestAnimationFrame(step); return; }
     node.textContent = to.toLocaleString();
     if (pop) {
       node.classList.add("is-pop");

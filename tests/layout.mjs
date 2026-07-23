@@ -49,7 +49,7 @@ const check = (name, cond, detail = "") => {
   else { fail++; lines.push(`    ❌ ${name}${detail ? "  → " + detail : ""}`); }
 };
 
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".mp3": "audio/mpeg", ".png": "image/png", ".svg": "image/svg+xml" };
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".png": "image/png", ".svg": "image/svg+xml" };
 function serve() {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {

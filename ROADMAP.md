@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.11.1 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.11.2 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,23 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.11.2** — **Anti-lag engineering.** Three reported lags, three
+  mechanisms: (1) tick/blip/land re-shipped as WAV — LAME puts ~50ms of encoder
+  silence at the front of an MP3, stretched further by the 0.7x pitch bend, so
+  every blip landed late; PCM has zero decoder delay and exact seeks. (2) The
+  ~35-element synchronous prime burst ran on EVERY start/resume tap (since
+  v1.8.1), freezing the screen while the timer's real-time catch-up then
+  fast-forwarded the countdown. Priming is now tiered: the first tap primes one
+  element per sound (unlocks iOS, 17 plays), spare slots top up on the next tap
+  anywhere, later starts are free no-ops, and backgrounding costs one 17-play
+  repair (tracked by a needsReprime flag). (3) The count-up was re-engineered
+  from time-sampled easing (a dropped frame skipped numbers) to a precomputed
+  schedule: totals ≤18 count every number, larger ones use uniform strides,
+  steps fire strictly in order at most one per frame — lag delays the count,
+  it can never skip. New test: a restart adds ≤4 plays where it used to re-prime
+  ~35. Test 23's phantom injection switched from per-element to per-play (the
+  new prime order could brick both elements of a pool, which no phone does).
+  188 behaviour + 262 layout green.
 - **2026-07-23 — v1.11.1** — **Count-up audio synced to the count.** Two fixes:
   the summary is built invisibly during the finale's centre-stage hold (so the
   glide can measure final layout), and the count-up ran then — leaking its

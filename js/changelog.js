@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.11.2",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Anti-lag",
+    notes: [
+      "Fixed the freeze-then-fast-forward at the start of the countdown when restarting, unpausing, or re-entering fullscreen — the heavy audio setup now happens once, not on every tap.",
+      "The count-up no longer skips numbers under lag: every number arrives in order with its blip, just slightly later if the phone is busy.",
+      "Blips, ticks and the landing hit respond noticeably quicker.",
+    ],
+  },
+  {
     v: "1.11.1",
     date: "2026-07-23",
     size: "patch",
