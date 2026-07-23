@@ -711,7 +711,7 @@ async function collectSpokenVsShown(app, ms) {
   check("counts are final, not stuck at zero", !/\b0 punches\b/.test(stats.textContent), `"${stats.textContent}"`);
   check("summary reads as expected", /1 round · \d+ punches · \d+:\d\d/.test(stats.textContent),
     `"${stats.textContent}"`);
-  check("no flame on a 1-day streak", !stats.querySelector(".flame"), "flame present too early");
+  check("flame shows from the very first session", !!stats.querySelector(".flame"), "no flame on day 1");
   results.push(`     (day 1: "${stats.textContent}")`);
   app.restore();
 

@@ -3,8 +3,11 @@
 // whole app updates. No other code needs to change.
 
 // Every move has a display label (shown on screen) and a "say" word
-// (what the voice calls out). Boxing numbering: 1 jab, 2 cross, 3 lead hook,
-// 4 rear hook, 5 lead uppercut, 6 rear uppercut.
+// (what the voice calls out). Boxing numbering as used at Boxing With Bakr:
+//   1 jab · 2 cross · 3 lead hook · 4 rear hook · 5 lead uppercut ·
+//   6 rear uppercut · 7 and 8 body shots
+// (7/8 confirmed with Bakr. Which hand is which only matters if we ever
+// animate them — for calling numbers out loud it doesn't.)
 export const MOVES = {
   "1": { label: "1", say: "one" },
   "2": { label: "2", say: "two" },

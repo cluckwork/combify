@@ -685,8 +685,9 @@ function buildFinishSummary(streak, streakBit) {
     sep();
     const wrap = document.createElement("span");
     wrap.className = "streak";
-    // Fire only once a streak is genuinely a streak — one day isn't a run yet.
-    if (streak >= 2) {
+    // Any streak gets the flame. Gating it at 2+ meant a member finishing their
+    // first ever session — the moment most worth rewarding — saw nothing.
+    if (streak >= 1) {
       const flame = document.createElement("span");
       flame.className = "flame";
       flame.setAttribute("aria-hidden", "true");

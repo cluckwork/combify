@@ -117,8 +117,9 @@ These are blockers I can't clear for you, and they're high-leverage:
 
 - ⏳ **Show Bakr the live preview and watch him use it.** The single most
   important step. Listen for "I'd tell members to use this" vs. polite nodding.
-- ⏳ **Ask Bakr what 7 and 8 are** in his numbering (gyms differ — body hooks?
-  overhands?). Blocks correct combos *and* the breakdown animations.
+- ✅ ~~**Ask Bakr what 7 and 8 are**~~ — confirmed: **body shots**. Existing
+  combos using them (1-2-7-8 etc.) are correct as written. Which hand is which
+  would only matter if we animate them.
 - ⏳ **Collect Bakr's real combos** (by level if possible) to replace the
   placeholders in `js/combos.js`. This is what makes it *his gym's* app.
 - 💡 **Ask Bakr his single biggest headache running the gym.** May surface a
@@ -246,7 +247,8 @@ These are blockers I can't clear for you, and they're high-leverage:
 - **Done when:** a user can pick a struggled combo and clearly understand how to
   throw it from the animation alone.
 - **Effort:** PoC = **M** · full feature = **XL**
-- **Depends on:** knowing what 7 & 8 are (for correct animations) — see §5.
+- **Depends on:** which hand 7 & 8 are (they're body shots — lead vs rear only
+  matters once a figure has to actually throw them).
 - **Open questions:** side-on vs. angled view? auto-play vs. tap-through by
   default? one figure or mirror for orthodox/southpaw?
 
@@ -360,8 +362,8 @@ Choices made and *why*, so we don't relitigate them.
 ## 11. Glossary
 
 - **Boxing numbering** (this app): 1 jab · 2 cross · 3 lead hook · 4 rear hook ·
-  5 lead uppercut · 6 rear uppercut · **7 & 8 = TBD, confirm with Bakr** (often
-  body hooks or overhands). Defense/movement: **slip** (dip under a punch),
+  5 lead uppercut · 6 rear uppercut · **7 & 8 body shots** (confirmed with
+  Bakr). Defense/movement: **slip** (dip under a punch),
   **roll** (weave under), **block**, **pivot** (turn on the lead foot).
 - **Combo** — an ordered list of moves, e.g. `1-2-slip-2`.
 - **Round / work / rest** — a work period (throwing) followed by a rest period,
