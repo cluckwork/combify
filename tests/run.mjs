@@ -404,6 +404,45 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// -------------------------------------- 10k. backgrounded mid-round, then back
+{
+  section("10k. Leaving the app mid-round and coming back");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
+  app.setSeg("pace", "1500");
+  app.click("startBtn");
+  await app.clock.advance(8000);
+  // Backgrounded: iOS pauses media and throttles timers. The chain must be
+  // CUT here — a half-alive chain is what burst into overlapping words on
+  // return, or never recovered at all.
+  Object.defineProperty(app.doc, "visibilityState", { value: "hidden", configurable: true });
+  app.doc.dispatchEvent(new app.window.Event("visibilitychange"));
+  const during = await countCombos(app, 8000);
+  check("no combos while backgrounded", during.n === 0, `${during.n} advanced`);
+  // Return.
+  Object.defineProperty(app.doc, "visibilityState", { value: "visible", configurable: true });
+  app.doc.dispatchEvent(new app.window.Event("visibilitychange"));
+  const after = await countCombos(app, 20000);
+  check("combos resume promptly on return", after.n >= 2, `${after.n} combos in 20s`);
+  check("no words tumbling over each other on return", app.stats.maxVoiceConcurrent <= 1,
+    `max ${app.stats.maxVoiceConcurrent} at once`);
+  // And returning during REST must not start calling combos into the break.
+  const app2 = await boot({ duration: 0.6 });
+  app2.set("rounds", 2); app2.set("workSec", 8); app2.set("restSec", 20);
+  app2.setSeg("pace", "1500");
+  app2.click("startBtn");
+  await app2.clock.advance(13000); // into rest
+  Object.defineProperty(app2.doc, "visibilityState", { value: "hidden", configurable: true });
+  app2.doc.dispatchEvent(new app2.window.Event("visibilitychange"));
+  await app2.clock.advance(1000);
+  Object.defineProperty(app2.doc, "visibilityState", { value: "visible", configurable: true });
+  app2.doc.dispatchEvent(new app2.window.Event("visibilitychange"));
+  const restCombos = await countCombos(app2, 4000);
+  check("returning during rest stays quiet", restCombos.n === 0, `${restCombos.n} combos in rest`);
+  app2.restore();
+  app.restore();
+}
+
 // ------------------------------------------------------ 10j. install nudge
 {
   section("10j. Install nudge shows the right thing to the right browser");
@@ -631,12 +670,11 @@ async function countCombos(app, ms, step = 200) {
     `tick plays: ${app.stats.byKey.tick || 0}`);
   check("the round-start bell plays as a sample", (app.stats.byKey.bell || 0) >= 1,
     `bell plays: ${app.stats.byKey.bell || 0}`);
-  const afterStart = app.stats.byKey.bell || 0;
-  await app.clock.advance(25000);         // 10s warning, then session-over bell x3
+  await app.clock.advance(25000);         // 10s warning, then the victory jingle
   check("the 10-second warning plays as a sample", (app.stats.byKey.warning || 0) >= 1,
     `warning plays: ${app.stats.byKey.warning || 0}`);
-  check("the session-end bell rings all three strikes", (app.stats.byKey.bell || 0) >= afterStart + 3,
-    `bell plays: ${afterStart} → ${app.stats.byKey.bell || 0}`);
+  check("the session ends with the victory jingle", (app.stats.byKey.victory || 0) >= 1,
+    `victory plays: ${app.stats.byKey.victory || 0}`);
   // Exactly one synth sound is expected: the tick fired inside start() runs
   // before the sample's load event, so it uses the fallback. Everything after
   // must come from samples.
@@ -648,14 +686,14 @@ async function countCombos(app, ms, step = 200) {
 // ------------------------------------- 19b. sfx files missing → synth fallback
 {
   section("19b. Missing sfx files fall back to the synth");
-  const app = await boot({ duration: 0.6, missingClips: ["bell", "tick", "warning"] });
+  const app = await boot({ duration: 0.6, missingClips: ["bell", "tick", "warning", "victory"] });
   app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
   app.click("startBtn");
   await app.clock.advance(4000);
   check("ticks and bell still sound via the synth", app.synth.oscStarted > 0,
     `${app.synth.oscStarted} oscillators`);
   await app.clock.advance(25000);
-  check("the session still ends with an audible bell", app.synth.oscStarted >= 4,
+  check("the session still ends audibly via the synth jingle", app.synth.oscStarted >= 4,
     `${app.synth.oscStarted} oscillators`);
   app.restore();
 }

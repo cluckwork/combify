@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.9.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.9.1 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,18 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.9.1** — **Victory jingle + clean background/return.**
+  finish() plays `audio/sfx/victory.mp3` (rising C-major arpeggio into a held
+  chord with the bell's reverb; synth fallback mirrors it) instead of ringBell(3)
+  — the bell means "round boundary" all session, the end deserves its own sound.
+  Fixed the reported "sound glitches or stops entirely after leaving and
+  returning": iOS pauses the playing clip (its ended never fires) and throttles
+  timers, so returning released a burst of stale watchdogs at once, or left the
+  chain dead until the 20s revive. The callout chain is now cut cleanly on
+  visibilitychange→hidden and restarted fresh on →visible (after tick() has
+  caught the phase up; a return during rest stays quiet). New test section 10k
+  covers backgrounding mid-round, prompt resume, no overlapping words, and the
+  rest-phase case. 183 behaviour + 226 layout green.
 - **2026-07-23 — v1.9.0** — **The install path, unbroken.** Real PNG icons
   rendered from the BWB wordmark (192/512 "any", 512 maskable with the logo
   inside Android's 80%-circle safe zone, 180 apple-touch-icon — iOS only

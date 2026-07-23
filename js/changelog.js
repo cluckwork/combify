@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.9.1",
+    date: "2026-07-23",
+    size: "patch",
+    title: "A proper finish",
+    notes: [
+      "Finishing a session now plays a short victory jingle instead of three more bell rings — the bell keeps meaning \"round\", the jingle only ever means \"you did it\".",
+      "Fixed the sound glitching or dying after you left the app mid-round and came back — the callouts now stop cleanly when you leave and pick up fresh when you return.",
+    ],
+  },
+  {
     v: "1.9.0",
     date: "2026-07-23",
     size: "minor",
