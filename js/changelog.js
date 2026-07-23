@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.8.3",
+    date: "2026-07-23",
+    size: "patch",
+    title: "The bell fix, actually working on iPhone",
+    notes: [
+      "The previous update's bell fix worked everywhere except the phones it was for: iPhones never told the app the bell file had loaded, so it kept using the old muted route. The app now assumes its own sound files are there.",
+    ],
+  },
+  {
     v: "1.8.2",
     date: "2026-07-23",
     size: "patch",

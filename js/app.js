@@ -288,20 +288,25 @@ document.addEventListener("touchstart", armAudio, { capture: true, passive: true
 // silent (most phones, most of the time) the voice clips played and every
 // synthesized bell and tick was dead silence. The synthesis stays as the
 // fallback so a missing or unloadable file still makes a sound.
-// Each sample stays OFF until it proves it loaded (a browser that defers
-// loading never fires the error event that would flip it back off).
+// Samples default ON — the files are committed to the repo — and a sample only
+// turns off on an actual load error. This mirrors the voice clips, and for the
+// same hard-won reason (see the note above `voice` below): mobile Safari
+// frequently never fires canplaythrough/loadeddata for preloaded audio, so an
+// off-until-proven flag stays off forever on exactly the phones that need the
+// sample most. That mistake shipped once here: the flags defaulted to false,
+// iOS never delivered the "proof", every bell fell back to the synth, and the
+// synth is muted by the silent switch — "bells still don't work" while the
+// voice played fine. Off-until-proven was only right in the era when
+// audio/sfx/ had no files at all.
 const SFX_DIR = "audio/sfx/";
 const SFX_KEYS = ["bell", "tick", "warning"];
 const sfxCache = {};
-const sfx = { bell: false, tick: false, warning: false };
+const sfx = { bell: true, tick: true, warning: true };
 function preloadSfx() {
   SFX_KEYS.forEach((key) => {
     const a = new Audio(SFX_DIR + key + ".mp3");
     a.preload = "auto";
     sfxCache[key] = a;
-    const enable = () => { sfx[key] = true; };
-    a.addEventListener("canplaythrough", enable, { once: true });
-    a.addEventListener("loadeddata", enable, { once: true }); // whichever lands first
     a.addEventListener("error", () => { sfx[key] = false; }, { once: true });
   });
 }

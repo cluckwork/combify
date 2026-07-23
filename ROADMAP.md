@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.8.2 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.8.3 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,17 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.8.3** — **The v1.8.2 bell fix, actually effective on iOS.**
+  v1.8.2's sfx flags were off-until-proven (flip on canplaythrough/loadeddata) —
+  the exact pattern the voice clips abandoned long ago, for a documented
+  reason: mobile Safari frequently never fires those events for preloaded
+  audio. So on iPhone the flags stayed false forever, every bell fell back to
+  the synth, and the synth is muted by the silent switch — no change from the
+  user's point of view. Samples now default ON (the files are committed) and
+  only turn off on an actual load error, mirroring `voice.useClips`. Bonus:
+  the first countdown tick now plays as a media element too, making it
+  independent of the AudioContext entirely. Three tests updated from mechanism
+  to intent (a bell may satisfy them via sample OR synth).
 - **2026-07-23 — v1.8.2** — **Bells you can hear: sfx became real samples.**
   The bell, countdown tick and 10-second warning were Web-Audio-synth only, and
   iPhones MUTE Web Audio output when the ring/silent switch is on — while
