@@ -2,6 +2,7 @@
 
 import { randomCombo, comboToText, comboToSpeech } from "./combos.js";
 import { VERSION, RELEASED } from "./version.js";
+import { loadHistory, saveHistory, recordRound, currentStreak, trainedToday, formatDuration } from "./stats.js";
 
 // ---------- Segmented control: tap a segment, or swipe across it ----------
 function initSeg(id) {
@@ -103,6 +104,7 @@ const el = {
   clock: document.getElementById("clock"), round: document.getElementById("round"),
   combo: document.getElementById("combo"), startBtn: document.getElementById("startBtn"),
   resetBtn: document.getElementById("resetBtn"), voiceOn: document.getElementById("voiceOn"),
+  stats: document.getElementById("stats"),
 };
 
 // Restore whatever this member last used, then start persisting changes.
@@ -117,6 +119,35 @@ const el = {
   settingsReady = true;
 })();
 el.voiceOn.addEventListener("change", saveSettings);
+
+// ---------- Training history ----------
+// Counts what the member actually did, so finishing a session shows something
+// earned rather than just "nice work", and so a streak gives them a reason to
+// come back tomorrow. Only COMPLETED work rounds count.
+let history = loadHistory();
+const session = { rounds: 0, punches: 0, seconds: 0, pendingPunches: 0, started: false };
+
+const isPunch = (key) => /^[1-8]$/.test(key); // slips/rolls/blocks/pivots aren't punches
+
+function resetSessionTally() {
+  session.rounds = 0; session.punches = 0; session.seconds = 0;
+  session.pendingPunches = 0; session.started = false;
+}
+// Called the moment a work round runs out — before the phase flips to rest or done.
+function completeWorkRound() {
+  const seconds = getWork();
+  session.rounds += 1;
+  session.punches += session.pendingPunches;
+  session.seconds += seconds;
+  history = recordRound(history, {
+    punches: session.pendingPunches,
+    seconds,
+    firstOfSession: !session.started,
+  });
+  saveHistory(history);
+  session.started = true;
+  session.pendingPunches = 0;
+}
 
 // Stamp the build into the About section so a phone showing an old version is
 // obvious — that's usually a cached copy, not a change that failed to deploy.
@@ -549,11 +580,42 @@ function speakCombo(combo, onDone) {
 
 // ---------- Helpers ----------
 const format = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+// The strip under the combo. Kept OUT of the way mid-round — during work and
+// rest the screen should show the punches and nothing else — and used either
+// side of a session to show what was earned and why to come back.
+function renderStats() {
+  if (!el.stats) return;
+  if (state.phase === "work" || state.phase === "rest" || state.phase === "countdown") {
+    el.stats.textContent = "";
+    return;
+  }
+  const streak = currentStreak(history);
+  const streakBit = streak > 0 ? `${streak} day${streak === 1 ? "" : "s"} in a row` : null;
+
+  if (state.phase === "done") {
+    const parts = [`${session.rounds} round${session.rounds === 1 ? "" : "s"}`];
+    if (session.punches > 0) parts.push(`${session.punches} punches`);
+    parts.push(formatDuration(session.seconds));
+    if (streakBit) parts.push(streakBit);
+    el.stats.textContent = parts.join(" · ");
+    return;
+  }
+  // Ready screen
+  const bits = [];
+  if (streakBit) bits.push(streakBit);
+  if (history.totals.sessions > 0) {
+    bits.push(`${history.totals.sessions} session${history.totals.sessions === 1 ? "" : "s"}`);
+  }
+  if (history.totals.punches > 0) bits.push(`${history.totals.punches.toLocaleString()} punches`);
+  el.stats.textContent = bits.length ? bits.join(" · ") : "";
+}
+
 function render() {
   el.clock.textContent = state.phase === "countdown" ? String(state.secondsLeft) : format(state.secondsLeft);
   el.stage.dataset.phase = state.phase;
   el.phase.textContent = state.phase === "work" ? "Work" : state.phase === "rest" ? "Rest" : state.phase === "done" ? "Done" : state.phase === "countdown" ? "Get Ready" : "Ready";
   el.round.textContent = state.phase === "countdown" ? `Round 1 / ${getRounds()}` : `Round ${state.currentRound} / ${getRounds()}`;
+  renderStats();
 }
 
 // ---------- Combo calling (only during work) ----------
@@ -561,6 +623,7 @@ function nextCombo() {
   if (!state.running || state.phase !== "work") return;
   state.lastComboAt = Date.now(); // heartbeat, watched by tick() — see reviveComboLoop
   const combo = randomCombo(getLevel());
+  session.pendingPunches += combo.filter(isPunch).length;
   el.combo.textContent = comboToText(combo);
   speakCombo(combo, () => {
     if (!state.running || state.phase !== "work") return;
@@ -601,7 +664,14 @@ function beginPhase(seconds) {
 }
 function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned10 = false; ringBell(1); render(); startComboLoop(); }
 function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
-function finish() { state.phase = "done"; state.running = false; stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3); el.combo.textContent = "Session complete — nice work."; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); render(); }
+function finish() {
+  state.phase = "done"; state.running = false;
+  stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3);
+  const streak = currentStreak(history);
+  el.combo.textContent = streak > 1 ? `${streak} days in a row.` : "Session complete — nice work.";
+  el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running");
+  render();
+}
 
 // ---------- The one-second heartbeat ----------
 // Reads the REAL elapsed time rather than assuming this ran exactly 1s after
@@ -638,6 +708,7 @@ function tick() {
   reviveComboLoop();
   if (remaining <= 0) {
     if (state.phase === "work") {
+      completeWorkRound();
       if (state.currentRound >= getRounds()) { finish(); return; }
       enterRest();
     } else if (state.phase === "rest") { state.currentRound += 1; enterWork(); }
@@ -655,6 +726,7 @@ function start() {
   acquireWakeLock();
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
   state.phase = "countdown"; beginPhase(3);
+  resetSessionTally();
   el.combo.textContent = "Get ready...";
   playTick(); render();
   state.tickTimer = setInterval(tick, 1000);

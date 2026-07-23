@@ -213,6 +213,17 @@ label,
 .step__btn:active { background: var(--accent); color: var(--accent-ink); }
 .step__val { min-width: 62px; text-align: center; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; touch-action: pan-y; cursor: ew-resize; user-select: none; -webkit-user-select: none; }
 
+.stats {
+  margin-top: 12px;
+  min-height: 14px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.stage[data-phase="done"] .stats { color: var(--accent); }
+
 .about__version {
   margin-top: 4px;
   color: var(--muted);

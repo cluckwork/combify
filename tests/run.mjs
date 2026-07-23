@@ -535,6 +535,89 @@ async function collectSpokenVsShown(app, ms) {
   app.restore();
 }
 
+// ------------------------------------------------- 25. streak logic in isolation
+{
+  section("25. Streak counting");
+  const s = await import("../js/stats.js");
+  const DAY = 86400000;
+  const noon = (dayOffset) => new Date(2026, 6, 20 + dayOffset, 12, 0, 0).getTime();
+  const build = (offsets) => {
+    let h = { days: {}, totals: { sessions: 0, rounds: 0, punches: 0, seconds: 0 } };
+    for (const o of offsets) h = s.recordRound(h, { punches: 10, seconds: 120, firstOfSession: true }, noon(o));
+    return h;
+  };
+  check("no history = no streak", s.currentStreak(build([]), noon(0)) === 0);
+  check("trained today = 1", s.currentStreak(build([0]), noon(0)) === 1);
+  check("three days running = 3", s.currentStreak(build([-2, -1, 0]), noon(0)) === 3);
+  check("a missed day breaks it", s.currentStreak(build([-3, -2, 0]), noon(0)) === 1,
+    String(s.currentStreak(build([-3, -2, 0]), noon(0))));
+  // Opening the app in the morning before training must not show zero.
+  check("yesterday but not yet today still counts", s.currentStreak(build([-1]), noon(0)) === 1,
+    String(s.currentStreak(build([-1]), noon(0))));
+  check("two days ago and not since = 0", s.currentStreak(build([-2]), noon(0)) === 0,
+    String(s.currentStreak(build([-2]), noon(0))));
+  check("several sessions in one day = still 1 day", s.currentStreak(build([0, 0, 0]), noon(0)) === 1);
+  // Late-night training counts for that evening, not the next morning (local day).
+  const lateNight = new Date(2026, 6, 20, 23, 30, 0).getTime();
+  const h = s.recordRound({ days: {}, totals: { sessions: 0, rounds: 0, punches: 0, seconds: 0 } },
+    { punches: 5, seconds: 60, firstOfSession: true }, lateNight);
+  check("11:30pm counts for that day", s.dayKey(lateNight) === "2026-07-20", s.dayKey(lateNight));
+  check("and gives a streak that evening", s.currentStreak(h, lateNight) === 1);
+  check("duration formats as m:ss", s.formatDuration(390) === "6:30", s.formatDuration(390));
+}
+
+// --------------------------------------- 26. stats recorded from a real session
+{
+  section("26. A real session records rounds, punches and a streak");
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 2); app.set("workSec", 20); app.set("restSec", 5);
+  app.setSeg("pace", "1500"); app.setSeg("level", "beginner");
+  check("ready screen is empty before any training", app.doc.getElementById("stats").textContent === "",
+    `"${app.doc.getElementById("stats").textContent}"`);
+  app.click("startBtn");
+  await app.clock.advance(4000);
+  check("stats hidden during a round", app.doc.getElementById("stats").textContent === "",
+    `"${app.doc.getElementById("stats").textContent}"`);
+  await app.clock.advance(60000); // run both rounds out
+  check("session finishes", app.phase() === "Done", app.phase());
+  const summary = app.doc.getElementById("stats").textContent;
+  check("finish screen summarises the session", /2 rounds/.test(summary) && /punches/.test(summary), `"${summary}"`);
+  check("summary includes a duration", /\d+:\d\d/.test(summary), `"${summary}"`);
+  const stored = JSON.parse(peekStore()["combify.history.v1"] || "{}");
+  check("history persisted", stored.totals && stored.totals.rounds === 2, JSON.stringify(stored.totals));
+  check("counted exactly one session", stored.totals.sessions === 1, String(stored.totals?.sessions));
+  check("punches counted (beginner combos are all punches)", stored.totals.punches > 0, String(stored.totals?.punches));
+  results.push(`     (finish screen: "${summary}")`);
+  app.restore();
+
+  // Reopening shows the streak carried over
+  const b = await boot({ duration: 0.6 });
+  const ready = b.doc.getElementById("stats").textContent;
+  check("streak shown on the ready screen next visit", /1 day in a row/.test(ready), `"${ready}"`);
+  check("lifetime totals shown", /session/.test(ready) && /punches/.test(ready), `"${ready}"`);
+  results.push(`     (ready screen: "${ready}")`);
+  b.restore();
+  clearStore();
+}
+
+// ---------------------------------- 27. partial rounds must not inflate the log
+{
+  section("27. Quitting mid-round doesn't count that round");
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 3); app.set("workSec", 60); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(4000 + 30000);   // halfway through round 1
+  app.click("resetBtn");
+  await app.clock.advance(500);
+  const stored = JSON.parse(peekStore()["combify.history.v1"] || "{}");
+  check("no rounds logged for an abandoned round", !stored.totals || stored.totals.rounds === 0,
+    JSON.stringify(stored.totals));
+  app.restore();
+  clearStore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);

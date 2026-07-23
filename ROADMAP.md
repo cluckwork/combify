@@ -4,7 +4,11 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-22 · **Current version:** v1 (local, not yet deployed)
+> **Last updated:** 2026-07-22 · **Current version:** v1.2.0 (live on GitHub Pages)
+>
+> The running version is shown in the app's About section and comes from
+> `js/version.js`. Bumping it also renames the service worker cache, which is
+> what makes existing installs pick up a new build — see §7.
 
 ---
 
@@ -246,15 +250,21 @@ These are blockers I can't clear for you, and they're high-leverage:
 - **Open questions:** side-on vs. angled view? auto-play vs. tap-through by
   default? one figure or mirror for orthodox/southpaw?
 
-### 6.4 — Retention loop 💡 · M4
+### 6.4 — Retention loop 🔨 · M4
 
-Directly serves the business goal. Build after the basics are shown to get used.
+Directly serves the business goal.
 
-- **Streaks / session log** — "you trained 4 days this week." The single most
-  retention-relevant feature. Stored locally first (no account needed).
-  Effort **M**.
-- **Save favorite settings** — remember level/rounds/work/rest/pace/voice so it
-  opens ready to go. Effort **S**.
+- ✅ **Streaks / session log** — done. Completed work rounds are logged to
+  `localStorage` as per-day totals (`js/stats.js`); the ready screen shows
+  "N days in a row · N sessions · N punches" and the finish screen summarises
+  the session instead of just saying "nice work". Streak survives training late
+  at night (local day, not UTC) and doesn't reset until a full day is missed.
+  Partial rounds deliberately don't count.
+- ✅ **Save favorite settings** — done. Level/pace/rounds/work/rest/voice
+  persist per device.
+- 💡 **Next for this loop:** nothing prompts a member to come back — the streak
+  is only visible if they already opened the app. A reason to return (or, much
+  later, a notification) is the missing half.
 - **Signature combos** — named combos from Bakr ("Bakr's Special") as their own
   selectable set; makes the app feel personally his. Effort **S–M**.
 - **Shareable gym link** — one link Bakr texts every member; maybe a lightweight
@@ -380,6 +390,26 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-22 — v1.2.0** — Streaks and session logging (§6.4). Completed
+  rounds, punches and time are stored per day in `localStorage`; ready screen
+  shows the streak and lifetime totals, finish screen shows the session.
+- **2026-07-22 — v1.1.0** — Version stamp in About, wired to the service worker
+  cache name so a bump forces existing installs to refresh.
+- **2026-07-22** — Settings persist between visits (level/pace/rounds/work/rest/
+  voice).
+- **2026-07-22** — **Test suite added** (`npm test`, 82 checks). Runs the real
+  `app.js` in jsdom with a fake clock, injecting the failure modes phones
+  actually produce. Written after two bugs reached the gym.
+- **2026-07-22** — Mobile audio and timing fixes found via Bakr's testing:
+  combo audio no longer dies mid-round (dropped `ended` events on reused
+  elements); a clip that fails silently is retried so combos stop dropping a
+  punch; the bell no longer reaches for a sample that was deleted; the timer
+  keeps real time when the tab is backgrounded (was losing 177s of every 180s);
+  screen wake lock; iOS double-tap zoom no longer fights the +/- steppers.
+- **2026-07-22** — Combos no longer repeat back-to-back; removed a duplicate
+  beginner entry that made one combo twice as likely.
+- **2026-07-22** — Settings reordered by importance: Level and Combo pace on the
+  first screen, round lengths inside "More options".
 - **2026-07-22** — ElevenLabs clips are live. The founder recorded all 12 words
   as one continuous natural take (with `<break>` tags between words) instead of
   12 separate recordings; split programmatically using detected silence gaps
