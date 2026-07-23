@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.11.6",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Version at a glance",
+    notes: [
+      "The version number and the What's new link now sit at the bottom of the main screen — no need to open About to find them.",
+    ],
+  },
+  {
     v: "1.11.5",
     date: "2026-07-23",
     size: "patch",

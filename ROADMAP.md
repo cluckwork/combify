@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.11.5 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.11.6 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,10 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.11.6** — **Footer.** Version + release date + What's new
+  moved out of the About fold into an always-visible one-line footer (quiet
+  mono, folds away in focus mode with the rest of the chrome). Checking "am I
+  on the latest?" is now zero taps.
 - **2026-07-23 — v1.11.5** — **Bell clearance + first-call runway + glow back.**
   Both reported bell "glitches" were collisions with the voice: at round start
   the first word began during the bell's attack (two full-volume samples at

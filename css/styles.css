@@ -180,7 +180,7 @@ body:has(.app[data-focus="1"]) { padding: 0; }
    the room while moving. So the stage takes the whole screen and everything
    else folds away. Pausing brings it all back (see the app's start/pause).
    ========================================================================== */
-.topbar, .settings, .about, .install {
+.topbar, .settings, .about, .install, .foot {
   max-height: 1400px;
   opacity: 1;
   transition: opacity 0.25s ease 0.05s, max-height 0.35s ease;
@@ -188,6 +188,7 @@ body:has(.app[data-focus="1"]) { padding: 0; }
 .app[data-focus="1"] .topbar,
 .app[data-focus="1"] .settings,
 .app[data-focus="1"] .install,
+.app[data-focus="1"] .foot,
 .app[data-focus="1"] .about {
   max-height: 0;
   opacity: 0;
@@ -893,3 +894,20 @@ label,
    transition cleanup) so the layer doesn't linger. */
 .stage.is-finale .stage__meta { will-change: transform; }
 .stage.is-finale.is-finale-reveal .stage__meta { will-change: auto; }
+
+
+/* The always-visible footer: version + What's new, quiet mono, out of the way. */
+.foot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding-bottom: 4px;
+}
+.foot__dot { opacity: 0.5; }
+.foot__link { color: var(--accent); text-decoration: none; font-weight: 600; }
+.foot__link:hover { text-decoration: underline; }
