@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.11.7 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.11.8 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,28 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.11.8** — **The "t-two" stutter root cause + four fixes.**
+  The stutter's phonetic signature (word onset, hiccup, word again) pinned it:
+  currentTime assignment is an ASYNC seek on iOS, and an element paused
+  mid-word (round end, pause, voice-over-bell cut) stayed parked there — its
+  next reuse could start audibly from the old position then jump to 0 when the
+  lazy seek landed. v1.11.7's prime-seek removal widened that window, which is
+  why it "came back". Fix: park at 0 at EVERY pause site (stop, mismatch cut,
+  retry, skip) so seeks land during idle gaps, plus a displaced-only rewind in
+  primeElement (cheap; skips already-parked elements). Prior real-browser
+  traces (Sonnet's) had already exonerated the files (clean PCM tails) and
+  ruled out element-vs-element interruption — this was the one mechanism left.
+  Also: enterWork clears "Get ready..." to an nbsp (it lingered through the
+  1.6s runway and read as a hang); a fullscreenchange listener re-anchors the
+  countdown if the OS fullscreen transition lands inside its first 1.2s ("5"
+  holds through the repaint storm instead of the first second being eaten);
+  "The 10" renamed to "10 combo"; the normal screen's dead Reset is hidden and
+  Start fills the row (the same element still serves as the restart icon in
+  focus mode). Note on "quiet blips, loud final ding": expected on a
+  silent-switched iPhone or during an OS audio interruption — count-up blips
+  ride Web Audio (the jitter-free path, muted by the switch) while the landing
+  stays on the media pipeline; documented trade from v1.11.4.
+  191 behaviour + 262 layout green, three clean runs.
 - **2026-07-23 — v1.11.7** — **Settle beat, phase-aligned ticker, halo glow.**
   Start/restart now paint the countdown state on the tap's frame and start the
   clock 140ms later (armCountdownStart) — residual transition jank is absorbed

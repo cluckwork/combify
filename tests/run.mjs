@@ -1081,7 +1081,7 @@ async function collectSpokenVsShown(app, ms) {
   const ten = ["1", "2", "3", "2", "1", "1", "2", "slip", "2", "3", "2", "roll"];
   const inAdvanced = c.COMBOS.advanced.some((x) => x.join("-") === ten.join("-"));
   check("the 10 combo is in the advanced set", inAdvanced);
-  check("it is named", c.comboName(ten) === "The 10", String(c.comboName(ten)));
+  check("it is named", c.comboName(ten) === "10 combo", String(c.comboName(ten)));
   check("unnamed combos return null", c.comboName(["1", "2"]) === null, String(c.comboName(["1", "2"])));
   // The name should match reality: ten punches, slip and roll excluded.
   const punches = ten.filter((k) => /^[1-8]$/.test(k)).length;
@@ -1094,20 +1094,20 @@ async function collectSpokenVsShown(app, ms) {
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 200); app.set("restSec", 5);
   app.setSeg("pace", "500"); app.setSeg("level", "advanced");
-  // Force the pick rather than hoping. "The 10" is 1 of 9 advanced combos, so
+  // Force the pick rather than hoping. "10 combo" is 1 of 9 advanced combos, so
   // waiting for it to turn up randomly failed roughly one run in seven — a
   // test that fails on a dice roll teaches you to ignore it. Alternating two
   // values matters: randomCombo() re-rolls while it matches the last pick, so
   // a constant would spin forever.
   const realRandom = Math.random;
   let n = 0;
-  Math.random = () => (n++ % 2 === 0 ? 0 : 0.5); // 0 selects "The 10"
+  Math.random = () => (n++ % 2 === 0 ? 0 : 0.5); // 0 selects "10 combo"
   try {
     app.click("startBtn");
     let sawName = false;
     for (let t = 0; t < 30000 && !sawName; t += 100) {
       await app.clock.advance(100);
-      if (app.doc.getElementById("comboName").textContent === "The 10") sawName = true;
+      if (app.doc.getElementById("comboName").textContent === "10 combo") sawName = true;
     }
     check("name appears on screen when the combo comes up", sawName, "never displayed");
   } finally { Math.random = realRandom; }

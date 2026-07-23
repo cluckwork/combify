@@ -85,7 +85,7 @@ export function randomCombo(level) {
 // only has to be listed once above — add a name here and the app announces it.
 // This is what makes it read as HIS gym's app rather than a generic timer.
 export const COMBO_NAMES = {
-  "1-2-3-2-1-1-2-slip-2-3-2-roll": "The 10",
+  "1-2-3-2-1-1-2-slip-2-3-2-roll": "10 combo",
 };
 export function comboName(combo) {
   return COMBO_NAMES[combo.join("-")] || null;

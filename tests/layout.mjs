@@ -272,7 +272,7 @@ async function runDevice(dev) {
       if (i < keys.length - 1) c.appendChild(document.createTextNode(" "));
     });
     c.style.setProperty("--fit", "0.54");
-    document.getElementById("comboName").textContent = "The 10";
+    document.getElementById("comboName").textContent = "10 combo";
   });
   await page.waitForTimeout(120);
   m = await page.evaluate(probe);

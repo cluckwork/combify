@@ -21,6 +21,18 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.11.8",
+    date: "2026-07-23",
+    size: "patch",
+    title: "The stutter, hunted down",
+    notes: [
+      "Fixed words occasionally starting twice (\"t-two\", \"1-one\") — an interrupted callout could leave a clip parked mid-word, and its next use raced an audio seek. Every clip is now rewound the moment it's stopped.",
+      "\"Get ready\" now clears the moment the round starts instead of lingering until the first call.",
+      "Starting a session holds the 5 steady while the screen transitions, so the countdown never eats its first second.",
+      "Bakr's combo is now announced as \"10 combo\", and the useless Reset button on the main screen is gone — Start has the room now.",
+    ],
+  },
+  {
     v: "1.11.7",
     date: "2026-07-23",
     size: "patch",

@@ -626,9 +626,13 @@ function primeElement(a) {
   const p = a.play();
   if (p && p.catch) p.catch(() => {});
   a.pause();
-  // No currentTime reset here: a muted play()+pause() in the same task barely
-  // advances, real playback resets the time itself, and the seek was the most
-  // expensive part of priming 17 elements inside the Start tap.
+  // Park at 0 — but only when displaced. An element left mid-word (a paused
+  // round, a cut) MUST be rewound: currentTime assignment is an async seek on
+  // iOS, and seeking lazily at play time raced playback — the start of the
+  // word from the old position, an audible jump, the word again: "t-two".
+  // Rewinding here (and at every pause site) lets seeks land during idle
+  // time. Skipping already-parked elements keeps the tap cheap.
+  try { if (a.currentTime > 0.05) a.currentTime = 0; } catch (e) {}
   a.muted = false;
 }
 
@@ -768,7 +772,7 @@ function playClips(keys, onDone) {
     // event) could start the next word on top of one still playing, which is
     // heard as words cutting each other off and the cadence going ragged.
     if (voice.current && voice.current !== node) {
-      try { voice.current.pause(); } catch (e) {}
+      try { voice.current.pause(); voice.current.currentTime = 0; } catch (e) {}
     }
     // Clear handlers from this element's previous use so a late event from an
     // earlier combo can't advance the current one.
@@ -805,10 +809,10 @@ function playClips(keys, onDone) {
       // of duration was too eager — it retried words that had played fine,
       // so they were spoken twice and the cadence went out.
       const elapsed = Date.now() - startedAt;
-      if (elapsed < 120) { try { node.pause(); } catch (e) {} retryOr(afterWord); return; }
+      if (elapsed < 120) { try { node.pause(); node.currentTime = 0; } catch (e) {} retryOr(afterWord); return; }
       afterWord();
     });
-    const skip = once(() => { try { node.pause(); } catch (e) {} retryOr(playNext); });
+    const skip = once(() => { try { node.pause(); node.currentTime = 0; } catch (e) {} retryOr(playNext); });
 
     node.onended = finished;
     node.onerror = skip;
@@ -1254,7 +1258,10 @@ function stopComboLoop() {
   clearTimeout(state.wordGapTimer);
   state.comboTimer = null;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
-  if (voice.current) { try { voice.current.pause(); } catch (e) {} voice.current = null; }
+  if (voice.current) {
+    try { voice.current.pause(); voice.current.currentTime = 0; } catch (e) {}
+    voice.current = null;
+  }
 }
 
 // ---------- Phase changes ----------
@@ -1265,7 +1272,15 @@ function beginPhase(seconds) {
   state.secondsLeft = seconds;
   state.phaseEndsAt = Date.now() + seconds * 1000;
 }
-function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned10 = false; ringBell(1); render(); startComboLoop(FIRST_CALL_DELAY); }
+function enterWork() {
+  state.phase = "work"; beginPhase(getWork()); state.warned10 = false;
+  // The countdown's "Get ready..." must not survive into the round — the
+  // first call is 1.6s away and the leftover text read as a hang. A no-break
+  // space keeps the line box so the layout doesn't shift twice.
+  el.combo.textContent = "\u00A0";
+  if (el.comboName) el.comboName.textContent = "";
+  ringBell(1); render(); startComboLoop(FIRST_CALL_DELAY);
+}
 function enterRest() { state.phase = "rest"; beginPhase(getRest()); stopComboLoop(); ringBell(2); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
 // The headline when a session ends — one of these, never the same twice in a
 // row. Coach's voice: short, earned, no exclamation points. All of them fit on
@@ -1439,6 +1454,18 @@ function alignedTicker() {
 
 // ---------- Start / pause / reset ----------
 const COUNTDOWN_SECONDS = 5;
+
+// Entering browser fullscreen plays an OS transition (~300ms of resize and
+// repaint) right as the countdown begins. If that lands after the settle
+// beat, the first countdown second is visually eaten. Re-anchor the clock
+// when the transition fires within the countdown's first moments: "5" holds
+// through the animation, then ticks cleanly.
+["fullscreenchange", "webkitfullscreenchange"].forEach((ev) =>
+  document.addEventListener(ev, () => {
+    if (!state.running || state.phase !== "countdown") return;
+    const elapsed = COUNTDOWN_SECONDS * 1000 - (state.phaseEndsAt - Date.now());
+    if (elapsed < 1200) { beginPhase(COUNTDOWN_SECONDS); render(); }
+  }));
 
 // Both entrances to a session end here. The countdown state paints on THIS
 // frame; the clock starts one settle beat later, so any residual layout or
