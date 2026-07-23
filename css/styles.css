@@ -213,6 +213,16 @@ label,
 .step__btn:active { background: var(--accent); color: var(--accent-ink); }
 .step__val { min-width: 62px; text-align: center; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; touch-action: pan-y; cursor: ew-resize; user-select: none; -webkit-user-select: none; }
 
+.combo-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  min-height: 14px;
+  margin-bottom: 2px;
+}
+
 .stats {
   margin-top: 12px;
   min-height: 14px;
@@ -223,6 +233,81 @@ label,
   text-transform: uppercase;
 }
 .stage[data-phase="done"] .stats { color: var(--accent); }
+
+/* ---- Finish celebration ----
+   The end of a session is the only moment the app asks someone to feel good
+   about what they just did, so it gets the one flourish in the whole UI.
+   Warm colours appear here and nowhere else, which is what makes the streak
+   read as special against the otherwise teal palette. */
+.stage { position: relative; overflow: hidden; }
+
+@keyframes finishRise {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+.stage[data-phase="done"] .combo {
+  animation: finishRise 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+  text-shadow: 0 0 26px rgba(73, 149, 146, 0.45);
+}
+.stage[data-phase="done"] .stats { animation: finishRise 0.55s 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.15) both; }
+
+/* A single ring breathing outward behind the clock — celebratory without
+   turning into confetti. */
+@keyframes ringOut {
+  from { opacity: 0.45; transform: translate(-50%, -50%) scale(0.55); }
+  to   { opacity: 0;    transform: translate(-50%, -50%) scale(1.5); }
+}
+.stage[data-phase="done"]::after {
+  content: "";
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 230px; height: 230px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  animation: ringOut 1.8s ease-out 2 both;
+  pointer-events: none;
+}
+
+.stat-num { color: var(--text); font-weight: 700; display: inline-block; }
+
+/* The landing. Overshoots slightly and settles — the bit that makes hitting
+   the total feel earned rather than just displayed. */
+@keyframes numPop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.42); color: #ffb347; text-shadow: 0 0 20px rgba(255, 179, 71, 0.75); }
+  70%  { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+.stat-num.is-pop { animation: numPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
+.streak { display: inline-flex; align-items: center; gap: 5px; color: #ffb347; }
+
+/* Flame: three stacked teardrops, each flickering on its own beat. Pure CSS —
+   no image, no library, nothing to load. */
+.flame { position: relative; display: inline-block; width: 13px; height: 16px; }
+.flame i {
+  position: absolute;
+  left: 50%; bottom: 0;
+  border-radius: 50% 50% 22% 50%;
+  transform: translateX(-50%) rotate(-45deg);
+  animation: flicker 0.9s ease-in-out infinite alternate;
+}
+.flame i:nth-child(1) { width: 13px; height: 13px; background: linear-gradient(to top right, #ff6a00, #ff9d2e); filter: drop-shadow(0 0 6px rgba(255, 122, 0, 0.55)); }
+.flame i:nth-child(2) { width: 9px;  height: 9px;  background: linear-gradient(to top right, #ff9d2e, #ffc857); animation-delay: 0.15s; }
+.flame i:nth-child(3) { width: 5px;  height: 5px;  background: #ffe9a8; animation-delay: 0.3s; }
+@keyframes flicker {
+  from { transform: translateX(-50%) rotate(-45deg) scale(0.92); opacity: 0.85; }
+  to   { transform: translateX(-50%) rotate(-45deg) scale(1.08); opacity: 1; }
+}
+
+/* Anyone who has asked their phone to calm down gets no motion at all. */
+@media (prefers-reduced-motion: reduce) {
+  .stage[data-phase="done"] .combo,
+  .stage[data-phase="done"] .stats,
+  .stage[data-phase="done"]::after,
+  .flame i,
+  .stat-num.is-pop { animation: none; }
+  .stage[data-phase="done"]::after { display: none; }
+}
 
 .about__version {
   margin-top: 4px;

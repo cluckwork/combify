@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-22 · **Current version:** v1.2.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-22 · **Current version:** v1.3.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -390,6 +390,13 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-22 — v1.3.0** — **First real combo from Bakr: the "10 combo"**
+  (1-2-3-2-1-1-2-slip-2-3-2-roll, named for its ten punches), added to advanced
+  and announced by name on screen via `COMBO_NAMES` in `js/combos.js` — add a
+  name there and the app calls it the way Bakr does. Finish screen now counts
+  the punch total up, lands with a pop, and shows a CSS flame on a streak of 2+.
+  Haptics on landing where supported (not iOS — no Vibration API there).
+- **2026-07-22 — v1.2.1** — Hold +/- to run values fast.
 - **2026-07-22 — v1.2.0** — Streaks and session logging (§6.4). Completed
   rounds, punches and time are stored per day in `localStorage`; ready screen
   shows the streak and lifetime totals, finish screen shows the session.

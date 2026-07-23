@@ -661,6 +661,127 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
+// ------------------------------------------- 29. Bakr's named "10 combo"
+{
+  section("29. Bakr's 10 combo");
+  const c = await import("../js/combos.js");
+  const ten = ["1", "2", "3", "2", "1", "1", "2", "slip", "2", "3", "2", "roll"];
+  const inAdvanced = c.COMBOS.advanced.some((x) => x.join("-") === ten.join("-"));
+  check("the 10 combo is in the advanced set", inAdvanced);
+  check("it is named", c.comboName(ten) === "The 10", String(c.comboName(ten)));
+  check("unnamed combos return null", c.comboName(["1", "2"]) === null, String(c.comboName(["1", "2"])));
+  // The name should match reality: ten punches, slip and roll excluded.
+  const punches = ten.filter((k) => /^[1-8]$/.test(k)).length;
+  check("it really does contain 10 punches", punches === 10, `${punches} punches`);
+  check("every move in it is a known move", ten.every((k) => !!c.MOVES[k]),
+    ten.filter((k) => !c.MOVES[k]).join(","));
+  check("it speaks as words", c.comboToSpeech(ten).startsWith("one, two, three"), c.comboToSpeech(ten));
+
+  // And it shows its name on screen when called.
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 200); app.set("restSec", 5);
+  app.setSeg("pace", "500"); app.setSeg("level", "advanced");
+  app.click("startBtn");
+  let sawName = false;
+  for (let t = 0; t < 120000 && !sawName; t += 100) {
+    await app.clock.advance(100);
+    if (app.doc.getElementById("comboName").textContent === "The 10") sawName = true;
+  }
+  check("name appears on screen when the combo comes up", sawName, "never displayed");
+  app.click("resetBtn");
+  await app.clock.advance(200);
+  check("name cleared when the session resets", app.doc.getElementById("comboName").textContent === "",
+    `"${app.doc.getElementById("comboName").textContent}"`);
+  app.restore();
+}
+
+// --------------------------------------------- 30. finish screen celebration
+{
+  section("30. Finish screen summary and streak flame");
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+  app.setSeg("pace", "1500"); app.setSeg("level", "beginner");
+  app.click("startBtn");
+  await app.clock.advance(30000);
+  check("session finished", app.phase() === "Done", app.phase());
+  const stats = app.doc.getElementById("stats");
+  // Without requestAnimationFrame the counts must land on their final values
+  // immediately, so the summary is never left showing zeros.
+  check("counts are final, not stuck at zero", !/\b0 punches\b/.test(stats.textContent), `"${stats.textContent}"`);
+  check("summary reads as expected", /1 round · \d+ punches · \d+:\d\d/.test(stats.textContent),
+    `"${stats.textContent}"`);
+  check("no flame on a 1-day streak", !stats.querySelector(".flame"), "flame present too early");
+  results.push(`     (day 1: "${stats.textContent}")`);
+  app.restore();
+
+  // Train again "tomorrow" → 2-day streak → flame appears.
+  const b = await boot({ duration: 0.6, startTime: 86400000 });
+  b.set("rounds", 1); b.set("workSec", 20); b.set("restSec", 5);
+  b.click("startBtn");
+  await b.clock.advance(30000);
+  const stats2 = b.doc.getElementById("stats");
+  check("2-day streak shown", /2 days in a row/.test(stats2.textContent), `"${stats2.textContent}"`);
+  check("flame appears on a real streak", !!stats2.querySelector(".flame"), "no flame");
+  check("flame is decorative only", stats2.querySelector(".flame")?.getAttribute("aria-hidden") === "true");
+  check("flame has its three layers", stats2.querySelectorAll(".flame i").length === 3,
+    String(stats2.querySelectorAll(".flame i").length));
+  results.push(`     (day 2: "${stats2.textContent}")`);
+  b.restore();
+  clearStore();
+}
+
+// ------------------------------- 31. the count-up itself (real animation path)
+{
+  section("31. Punch count animates, pops and buzzes");
+  clearStore();
+  // Real requestAnimationFrame here, so the actual animation runs.
+  const app = await boot({ duration: 0.6, animate: true });
+  app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+  app.setSeg("pace", "1500"); app.setSeg("level", "beginner");
+  app.click("startBtn");
+  await app.clock.advance(30000);
+  const punchNode = app.doc.querySelectorAll("#stats .stat-num")[1];
+  check("a punch counter exists", !!punchNode, "not found");
+  const midway = punchNode ? punchNode.textContent : "";
+  check("starts below the final total (it counts up)", midway !== "" && Number(midway.replace(/,/g, "")) >= 0);
+
+  // Let the real animation finish (1200ms + slack).
+  await app.realWait(1600);
+  const finalShown = Number(punchNode.textContent.replace(/,/g, ""));
+  const stored = JSON.parse(peekStore()["combify.history.v1"] || "{}");
+  check("lands exactly on the punches thrown", finalShown === stored.totals.punches,
+    `showed ${finalShown}, threw ${stored.totals?.punches}`);
+  check("counted up rather than jumping", midway !== String(finalShown) || finalShown === 0,
+    `was already ${midway} at the start`);
+  check("haptics fired while settling and on landing", app.vibrations.length >= 2,
+    `${app.vibrations.length} vibrations`);
+  const last = app.vibrations[app.vibrations.length - 1];
+  check("the landing buzz is a pattern, not a tick", Array.isArray(last.pattern),
+    JSON.stringify(last.pattern));
+  results.push(`     (${app.vibrations.length} buzzes, landed on ${finalShown} punches)`);
+  app.restore();
+  clearStore();
+}
+
+// ------------------------------------- 32. devices without the Vibration API
+{
+  section("32. No Vibration API (iOS Safari)");
+  clearStore();
+  const app = await boot({ duration: 0.6, animate: true, noVibrate: true });
+  app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(30000);
+  await app.realWait(1600);
+  const punchNode = app.doc.querySelectorAll("#stats .stat-num")[1];
+  const stored = JSON.parse(peekStore()["combify.history.v1"] || "{}");
+  check("count-up still completes without haptics",
+    Number(punchNode.textContent.replace(/,/g, "")) === stored.totals.punches,
+    `showed ${punchNode.textContent}, threw ${stored.totals?.punches}`);
+  app.restore();
+  clearStore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);

@@ -1,6 +1,6 @@
 // app.js — the brain of the trainer: settings controls, timer, bell, and voice.
 
-import { randomCombo, comboToText, comboToSpeech } from "./combos.js";
+import { randomCombo, comboToText, comboToSpeech, comboName } from "./combos.js";
 import { VERSION, RELEASED } from "./version.js";
 import { loadHistory, saveHistory, recordRound, currentStreak, trainedToday, formatDuration } from "./stats.js";
 
@@ -132,6 +132,7 @@ const el = {
   combo: document.getElementById("combo"), startBtn: document.getElementById("startBtn"),
   resetBtn: document.getElementById("resetBtn"), voiceOn: document.getElementById("voiceOn"),
   stats: document.getElementById("stats"),
+  comboName: document.getElementById("comboName"),
 };
 
 // Restore whatever this member last used, then start persisting changes.
@@ -607,6 +608,97 @@ function speakCombo(combo, onDone) {
 
 // ---------- Helpers ----------
 const format = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+// Motion is opt-out: anyone who has asked their phone to reduce motion gets the
+// final numbers immediately with no animation. Also skipped where there's no
+// requestAnimationFrame at all, which keeps the finish screen deterministic
+// under test.
+function motionOK() {
+  if (typeof requestAnimationFrame !== "function") return false;
+  try {
+    return !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  } catch (e) { return true; }
+}
+
+// A short buzz, where the device supports it. Silently does nothing on iOS
+// Safari, which has never implemented the Vibration API.
+function buzz(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+}
+
+// Tick a number up to its final value: winds up, races through the middle, then
+// slows into the total and lands with a pop. The slowing half ticks a small
+// haptic on each change — because the changes naturally thin out as it
+// decelerates, that reads as the count "settling" rather than a buzz.
+function countUp(node, to, { ms = 900, pop = false, haptics = false } = {}) {
+  if (!motionOK() || to <= 0) { node.textContent = to.toLocaleString(); return; }
+  const started = performance.now();
+  let shown = -1;
+  let lastBuzz = 0;
+  const step = (now) => {
+    const p = Math.min(1, (now - started) / ms);
+    // ease-in-out cubic: accelerate away from 0, decelerate into the total
+    const eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    const value = Math.round(to * eased);
+    if (value !== shown) {
+      shown = value;
+      node.textContent = value.toLocaleString();
+      // Only in the second half, and never faster than the skin can tell apart.
+      if (haptics && p > 0.55 && now - lastBuzz > 45) { buzz(7); lastBuzz = now; }
+    }
+    if (p < 1) { requestAnimationFrame(step); return; }
+    node.textContent = to.toLocaleString();
+    if (pop) {
+      node.classList.add("is-pop");
+      node.addEventListener("animationend", () => node.classList.remove("is-pop"), { once: true });
+    }
+    if (haptics) buzz([18, 45, 30]); // the landing: two beats, firmer than the ticks
+  };
+  requestAnimationFrame(step);
+}
+
+// The end-of-session summary: "2 rounds · 32 punches · 6:40 · 3 days in a row",
+// with the counts ticking up and a flame on a streak worth showing off.
+function buildFinishSummary(streak, streakBit) {
+  el.stats.textContent = "";
+  const frag = document.createDocumentFragment();
+  const sep = () => frag.appendChild(document.createTextNode(" · "));
+  const num = (value, label, opts) => {
+    const n = document.createElement("span");
+    n.className = "stat-num";
+    n.textContent = "0";
+    frag.appendChild(n);
+    frag.appendChild(document.createTextNode(` ${label}`));
+    countUp(n, value, opts);
+  };
+
+  // Rounds is a small number and settles quickly; the punch total is the one
+  // worth watching land, so it gets the longer run, the pop and the haptics.
+  num(session.rounds, session.rounds === 1 ? "round" : "rounds", { ms: 550 });
+  if (session.punches > 0) {
+    sep();
+    num(session.punches, "punches", { ms: 1200, pop: true, haptics: true });
+  }
+  sep();
+  frag.appendChild(document.createTextNode(formatDuration(session.seconds)));
+
+  if (streakBit) {
+    sep();
+    const wrap = document.createElement("span");
+    wrap.className = "streak";
+    // Fire only once a streak is genuinely a streak — one day isn't a run yet.
+    if (streak >= 2) {
+      const flame = document.createElement("span");
+      flame.className = "flame";
+      flame.setAttribute("aria-hidden", "true");
+      for (let i = 0; i < 3; i++) flame.appendChild(document.createElement("i"));
+      wrap.appendChild(flame);
+    }
+    wrap.appendChild(document.createTextNode(streakBit));
+    frag.appendChild(wrap);
+  }
+  el.stats.appendChild(frag);
+}
+
 // The strip under the combo. Kept OUT of the way mid-round — during work and
 // rest the screen should show the punches and nothing else — and used either
 // side of a session to show what was earned and why to come back.
@@ -620,13 +712,15 @@ function renderStats() {
   const streakBit = streak > 0 ? `${streak} day${streak === 1 ? "" : "s"} in a row` : null;
 
   if (state.phase === "done") {
-    const parts = [`${session.rounds} round${session.rounds === 1 ? "" : "s"}`];
-    if (session.punches > 0) parts.push(`${session.punches} punches`);
-    parts.push(formatDuration(session.seconds));
-    if (streakBit) parts.push(streakBit);
-    el.stats.textContent = parts.join(" · ");
+    // Built once per finish, not on every render, or the count-up would
+    // restart every time something else redraws.
+    if (el.stats.dataset.finished !== "1") {
+      buildFinishSummary(streak, streakBit);
+      el.stats.dataset.finished = "1";
+    }
     return;
   }
+  delete el.stats.dataset.finished;
   // Ready screen
   const bits = [];
   if (streakBit) bits.push(streakBit);
@@ -651,6 +745,7 @@ function nextCombo() {
   state.lastComboAt = Date.now(); // heartbeat, watched by tick() — see reviveComboLoop
   const combo = randomCombo(getLevel());
   session.pendingPunches += combo.filter(isPunch).length;
+  if (el.comboName) el.comboName.textContent = comboName(combo) || "";
   el.combo.textContent = comboToText(combo);
   speakCombo(combo, () => {
     if (!state.running || state.phase !== "work") return;
@@ -690,7 +785,7 @@ function beginPhase(seconds) {
   state.phaseEndsAt = Date.now() + seconds * 1000;
 }
 function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned10 = false; ringBell(1); render(); startComboLoop(); }
-function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
+function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
 function finish() {
   state.phase = "done"; state.running = false;
   stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3);
@@ -755,12 +850,13 @@ function start() {
   state.phase = "countdown"; beginPhase(3);
   resetSessionTally();
   el.combo.textContent = "Get ready...";
+  if (el.comboName) el.comboName.textContent = "";
   playTick(); render();
   state.tickTimer = setInterval(tick, 1000);
 }
 function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); }
 function resume() { state.running = true; el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); }
-function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; render(); }
+function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
 el.startBtn.addEventListener("click", () => {

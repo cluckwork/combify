@@ -138,6 +138,9 @@ export async function boot(cfg = {}) {
   const dom = new JSDOM(html, { url: "http://localhost/", pretendToBeVisual: false });
   const { window } = dom;
   const clock = new Clock();
+  // Lets a test boot "the next day" so streak logic can be exercised across
+  // real day boundaries rather than only within one.
+  if (cfg.startTime) clock.now = cfg.startTime;
   const { FakeAudio, stats } = makeAudioFactory(clock, cfg);
 
   // Element.prototype bits app.js touches that jsdom lacks
@@ -177,12 +180,35 @@ export async function boot(cfg = {}) {
   saved.dateNow = realNow;
   Date.now = () => clock.now; // app.js uses Date.now() for the stall heartbeat
 
+  // cfg.animate turns on a real requestAnimationFrame (driven by real time, not
+  // the virtual clock) plus a vibrate spy, so the count-up/pop/haptic path can
+  // be exercised. Off by default: everything else in the suite wants the
+  // deterministic no-motion path.
+  const vibrations = [];
+  if (cfg.animate) {
+    let rafId = 0;
+    const rafs = new Map();
+    g.requestAnimationFrame = (fn) => {
+      const id = ++rafId;
+      rafs.set(id, saved.setTimeout(() => { rafs.delete(id); fn(performance.now()); }, 16));
+      return id;
+    };
+    g.cancelAnimationFrame = (id) => { saved.clearTimeout(rafs.get(id)); rafs.delete(id); };
+  } else {
+    delete g.requestAnimationFrame;
+  }
+
   g.window = window;
   g.document = window.document;
   const storage = makeStorage(cfg.storage);
   g.localStorage = storage;
   Object.defineProperty(window, "localStorage", { value: storage, configurable: true });
-  const nav = { userAgent: "test", wakeLock };            // no serviceWorker key: app skips SW registration
+  const nav = {                                            // no serviceWorker key: app skips SW registration
+    userAgent: "test",
+    wakeLock,
+    vibrate: (pattern) => { vibrations.push({ t: Date.now(), pattern }); return true; },
+  };
+  if (cfg.noVibrate) delete nav.vibrate;                   // e.g. iOS Safari, which has no Vibration API
   if (cfg.noWakeLock === "unsupported") delete nav.wakeLock; // simulate Firefox / in-app WebView
   Object.defineProperty(g, "navigator", { value: nav, configurable: true, writable: true });
   g.Audio = FakeAudio;
@@ -224,13 +250,16 @@ export async function boot(cfg = {}) {
 
   const doc = window.document;
   const api = {
-    dom, window, doc, clock, stats, wakeLog, speechLog, cfg, synth,
+    dom, window, doc, clock, stats, wakeLog, speechLog, cfg, synth, vibrations,
     set(id, v) { doc.getElementById(id).dataset.value = String(v); },
     setSeg(id, v) { doc.getElementById(id).dataset.value = v; },
     click(id) { doc.getElementById(id).dispatchEvent(new window.MouseEvent("click", { bubbles: true })); },
     combo: () => doc.getElementById("combo").textContent,
     phase: () => doc.getElementById("phase").textContent,
     clockText: () => doc.getElementById("clock").textContent,
+    // Waits real wall-clock time, needed when a test drives requestAnimationFrame
+    // (which runs on real timers) rather than the virtual clock.
+    realWait: (ms) => new Promise((r) => saved.setTimeout(r, ms)),
     restore() { g.setTimeout = saved.setTimeout; g.setInterval = saved.setInterval; g.clearTimeout = saved.clearTimeout; g.clearInterval = saved.clearInterval; Date.now = saved.dateNow; },
   };
   return api;

@@ -48,6 +48,9 @@ export const COMBOS = {
     ["3", "4", "5", "6"],
   ],
   advanced: [
+    // Bakr's "10 combo" — the real thing, drilled often at the gym. Named
+    // for its ten punches (the slip and roll aren't punches).
+    ["1", "2", "3", "2", "1", "1", "2", "slip", "2", "3", "2", "roll"],
     ["1", "2", "slip", "2", "3", "4", "roll", "2"],
     ["1", "1", "2", "5", "4", "3", "2"],
     ["2", "3", "2", "roll", "3", "6", "pivot"],
@@ -73,6 +76,16 @@ export function randomCombo(level) {
   } while (pick === lastPicked);
   lastPicked = pick;
   return pick;
+}
+
+// Combos Bakr calls by name at the gym. Keyed by the move sequence, so a combo
+// only has to be listed once above — add a name here and the app announces it.
+// This is what makes it read as HIS gym's app rather than a generic timer.
+export const COMBO_NAMES = {
+  "1-2-3-2-1-1-2-slip-2-3-2-roll": "The 10",
+};
+export function comboName(combo) {
+  return COMBO_NAMES[combo.join("-")] || null;
 }
 
 // Turn a combo into the text shown on screen, e.g. "1 - 2 - slip - 2"
