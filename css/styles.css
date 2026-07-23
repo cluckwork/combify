@@ -219,9 +219,14 @@ body {
    stage. Rounded squares, not circles — they echo the card radius everywhere
    else, and a lone teal circle read as a record button. The text label is
    still in the DOM (font-size 0) for screen readers; the glyph is the icon. */
+/* Portrait: centred at the bottom, on the same vertical axis as the ring and
+   the combo, so the screen reads as one column top to bottom. Off in the
+   right corner they sat against nothing. Still side by side. */
 .app[data-focus="1"] .controls {
   position: fixed;
-  right: calc(14px + env(safe-area-inset-right, 0px));
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   z-index: 6;
   gap: 10px;
@@ -238,8 +243,10 @@ body {
   background-repeat: no-repeat;
   background-position: center;
   background-size: 20px 20px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* No backdrop-filter here. Blurring behind a position:fixed element left
+     ghost copies of both buttons painted at the top of the screen — visible in
+     a screenshot, and the DOM only ever held one pair at the bottom. Over a
+     near-black background the blur bought nothing anyway. */
 }
 .app[data-focus="1"] .btn--primary,
 .app[data-focus="1"] .btn--primary.is-running {
@@ -289,10 +296,15 @@ body {
   .app[data-focus="1"] .stage__main { max-width: none; }
   /* On a side: the controls stack on the right edge, centred where a thumb
      naturally rests, out of both columns' way thanks to the gutter above. */
+  /* On its side there is no room to spare at the bottom, so the pair becomes a
+     column on the right edge where a thumb already rests. `left: auto` matters:
+     without it the portrait `left: 50%` and this `right` would both apply and
+     stretch the row across the screen. */
   .app[data-focus="1"] .controls {
     flex-direction: column;
     top: 50%;
     bottom: auto;
+    left: auto;
     transform: translateY(-50%);
     right: calc(12px + env(safe-area-inset-right, 0px));
   }
@@ -724,3 +736,69 @@ label,
 .about__body { display: grid; gap: 12px; padding: 4px 18px 18px; }
 .about__body p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
 .about__body strong { color: var(--text); }
+
+/* ==========================================================================
+   The changelog page (changelog.html).
+   Its own page rather than a panel inside About: the list only grows, and the
+   app screen should stay short enough that Start is always the obvious thing
+   to press.
+   ========================================================================== */
+.app--doc { min-height: auto; padding-bottom: 48px; }
+.doc { display: grid; gap: 4px; }
+.doc__back {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+.doc__back:hover { color: var(--text); }
+.doc__title { margin: 8px 0 0; font-size: clamp(26px, 7vw, 38px); font-weight: 800; }
+.doc__lede { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.log__item {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.log__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.log__ver {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+/* The build you're actually running, so "am I up to date?" is answerable at a
+   glance — the reason the version is shown in About at all. */
+.log__ver.is-current { color: var(--accent); }
+.log__date { font-family: var(--font-mono); font-size: 11px; color: var(--muted); opacity: 0.7; }
+.log__badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.log__title { margin: 6px 0 0; font-size: 18px; font-weight: 700; }
+.log__notes { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.log__notes li { color: var(--muted); font-size: 14px; line-height: 1.55; }
+.log__kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.about__link { color: var(--accent); text-decoration: none; font-weight: 600; }
+.about__link:hover { text-decoration: underline; }

@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.7.1 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.8.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,20 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.8.0** — **A changelog anyone can read, and a versioning
+  rule.** Added `changelog.html`, its own page rather than a panel inside About
+  because the list only grows and the app screen should stay short enough that
+  Start is always the obvious thing to press. It's linked from About, opens
+  in-app (not a new tab, which from an installed Combify would throw you out to
+  the browser), works offline, and is written for Bakr: each release is labelled
+  **New** or **Fixes** and says what he'd notice, so he can point at a version
+  and ask for it back. Entries live in `js/changelog.js`; tests fail the build
+  if the newest entry doesn't match `VERSION`, so it can't rot. History now
+  reaches back past the version stamp — the first two days ship as **Early
+  build** entries rather than being given numbers that were never released.
+  Also: in portrait the Pause/Reset icons moved to the bottom centre, on the
+  same vertical axis as the ring and combo (landscape keeps its right-edge
+  column). §14 documents the notation and records the version audit.
 - **2026-07-23 — v1.7.1** — **Per-move callout highlight; countdown glides
   again; test suite ~6× faster.** The screen now tracks the voice: the single
   move being called turns BWB teal with a small lift, so you can glance down
@@ -521,3 +535,63 @@ Captured so they're not lost; not planned yet.
   settings; natural-voice selection; pace synced to voice; punches 7 & 8 +
   real difficulty scaling; collapsible "More options"; PWA + offline. Live
   preview published as a Claude Artifact. Not yet on GitHub.
+
+---
+
+## 14. Versioning — how the number is chosen
+
+**The notation.** A version is three numbers, `MAJOR.MINOR.PATCH` — so `1.8.0`
+is major 1, minor 8, patch 0. This is the industry-standard scheme (semantic
+versioning). You only ever *add one* to a single position, and everything to
+its right resets to zero:
+
+| Bump | From `1.7.1` you get | When |
+| --- | --- | --- |
+| **Patch** — add 1 to the last number | `1.7.2` | Fixes, refinements, tweaks to things that already exist. |
+| **Minor** — add 1 to the middle, reset the last to 0 | `1.8.0` | Something new you can *see and use*. |
+| **Major** — add 1 to the first, reset the rest to 0 | `2.0.0` | A reimagining, or a change that breaks how the app already worked. |
+
+Two habits worth keeping: it's `1.8.0`, never `1.8` (always three numbers), and
+the middle number is not a decimal — after `1.9.0` comes `1.10.0`, not `2.0.0`.
+"A 0.0.1 change" means a patch; "a 0.1 change" means a minor, written `0.1.0`.
+
+**The rule for this project.** Size the bump to the change, not to how many
+things shipped together:
+
+- **Minor** — something new you can see and use. Focus mode, the progress ring,
+  streaks, true fullscreen, the changelog page.
+- **Patch** — fixes, refinements and tweaks, however many land at once.
+- **Major** — not used yet. Combify has been `1.x` since the first working
+  build; `2.0.0` would mean something like the breakdown-animation rewrite
+  (§6.3), not another round of polish.
+
+Bumping also means moving `VERSION` in `js/version.js`, `CACHE` in `sw.js`, and
+`version` in `package.json` together (the suite fails the build if they
+disagree), plus adding an entry to `js/changelog.js` (also enforced).
+
+**The audit (2026-07-23).** Reviewing every release against that rule, two were
+numbered too generously and one too meanly:
+
+| Shipped as | Should have been | Why |
+| --- | --- | --- |
+| v1.1.0 | patch | Only showed the build number in About. |
+| v1.7.0 | patch | One tweak plus four bug fixes — no new capability. |
+| v1.7.1 | minor | The per-move callout highlight is a genuinely new, visible feature. |
+
+Every other release was sized correctly.
+
+**Why the numbers were NOT rewritten.** A version's job is to answer "which
+build is my phone running?", which only works if the number matches what was
+actually served at the time and never goes backwards. Renumbering would put the
+changelog at odds with the git history (commits name their versions) and would
+show a *lower* number on a phone that had already displayed a higher one — real
+cost, no functional gain. Instead the record is corrected where it's read:
+`js/changelog.js` labels each release **New** or **Fixes** by what it actually
+was, so `v1.7.0 · Fixes` tells the truth even though the digits don't. From
+v1.8.0 on, the digits and the label agree.
+
+**Before version numbers existed.** The first two days (2026-07-21 to 07-22)
+predate the version stamp — the real voice, the fixes from Bakr's testing,
+combo variety and settings persistence all shipped unnumbered. They're in the
+changelog as **Early build** entries with their dates rather than being given
+numbers that were never really released.

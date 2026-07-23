@@ -8,6 +8,13 @@ function check(name, cond, detail = "") {
   else { fail++; results.push(`  ❌ ${name}${detail ? "  → " + detail : ""}`); }
 }
 function section(t) { results.push(`\n── ${t} ──`); }
+// -1 / 0 / 1 for "a older / same / newer than b", comparing numerically so
+// 1.10.0 sorts above 1.9.0 rather than below it as strings would.
+function cmpVer(a, b) {
+  const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) { if (pa[i] !== pb[i]) return pa[i] > pb[i] ? 1 : -1; }
+  return 0;
+}
 
 // Count how many distinct combos got called during a window.
 async function countCombos(app, ms, step = 200) {
@@ -645,6 +652,26 @@ async function collectSpokenVsShown(app, ms) {
   const modules = fs.readdirSync(path.join(repo, "js")).filter((f) => f.endsWith(".js"));
   const missing = modules.filter((f) => !sw.includes(`./js/${f}`));
   check("every js module is precached for offline use", missing.length === 0, missing.join(", "));
+  // The changelog is only useful if it is actually kept up to date, and the
+  // one way it silently rots is shipping a version without adding an entry.
+  const { CHANGELOG } = await import("../js/changelog.js");
+  check("the changelog's newest entry matches the shipped version",
+    CHANGELOG[0].v === version, `newest entry v${CHANGELOG[0].v} vs VERSION ${version}`);
+  const complete = (e) => e.date && e.title && (e.size === "minor" || e.size === "patch") && e.notes?.length;
+  check("every changelog entry is complete",
+    CHANGELOG.every(complete),
+    CHANGELOG.filter((e) => !complete(e)).map((e) => e.v || e.date).join(", "));
+  // Entries predating the version system carry v: null; the numbered ones must
+  // still run strictly newest-first among themselves.
+  const numbered = CHANGELOG.filter((e) => e.v);
+  check("changelog versions run newest-first, no duplicates",
+    numbered.every((e, i) => i === 0 || cmpVer(numbered[i - 1].v, e.v) > 0),
+    numbered.map((e) => e.v).join(" > "));
+  check("the changelog reaches back to the first build",
+    numbered.some((e) => e.v === "1.0.0") && CHANGELOG.some((e) => e.v === null),
+    `${numbered.length} numbered, ${CHANGELOG.length - numbered.length} pre-version`);
+  // changelog.html is a real page users can land on; offline it must be there.
+  check("the changelog page is precached", sw.includes("./changelog.html"), "missing from sw.js");
   results.push(`     (showing "${shown}")`);
   app.restore();
 }

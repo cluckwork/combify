@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>What's new — Combify</title>
+  <meta name="description" content="Every update to Combify, by Boxing With Bakr." />
+
+  <!-- Same manifest and theme as the app: opened from an installed Combify this
+       is still the app, not a trip out to the browser. -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#010101" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app app--doc">
+    <header class="topbar">
+      <div class="brand">
+        <a class="brand__logo-link" href="https://boxingwithbakr.com/" target="_blank" rel="noopener noreferrer" aria-label="Boxing With Bakr — opens in a new tab">
+          <img class="brand__logo" src="icons/bwb-logo-white.png" alt="Boxing With Bakr" />
+        </a>
+        <span class="brand__name">Combify</span>
+      </div>
+      <!-- A normal in-app link, not a new tab: from an installed Combify a new
+           tab would throw you out into the browser. -->
+      <a class="doc__back" href="./index.html">&larr; Back</a>
+    </header>
+
+    <main class="doc">
+      <h1 class="doc__title">What's new</h1>
+      <p class="doc__lede">
+        Every update to Combify, newest first. If a change made something worse,
+        note the version next to it and say so &mdash; it can be put back.
+      </p>
+      <ol class="log" id="log"></ol>
+    </main>
+  </div>
+
+  <script type="module">
+    import { CHANGELOG } from "./js/changelog.js";
+    import { VERSION } from "./js/version.js";
+
+    const log = document.getElementById("log");
+    const make = (tag, cls, text) => {
+      const el = document.createElement(tag);
+      if (cls) el.className = cls;
+      if (text != null) el.textContent = text;
+      return el;
+    };
+
+    for (const rel of CHANGELOG) {
+      const li = make("li", "log__item");
+
+      const head = make("div", "log__head");
+      // The first couple of days predate version numbers; they still count as
+      // changes, so they're listed with their date and marked as early work
+      // rather than given a number that was never really shipped.
+      const ver = make("span", "log__ver", rel.v ? "v" + rel.v : "Early build");
+      if (rel.v === VERSION) ver.classList.add("is-current");
+      head.appendChild(ver);
+      head.appendChild(make("span", "log__date", rel.date));
+      // Plain words, not "minor/patch" — this page is meant to be readable by
+      // Bakr, who should be able to tell a new feature from a fix at a glance.
+      head.appendChild(make("span", "log__kind", rel.size === "minor" ? "New" : "Fixes"));
+      if (rel.v === VERSION) head.appendChild(make("span", "log__badge", "You're on this"));
+      li.appendChild(head);
+
+      li.appendChild(make("h2", "log__title", rel.title));
+
+      const ul = make("ul", "log__notes");
+      for (const n of rel.notes) ul.appendChild(make("li", null, n));
+      li.appendChild(ul);
+
+      log.appendChild(li);
+    }
+  </script>
+</body>
+</html>
