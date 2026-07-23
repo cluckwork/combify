@@ -12,7 +12,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <!-- PNG, not SVG: iOS only accepts PNG here, and pointing this at the SVG
+       meant Add to Home Screen produced a washed-out page screenshot instead
+       of the logo. -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 
   <link rel="stylesheet" href="css/styles.css" />
 </head>
@@ -126,6 +129,21 @@
           </div>
         </div>
       </details>
+    </section>
+
+    <!-- Install nudge. Hidden by default; js/app.js reveals ONE of the two
+         bodies — the real one-tap install where the browser offers it
+         (beforeinstallprompt), or the Share → Add to Home Screen hint on iOS.
+         Never shown once installed, and stays away once dismissed. -->
+    <section class="install" id="installNudge" hidden>
+      <div class="install__body">
+        <p class="install__title">Put Combify on your home screen</p>
+        <p class="install__sub" id="installSub">Opens fullscreen like a real app, works offline.</p>
+      </div>
+      <div class="install__actions">
+        <button class="btn btn--primary install__btn" id="installBtn" hidden>Install</button>
+        <button class="install__dismiss" id="installDismiss" aria-label="Dismiss">&times;</button>
+      </div>
     </section>
 
     <details class="about">

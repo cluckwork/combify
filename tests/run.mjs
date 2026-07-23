@@ -404,6 +404,53 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// ------------------------------------------------------ 10j. install nudge
+{
+  section("10j. Install nudge shows the right thing to the right browser");
+  // Chrome path: browser says the app is installable -> one-tap Install.
+  const app = await boot({ duration: 0.6 });
+  const nudge = () => app.doc.getElementById("installNudge");
+  check("hidden until a browser offers something", nudge().hidden === true, "visible at boot");
+  let prompted = 0;
+  const ev = new app.window.Event("beforeinstallprompt");
+  ev.prompt = () => { prompted++; };
+  ev.userChoice = Promise.resolve({ outcome: "accepted" });
+  app.window.dispatchEvent(ev);
+  check("nudge appears when the browser offers install", nudge().hidden === false, "still hidden");
+  check("with a real Install button", app.doc.getElementById("installBtn").hidden === false, "button hidden");
+  app.click("installBtn");
+  await app.clock.advance(50);
+  await Promise.resolve(); await Promise.resolve();
+  check("tapping Install calls the browser prompt", prompted === 1, `prompted ${prompted}`);
+  check("accepting hides the nudge", nudge().hidden === true, "still visible");
+  app.restore();
+
+  // Dismissal is remembered across visits.
+  const app2 = await boot({ duration: 0.6 });
+  const ev2 = new app2.window.Event("beforeinstallprompt");
+  ev2.prompt = () => {};
+  ev2.userChoice = new Promise(() => {});
+  app2.window.dispatchEvent(ev2);
+  check("nudge shows again on a later visit", app2.doc.getElementById("installNudge").hidden === false, "hidden");
+  app2.click("installDismiss");
+  check("dismiss hides it", app2.doc.getElementById("installNudge").hidden === true, "still visible");
+  app2.restore();
+  const app3 = await boot({ duration: 0.6 });
+  const ev3 = new app3.window.Event("beforeinstallprompt");
+  ev3.prompt = () => {};
+  ev3.userChoice = new Promise(() => {});
+  app3.window.dispatchEvent(ev3);
+  check("dismissal is remembered across visits", app3.doc.getElementById("installNudge").hidden === true, "shown again");
+  app3.restore();
+  clearStore();
+
+  // A session must fold the nudge away with the rest of the chrome (CSS is
+  // asserted in the layout suite; here just confirm the row's still in flow).
+  const app4 = await boot({ duration: 0.6 });
+  check("nudge element exists for the layout to manage", !!app4.doc.querySelector(".install"), "missing");
+  app4.restore();
+}
+
 // ------------------------------------------------------ 11. element count sanity
 {
   section("11. Audio element count (iOS decoder pressure)");

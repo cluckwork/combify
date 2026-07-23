@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.9.0",
+    date: "2026-07-23",
+    size: "minor",
+    title: "Make it an app",
+    notes: [
+      "Combify can now be put on your home screen properly: a real BWB logo icon, and it opens fullscreen with no browser bar at all — including on iPhone.",
+      "The app offers this once: one tap on Android, and on iPhone it shows where Apple hid the option (Share → Add to Home Screen). Dismiss it and it won't ask again.",
+      "Nothing changes if you'd rather keep using the link — it works the same as always.",
+    ],
+  },
+  {
     v: "1.8.3",
     date: "2026-07-23",
     size: "patch",

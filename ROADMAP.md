@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.8.3 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.9.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,19 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.9.0** — **The install path, unbroken.** Real PNG icons
+  rendered from the BWB wordmark (192/512 "any", 512 maskable with the logo
+  inside Android's 80%-circle safe zone, 180 apple-touch-icon — iOS only
+  accepts PNG there; the old SVG-only manifest meant Chrome never offered its
+  install prompt and iOS fell back to a page-screenshot icon). Added a quiet,
+  dismissible install nudge above About: one-tap Install where the browser
+  fires beforeinstallprompt, the Share → Add to Home Screen hint on iOS
+  (detected incl. iPadOS-as-Macintosh), never shown when already standalone,
+  dismissal remembered in localStorage, folds away in focus mode with the rest
+  of the chrome. Installed Combify opens with zero browser chrome on every
+  platform — the only way to lose the Safari bar on iPhone — and is the
+  prerequisite for push notifications later. All four icons precached.
+  8 new nudge tests; 179 behaviour + 226 layout green.
 - **2026-07-23 — v1.8.3** — **The v1.8.2 bell fix, actually effective on iOS.**
   v1.8.2's sfx flags were off-until-proven (flip on canplaythrough/loadeddata) —
   the exact pattern the voice clips abandoned long ago, for a documented

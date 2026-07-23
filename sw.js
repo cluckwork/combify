@@ -5,7 +5,7 @@
 // version makes old installs throw away whatever they were holding instead of
 // serving a stale app. A service worker can't import ES modules, hence the
 // duplicated literal.
-const CACHE = "combify-v1.8.3";
+const CACHE = "combify-v1.9.0";
 const ASSETS = [
   "./",
   "./index.html",
@@ -19,6 +19,10 @@ const ASSETS = [
   "./manifest.json",
   "./icons/icon.svg",
   "./icons/bwb-logo-white.png",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/icon-512-maskable.png",
+  "./icons/apple-touch-icon.png",
   // Every sound the app can make. These were missing entirely, which meant an
   // installed app opened offline had NO voice and NO bell — the timer ran in
   // total silence. Tests now fail if a file in audio/ isn't listed here.

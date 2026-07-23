@@ -135,6 +135,10 @@ const el = {
   comboName: document.getElementById("comboName"),
   app: document.querySelector(".app"),
   dialFill: document.getElementById("dialFill"),
+  installNudge: document.getElementById("installNudge"),
+  installBtn: document.getElementById("installBtn"),
+  installSub: document.getElementById("installSub"),
+  installDismiss: document.getElementById("installDismiss"),
 };
 
 // Restore whatever this member last used, then start persisting changes.
@@ -1150,3 +1154,69 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
+
+// ---------- Install nudge ----------
+// Installing is the upgrade path, not the front door: the link keeps working
+// for everyone forever, but installed Combify opens fullscreen with no browser
+// chrome (the ONLY way to lose the bar on iPhone) and is the prerequisite for
+// push later. Most people have never noticed "Add to Home Screen" exists, so
+// the app offers it once — quietly, dismissible, never while installed.
+const INSTALL_DISMISSED_KEY = "combify.installDismissed";
+function isStandalone() {
+  try {
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+      || window.navigator.standalone === true; // old-iOS spelling
+  } catch (e) { return false; }
+}
+function installDismissed() {
+  try { return localStorage.getItem(INSTALL_DISMISSED_KEY) === "1"; } catch (e) { return false; }
+}
+let deferredInstall = null;
+function showInstallNudge(mode) {
+  if (!el.installNudge || isStandalone() || installDismissed()) return;
+  if (mode === "prompt") {
+    el.installBtn.hidden = false;
+    el.installSub.textContent = "Opens fullscreen like a real app, works offline.";
+  } else {
+    // iOS has no install prompt API; the honest path is telling people where
+    // Apple hid it.
+    el.installBtn.hidden = true;
+    el.installSub.textContent = "Tap Share, then “Add to Home Screen”. Opens fullscreen, works offline.";
+  }
+  el.installNudge.hidden = false;
+}
+function hideInstallNudge() { if (el.installNudge) el.installNudge.hidden = true; }
+
+// Chrome/Edge/Android fire this when the app qualifies for install. Stash the
+// event; calling prompt() later must happen inside our button's tap.
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  showInstallNudge("prompt");
+});
+if (el.installBtn) {
+  el.installBtn.addEventListener("click", async () => {
+    if (!deferredInstall) return;
+    const ev = deferredInstall;
+    deferredInstall = null;
+    try {
+      ev.prompt();
+      const choice = await ev.userChoice;
+      if (choice && choice.outcome === "accepted") hideInstallNudge();
+    } catch (e) {}
+  });
+}
+if (el.installDismiss) {
+  el.installDismiss.addEventListener("click", () => {
+    try { localStorage.setItem(INSTALL_DISMISSED_KEY, "1"); } catch (e) {}
+    hideInstallNudge();
+  });
+}
+window.addEventListener("appinstalled", () => { hideInstallNudge(); });
+// iOS never fires beforeinstallprompt, so detect it directly. iPadOS 13+
+// reports itself as "Macintosh" but has touch — hence the maxTouchPoints test.
+(function iosInstallHint() {
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  if (isIOS) showInstallNudge("hint");
+})();
