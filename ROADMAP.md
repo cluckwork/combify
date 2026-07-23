@@ -281,20 +281,16 @@ Directly serves the business goal.
 
 ---
 
-## 7. Deployment 🟡 · M1
+## 7. Deployment ✅ · M1
 
-- **Goal:** a free public URL (e.g. `username.github.io/combify`) to text to Bakr
-  and install on a phone.
-- **Tasks:**
-  - [ ] 🚧 Get code onto the founder's **GitHub**. Blocker: `gh` CLI isn't logged
-        in and this environment may block outbound network to GitHub.
-        - Next step: test whether GitHub is reachable from here. If yes →
-          `gh auth login` → push. If no → hand over the exact git commands to run
-          on the founder's own laptop.
-  - [ ] Enable **GitHub Pages** on the repo (serves the static site free).
+- **Goal:** a free public URL to text to Bakr and install on a phone. **Done —
+  live on GitHub Pages** (repo: `github.com/cluckwork/combify`), and pushing to
+  `main` is how a new build ships. Remember to bump `js/version.js` (+ sw cache
+  + package.json) so installed phones pick it up.
+- **Remaining:**
   - [ ] Verify PWA install + offline work from the live URL on a real phone.
-  - [ ] Put the real combos in before wide sharing.
-- **Effort:** **S** once the network/auth blocker is cleared.
+  - [ ] Put the rest of Bakr's real combos in before wide sharing (the "10
+        combo" is in; the other levels are still placeholders).
 
 ---
 
