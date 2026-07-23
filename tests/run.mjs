@@ -467,11 +467,22 @@ async function collectSpokenVsShown(app, ms) {
   app.set("rounds", 1); app.set("workSec", 90); app.set("restSec", 5);
   app.setSeg("pace", "1500"); app.setSeg("level", "intermediate");
   app.click("startBtn");
+  const before = app.stats.audible.length;
   const rows = await collectSpokenVsShown(app, 45000);
   const bad = rows.filter((r) => r.expected.join(",") !== r.heard.join(","));
   check("normal playback speaks every word, in order",
     rows.length >= 4 && bad.length === 0,
     bad.length ? `e.g. shown ${bad[0].expected.join("-")} but heard ${bad[0].heard.join("-") || "(nothing)"}` : `only ${rows.length} combos`);
+  // Guards the opposite failure: an over-eager retry speaking words twice,
+  // which is heard as clips cutting each other off and ragged timing.
+  const wordsShown = rows.reduce((n, r) => n + r.expected.length, 0);
+  const wordsHeard = app.stats.audible.length - before;
+  check("no word is spoken twice (no spurious retries)",
+    wordsHeard <= wordsShown + rows.length + 2,
+    `${wordsShown} words shown but ${wordsHeard} clips played`);
+  results.push(`     (${wordsShown} words shown, ${wordsHeard} clips played)`);
+  check("only one clip ever sounds at a time", app.stats.maxVoiceConcurrent <= 1,
+    `max ${app.stats.maxVoiceConcurrent} at once`);
   app.restore();
 }
 {

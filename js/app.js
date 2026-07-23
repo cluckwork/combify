@@ -440,6 +440,12 @@ function playClips(keys, onDone) {
   const playWord = (key, attempt) => {
     const node = getPooledClip(key); // round-robin: a retry lands on a different element
     if (!node) { playNext(); return; }
+    // Never let two clips sound at once. Without this a retry (or a late
+    // event) could start the next word on top of one still playing, which is
+    // heard as words cutting each other off and the cadence going ragged.
+    if (voice.current && voice.current !== node) {
+      try { voice.current.pause(); } catch (e) {}
+    }
     // Clear handlers from this element's previous use so a late event from an
     // earlier combo can't advance the current one.
     node.onended = null;
@@ -465,15 +471,17 @@ function playClips(keys, onDone) {
       setTimeout(playNext, getWordGap());
     };
     const finished = once(() => {
-      // Did it actually play, or just claim to? Anything far shorter than the
-      // clip's own length never reached the speaker.
-      const durMs = node.duration && isFinite(node.duration) && node.duration > 0 ? node.duration * 1000 : 0;
+      // Did it actually play, or just claim to? Deliberately a small ABSOLUTE
+      // threshold rather than a fraction of the clip's length: the shortest
+      // clip in audio/ is ~390ms, while a clip that never reached the speaker
+      // reports back in a handful of milliseconds. Judging this as a fraction
+      // of duration was too eager — it retried words that had played fine,
+      // so they were spoken twice and the cadence went out.
       const elapsed = Date.now() - startedAt;
-      const tooFastToBeReal = durMs ? elapsed < durMs * 0.4 : elapsed < 100;
-      if (tooFastToBeReal) { retryOr(afterWord); return; }
+      if (elapsed < 120) { try { node.pause(); } catch (e) {} retryOr(afterWord); return; }
       afterWord();
     });
-    const skip = once(() => retryOr(playNext));
+    const skip = once(() => { try { node.pause(); } catch (e) {} retryOr(playNext); });
 
     node.onended = finished;
     node.onerror = skip;
