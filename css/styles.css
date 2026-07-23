@@ -124,7 +124,9 @@ body {
   stroke: var(--accent);
   stroke-width: 3;
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.45s linear, stroke 0.3s ease;
+  /* No transition on the dashoffset: the sweep is driven per-frame from JS
+     (dialLoop), and an eased transition on top of that only adds lag. */
+  transition: stroke 0.3s ease;
 }
 .stage[data-phase="rest"] .dial__fill { stroke: var(--rest); }
 .stage[data-phase="ready"] .dial__fill,
@@ -215,7 +217,12 @@ body {
 @media (orientation: landscape) and (max-height: 520px) {
   .app { padding: 8px 16px 14px; gap: 8px; }
   .stage { padding: 10px 16px; }
-  .dial { width: min(24vh, 110px); }
+  /* No ring off-session here: it would have to shrink to ~100px while the
+     clock stays 32px, so the time burst out of the circle and read as a
+     rendering glitch. Mid-round (focus) keeps its own, larger dial. */
+  .app:not([data-focus="1"]) .dial { width: auto; aspect-ratio: auto; }
+  .app:not([data-focus="1"]) .dial__ring { display: none; }
+  .app:not([data-focus="1"]) .dial__center { max-width: none; }
   .phase { font-size: 11px; }
   .clock { font-size: 32px; margin: 0; }
   .round { font-size: 11px; }
@@ -250,7 +257,9 @@ body {
 .stage[data-phase="rest"] .phase { color: var(--rest); }
 
 .clock {
-  font-size: 68px;
+  /* Sized with the dial (min(62vw, 240px)): at 68px fixed, the digits poked
+     out of the ring on a 320px phone. 16vw tracks the ring's 62vw. */
+  font-size: min(16vw, 64px);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;

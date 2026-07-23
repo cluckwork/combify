@@ -760,19 +760,42 @@ function render() {
   el.round.textContent = state.phase === "countdown" ? `Round 1 / ${getRounds()}` : `Round ${state.currentRound} / ${getRounds()}`;
   renderProgress();
   renderStats();
+  startDialLoop();
 }
 
 // The ring empties as the phase runs down. r=54 in the SVG's own units, so the
 // circumference is 2*pi*54; we draw that much dash and push the offset toward a
 // full circle as time runs out.
 const DIAL_CIRCUMFERENCE = 2 * Math.PI * 54;
+// Fraction of the phase remaining, from the same real-time deadline tick()
+// uses — so the ring can never disagree with the clock. While running it is
+// fractional (that's what makes the sweep smooth); paused it holds on the
+// frozen whole-second value, which is also where resume() restarts the clock.
+function phaseFractionLeft() {
+  const total = state.phase === "work" ? getWork() : state.phase === "rest" ? getRest() : state.phase === "countdown" ? 3 : 0;
+  if (!(total > 0)) return 0;
+  const left = state.running ? (state.phaseEndsAt - Date.now()) / 1000 / total : state.secondsLeft / total;
+  return Math.max(0, Math.min(1, left));
+}
 function renderProgress() {
   if (!el.dialFill) return;
-  const total = state.phase === "work" ? getWork() : state.phase === "rest" ? getRest() : state.phase === "countdown" ? 3 : 0;
-  const running = total > 0 && (state.phase === "work" || state.phase === "rest" || state.phase === "countdown");
-  const left = running ? Math.max(0, Math.min(1, state.secondsLeft / total)) : 0;
   el.dialFill.style.strokeDasharray = String(DIAL_CIRCUMFERENCE);
-  el.dialFill.style.strokeDashoffset = String(DIAL_CIRCUMFERENCE * (1 - left));
+  el.dialFill.style.strokeDashoffset = String(DIAL_CIRCUMFERENCE * (1 - phaseFractionLeft()));
+}
+// Redraw the ring every frame while a session runs, so it drains seamlessly
+// instead of ticking down in one-second steps. Self-terminating: pause, reset
+// and done all clear state.running, and the next frame simply doesn't
+// reschedule. Reduced-motion users (and jsdom, which has no rAF) keep the
+// per-second updates from render().
+let dialRaf = 0;
+function dialLoop() {
+  dialRaf = 0;
+  if (!state.running) return;
+  renderProgress();
+  dialRaf = requestAnimationFrame(dialLoop);
+}
+function startDialLoop() {
+  if (!dialRaf && state.running && motionOK()) dialRaf = requestAnimationFrame(dialLoop);
 }
 
 // Render a combo as separate move tokens rather than one string. Each token

@@ -95,6 +95,7 @@ const probe = () => {
     comboScrollW: q("#combo").scrollWidth, comboClientW: q("#combo").clientWidth,
     clockScrollW: q("#clock").scrollWidth, clockClientW: q("#clock").clientWidth,
     dial: box(".dial"), meta: box(".stage__meta"),
+    ringVisible: (() => { const e = q(".dial__ring"); if (!e) return false; const r = e.getBoundingClientRect(); return getComputedStyle(e).display !== "none" && r.width > 0; })(),
     clockTextW: (() => { const r = document.createRange(); r.selectNodeContents(q("#clock")); return r.getBoundingClientRect().width; })(),
     stageScrollH: q("#stage").scrollHeight, stageClientH: q("#stage").clientHeight,
     settingsVisible: vis("#settings"), topbarVisible: vis(".topbar"),
@@ -136,6 +137,11 @@ for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(O
   check("no horizontal scrolling on the ready screen", m.docScrollW <= m.docClientW + 1, `${m.docScrollW} > ${m.docClientW}`);
   check("settings visible before starting", m.settingsVisible);
   check("Start button on screen", m.controls && m.controls.bottom <= m.vh + 1, `controls bottom ${m.controls?.bottom} vs ${m.vh}`);
+  // The ring is decorative — but if it renders, the time must genuinely sit
+  // inside it. Short-landscape once shipped a ~100px ring with the clock
+  // bursting out of it, and every box-based check called that fine.
+  check("ready: time inside the ring, or ring hidden", !m.ringVisible || m.clockTextW <= m.dial.w * 0.86,
+    `clock text ${Math.round(m.clockTextW)} vs ring ${Math.round(m.dial?.w)}`);
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-ready.png`) });
 
   // ---- Mid-round (focus mode) ----
@@ -210,6 +216,8 @@ for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(O
   check("punch total is large and readable", m.heroFont >= (dev.height < 500 ? 34 : 42), `${m.heroFont}px`);
   check("no horizontal scroll on the finish screen", m.docScrollW <= m.docClientW + 1, `${m.docScrollW} > ${m.docClientW}`);
   check("nothing overlaps on the finish screen", m.overlaps.length === 0, m.overlaps.join(", "));
+  check("finish: time inside the ring, or ring hidden", !m.ringVisible || m.clockTextW <= m.dial.w * 0.86,
+    `clock text ${Math.round(m.clockTextW)} vs ring ${Math.round(m.dial?.w)}`);
   lines.push(`       (finish punch total ${Math.round(m.heroFont)}px)`);
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-finish.png`) });
 
@@ -233,6 +241,19 @@ if (!ONLY || "rotating mid-session".includes(ONLY.toLowerCase())) {
 
   const clockBefore = await page.textContent("#clock");
   const comboBefore = await page.textContent("#combo");
+
+  // The ring must drain continuously, not in one-second steps. This runs here
+  // because the 30s work phase guarantees no phase boundary interrupts the
+  // sampling window. Three samples 300ms apart can straddle at most one second
+  // boundary, so per-second stepping yields at most two distinct values —
+  // smooth drain yields three.
+  const offsets = [];
+  for (let i = 0; i < 3; i++) {
+    offsets.push(await page.evaluate(() => parseFloat(document.getElementById("dialFill").style.strokeDashoffset)));
+    if (i < 2) await page.waitForTimeout(300);
+  }
+  check("ring drains smoothly between second ticks", new Set(offsets).size === 3,
+    `offsets ${offsets.map((o) => Math.round(o * 10) / 10).join(", ")}`);
 
   for (const [w, h, label] of [[844, 390, "→ landscape"], [390, 844, "→ back to portrait"], [844, 390, "→ landscape again"]]) {
     await page.setViewportSize({ width: w, height: h });

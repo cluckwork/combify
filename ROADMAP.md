@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-22 · **Current version:** v1.5.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-22 · **Current version:** v1.5.1 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,17 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-22 — v1.5.1** — **Smooth ring drain + landscape ready/finish fix.**
+  The progress ring now drains continuously (redrawn every frame from the same
+  real-time deadline the timer uses) instead of stepping once a second;
+  reduced-motion users keep the per-second steps. Fixed the off-session
+  landscape ready/finish screens, where a ~100px ring sat behind a 32px clock
+  and the digits burst out of the circle — the ring is now dropped there (it
+  was near-invisible anyway) and the text stands alone. The base clock is
+  sized with the ring (`min(16vw, 64px)`), which also stops digits poking out
+  of the ring on a 320px phone. New layout checks: time-inside-ring on the
+  ready and finish screens, and a three-sample probe proving the ring moves
+  between second ticks.
 - **2026-07-22 — v1.5.0** — **Visual pass, driven by actually looking at
   screenshots.** Added a progress ring around the clock (the screen had no
   centre of gravity — text floating in an empty box). Combo now renders as
