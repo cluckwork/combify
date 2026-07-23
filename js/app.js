@@ -161,16 +161,21 @@ function getAudioCtx() {
 // fall back to a synthesized tone if it's missing so the timer never breaks.
 const SFX_DIR = "audio/sfx/";
 const sfxCache = {};
-// Assume the sample exists (it's committed to the repo) and only fall back
-// on an actual load error — mobile Safari often never fires "canplaythrough"
-// for preloaded audio (it defers full buffering on cellular/Low Power Mode),
-// so waiting for that event to flip this on left phones stuck on the
-// synth fallback detection forever.
-const sfx = { useSamples: true };
+// NOTE the deliberate asymmetry with the voice clips below: those default to ON
+// because the files ARE in the repo and the fallback (robotic TTS) is bad. The
+// bell sample is the opposite — there is no audio/sfx/bell.mp3 (the synth FM
+// bell replaced it), and the fallback is the sound we actually want. So this
+// stays OFF until a real sample proves it loaded. Defaulting it ON meant the
+// app tried to play a missing file and rang nothing at all, because a browser
+// that defers loading never fires the error event that would flip it back.
+const sfx = { useSamples: false };
 function preloadSfx() {
   const a = new Audio(SFX_DIR + "bell.mp3");
   a.preload = "auto";
   sfxCache.bell = a;
+  const enable = () => { sfx.useSamples = true; };
+  a.addEventListener("canplaythrough", enable, { once: true });
+  a.addEventListener("loadeddata", enable, { once: true }); // whichever lands first
   a.addEventListener("error", () => { sfx.useSamples = false; }, { once: true });
 }
 preloadSfx();
@@ -247,10 +252,12 @@ function ringBell(times = 1) {
   for (let i = 0; i < times; i++) {
     setTimeout(() => {
       const node = getPooledBell();
-      if (!node) return;
+      // Any failure here still rings the synth: a round must never start or end
+      // in silence just because a sample went missing.
+      if (!node) { synthBell(1); return; }
       node.currentTime = 0;
       const p = node.play();
-      if (p && p.catch) p.catch(() => {});
+      if (p && p.catch) p.catch(() => { sfx.useSamples = false; synthBell(1); });
     }, i * gap);
   }
 }
@@ -369,10 +376,14 @@ function unlockAudioForMobile() {
     pool.forEach(primeElement);
     clipPool[key] = pool;
   });
-  for (let i = 0; i < UNLOCK_POOL_SIZE; i++) {
-    const a = new Audio(SFX_DIR + "bell.mp3");
-    primeElement(a);
-    bellPool.push(a);
+  // Only worth priming if a real sample actually loaded; the synth bell needs
+  // no unlocking (it goes through the AudioContext resumed in this same tap).
+  if (sfx.useSamples) {
+    for (let i = 0; i < UNLOCK_POOL_SIZE; i++) {
+      const a = new Audio(SFX_DIR + "bell.mp3");
+      primeElement(a);
+      bellPool.push(a);
+    }
   }
 }
 

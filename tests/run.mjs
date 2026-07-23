@@ -359,6 +359,52 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// ---------------------------------------------------------------- 19. the bell
+{
+  section("19. Bell must ring even though audio/sfx/bell.mp3 doesn't exist");
+  // The sample was deleted deliberately (the synth FM bell replaced it). The
+  // app must therefore ring the SYNTH, not try to play a missing file.
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+  app.click("startBtn");
+  const beforeRound = app.synth.oscStarted;
+  await app.clock.advance(4000);          // countdown ends → round 1 bell
+  const afterBell = app.synth.oscStarted;
+  check("something audible fires at round start", afterBell > beforeRound,
+    `oscillators started: ${beforeRound} → ${afterBell}`);
+  await app.clock.advance(25000);         // work ends → session-over bell (3 strikes)
+  check("session-end bell rings too", app.synth.oscStarted > afterBell + 2,
+    `${afterBell} → ${app.synth.oscStarted}`);
+  check("no attempt to play the missing sample",
+    !Object.keys(app.stats.byKey).includes("bell"),
+    `tried to play: ${JSON.stringify(app.stats.byKey)}`);
+  app.restore();
+}
+
+// ------------------------------- 20. mobile defers loading — no load events fire
+{
+  section("20. Mobile defers loading (no canplaythrough / no error ever)");
+  // This is the exact condition that silenced the bell: the browser fires no
+  // load events at all, so any flag that flips on an error never flips.
+  const app = await boot({ duration: 0.6, deferMetadata: true });
+  app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+  app.setSeg("pace", "1500");
+  app.click("startBtn");
+  const before = app.synth.oscStarted;
+  await app.clock.advance(4000);
+  check("bell still rings with zero load events", app.synth.oscStarted > before,
+    `oscillators: ${before} → ${app.synth.oscStarted}`);
+  const { n } = await countCombos(app, 15000);
+  check("combos still called with zero load events", n >= 2, `${n} combos`);
+  // The real guard on the bug: the app must not reach for a file that isn't
+  // there in the first place. Relying on play() to reject is a safety net, not
+  // a plan — a browser that stalls instead of rejecting rings nothing.
+  check("never tries to play a file that doesn't exist",
+    app.stats.missingPlayAttempts.length === 0,
+    `${app.stats.missingPlayAttempts.length} attempts, e.g. ${app.stats.missingPlayAttempts[0]?.src}`);
+  app.restore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);

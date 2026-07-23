@@ -41,14 +41,26 @@ export class Clock {
 
 // ---------- Fake audio ----------
 export function makeAudioFactory(clock, cfg) {
-  const stats = { created: 0, plays: 0, byKey: {}, live: [], maxConcurrent: 0, playing: 0, voicePlaying: 0, maxVoiceConcurrent: 0, overlapEvents: [] };
+  const stats = { created: 0, plays: 0, byKey: {}, live: [], maxConcurrent: 0, playing: 0, voicePlaying: 0, maxVoiceConcurrent: 0, overlapEvents: [], missingPlayAttempts: [] };
   class FakeAudio {
     constructor(src = "") {
       this.src = src; this.preload = ""; this.muted = false; this.paused = true;
       this.currentTime = 0; this.duration = cfg.duration ?? 0.6;
       this._l = {}; this.onended = null; this.onerror = null;
       this._endTimer = null;
+      // Faithful to the real repo: a file that isn't on disk behaves like a
+      // 404 (never loads, play() rejects). This is what catches "the code
+      // points at an audio file that doesn't exist".
+      this.exists = fs.existsSync(path.join(REPO, src.replace(/^\.?\//, "")));
       stats.created++; stats.live.push(this);
+      // deferMetadata simulates mobile Safari refusing to load anything until
+      // a play attempt — so NO load events fire at all, success or failure.
+      if (!cfg.deferMetadata) {
+        clock.setTimeout(() => {
+          if (this.exists) { this._emit("loadeddata"); this._emit("canplaythrough"); }
+          else this._emit("error");
+        }, 5);
+      }
     }
     get key() { const m = /([^/]+)\.mp3$/.exec(this.src); return m ? m[1] : "?"; }
     get isVoice() { return !this.src.includes("/sfx/"); }
@@ -63,6 +75,10 @@ export function makeAudioFactory(clock, cfg) {
     pause() { if (!this.paused) { this.paused = true; stats.playing--; if (this.isVoice) stats.voicePlaying--; } if (this._endTimer) { clock.clear(this._endTimer); this._endTimer = null; } }
     play() {
       if (cfg.playRejects) return Promise.reject(new Error("NotAllowedError"));
+      if (!this.exists) {   // missing file: record the wasted attempt
+        stats.missingPlayAttempts.push({ t: clock.now, src: this.src });
+        return Promise.reject(new Error("NotSupportedError"));
+      }
       stats.plays++;
       stats.byKey[this.key] = (stats.byKey[this.key] || 0) + 1;
       if (this.paused) {
@@ -163,12 +179,15 @@ export async function boot(cfg = {}) {
   window.speechSynthesis = speech;
   g.speechSynthesis = speech;
   if (cfg.noSpeech) { delete window.speechSynthesis; g.speechSynthesis = undefined; }
+  // Counts oscillators actually started, so tests can tell whether the synth
+  // bell/tick/warning genuinely made a sound.
+  const synth = { oscStarted: 0 };
   window.AudioContext = g.AudioContext = class {
     constructor() { this.state = "running"; this.sampleRate = 44100; this.currentTime = 0; this.destination = {}; }
     resume() { this.state = "running"; return Promise.resolve(); }
     createBuffer(ch, len, rate) { return { getChannelData: () => new Float32Array(len) }; }
     createConvolver() { return { buffer: null, connect: (n) => n }; }
-    createOscillator() { return { type: "", frequency: { setValueAtTime() {} }, connect: (n) => n, start() {}, stop() {} }; }
+    createOscillator() { return { type: "", frequency: { setValueAtTime() {} }, connect: (n) => n, start() { synth.oscStarted++; }, stop() {} }; }
     createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: (n) => n }; }
   };
 
@@ -185,7 +204,7 @@ export async function boot(cfg = {}) {
 
   const doc = window.document;
   const api = {
-    dom, window, doc, clock, stats, wakeLog, speechLog, cfg,
+    dom, window, doc, clock, stats, wakeLog, speechLog, cfg, synth,
     set(id, v) { doc.getElementById(id).dataset.value = String(v); },
     setSeg(id, v) { doc.getElementById(id).dataset.value = v; },
     click(id) { doc.getElementById(id).dispatchEvent(new window.MouseEvent("click", { bubbles: true })); },
