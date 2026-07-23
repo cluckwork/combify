@@ -133,6 +133,7 @@ const el = {
   resetBtn: document.getElementById("resetBtn"), voiceOn: document.getElementById("voiceOn"),
   stats: document.getElementById("stats"),
   comboName: document.getElementById("comboName"),
+  app: document.querySelector(".app"),
 };
 
 // Restore whatever this member last used, then start persisting changes.
@@ -660,44 +661,44 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false } = {}) {
 // with the counts ticking up and a flame on a streak worth showing off.
 function buildFinishSummary(streak, streakBit) {
   el.stats.textContent = "";
-  const frag = document.createDocumentFragment();
-  const sep = () => frag.appendChild(document.createTextNode(" · "));
-  const num = (value, label, opts) => {
-    const n = document.createElement("span");
-    n.className = "stat-num";
-    n.textContent = "0";
-    frag.appendChild(n);
-    frag.appendChild(document.createTextNode(` ${label}`));
-    countUp(n, value, opts);
+  const make = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
   };
 
-  // Rounds is a small number and settles quickly; the punch total is the one
-  // worth watching land, so it gets the longer run, the pop and the haptics.
-  num(session.rounds, session.rounds === 1 ? "round" : "rounds", { ms: 550 });
-  if (session.punches > 0) {
-    sep();
-    num(session.punches, "punches", { ms: 1200, pop: true, haptics: true });
-  }
-  sep();
-  frag.appendChild(document.createTextNode(formatDuration(session.seconds)));
+  // The punch total is the number worth reading from across the room, so it
+  // gets its own line at display size rather than being one item in a
+  // small grey list.
+  const hero = make("div", "finish__hero");
+  const heroNum = make("span", "stat-num", "0");
+  hero.appendChild(heroNum);
+  hero.appendChild(make("span", "finish__label", session.punches === 1 ? "punch" : "punches"));
+  el.stats.appendChild(hero);
+  countUp(heroNum, session.punches, { ms: 1200, pop: true, haptics: true });
+
+  // Everything else is supporting detail on one quieter line.
+  const meta = make("div", "finish__meta");
+  meta.appendChild(make("span", null, `${session.rounds} round${session.rounds === 1 ? "" : "s"}`));
+  meta.appendChild(make("span", "finish__dot", " · "));
+  meta.appendChild(make("span", null, formatDuration(session.seconds)));
 
   if (streakBit) {
-    sep();
-    const wrap = document.createElement("span");
-    wrap.className = "streak";
+    meta.appendChild(make("span", "finish__dot", " · "));
+    const wrap = make("span", "streak");
     // Any streak gets the flame. Gating it at 2+ meant a member finishing their
     // first ever session — the moment most worth rewarding — saw nothing.
     if (streak >= 1) {
-      const flame = document.createElement("span");
-      flame.className = "flame";
+      const flame = make("span", "flame");
       flame.setAttribute("aria-hidden", "true");
       for (let i = 0; i < 3; i++) flame.appendChild(document.createElement("i"));
       wrap.appendChild(flame);
     }
-    wrap.appendChild(document.createTextNode(streakBit));
-    frag.appendChild(wrap);
+    wrap.appendChild(make("span", null, streakBit));
+    meta.appendChild(wrap);
   }
-  el.stats.appendChild(frag);
+  el.stats.appendChild(meta);
 }
 
 // The strip under the combo. Kept OUT of the way mid-round — during work and
@@ -733,6 +734,14 @@ function renderStats() {
 }
 
 function render() {
+  // Full-screen only while a session is actually running. Pausing drops back to
+  // the normal screen so settings are reachable without leaving the session —
+  // no extra button to learn, and pausing is already what you do to change
+  // something. Finishing exits too, so you can adjust and go again.
+  if (el.app) {
+    const inSession = state.running && (state.phase === "countdown" || state.phase === "work" || state.phase === "rest");
+    el.app.dataset.focus = inSession ? "1" : "0";
+  }
   el.clock.textContent = state.phase === "countdown" ? String(state.secondsLeft) : format(state.secondsLeft);
   el.stage.dataset.phase = state.phase;
   el.phase.textContent = state.phase === "work" ? "Work" : state.phase === "rest" ? "Rest" : state.phase === "done" ? "Done" : state.phase === "countdown" ? "Get Ready" : "Ready";
@@ -855,8 +864,8 @@ function start() {
   playTick(); render();
   state.tickTimer = setInterval(tick, 1000);
 }
-function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); }
-function resume() { state.running = true; el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); }
+function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
+function resume() { state.running = true; el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); render(); }
 function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------

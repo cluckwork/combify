@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-22 · **Current version:** v1.3.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-22 · **Current version:** v1.4.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -392,6 +392,17 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-22 — v1.4.0** — **Full-screen focus mode.** While a session runs the
+  stage takes the whole screen and the chrome folds away, so the combo can be
+  read from across the room; pausing brings the settings back, which is how you
+  change something mid-session without a new control to learn. Purpose-built
+  layouts for portrait, landscape and desktop (a Mac now uses its space instead
+  of a phone-width column). Finish screen rebuilt so the punch total is the
+  headline at display size. Added `tests/layout.mjs` — a REAL Chromium driving
+  six viewports plus mid-round rotation, because jsdom does no layout and can't
+  tell you text is clipped or a button is off-screen.
+- **2026-07-22 — v1.3.1** — Flame from the first session; 7 & 8 confirmed as
+  body shots.
 - **2026-07-22 — v1.3.0** — **First real combo from Bakr: the "10 combo"**
   (1-2-3-2-1-1-2-slip-2-3-2-roll, named for its ten punches), added to advanced
   and announced by name on screen via `COMBO_NAMES` in `js/combos.js` — add a

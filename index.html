@@ -29,13 +29,19 @@
     </header>
 
     <!-- The big timer face -->
+    <!-- Two groups so the stage can stack in portrait and sit side-by-side in
+         landscape, where vertical space is scarce. -->
     <main class="stage" id="stage">
-      <p class="phase" id="phase">Ready</p>
-      <p class="clock" id="clock">00:00</p>
-      <p class="round" id="round">Round 0 / 0</p>
-      <p class="combo-name" id="comboName"></p>
-      <p class="combo" id="combo">Press start to begin</p>
-      <p class="stats" id="stats"></p>
+      <div class="stage__meta">
+        <p class="phase" id="phase">Ready</p>
+        <p class="clock" id="clock">00:00</p>
+        <p class="round" id="round">Round 0 / 0</p>
+      </div>
+      <div class="stage__main">
+        <p class="combo-name" id="comboName"></p>
+        <p class="combo" id="combo">Press start to begin</p>
+        <p class="stats" id="stats"></p>
+      </div>
     </main>
 
     <!-- Controls -->

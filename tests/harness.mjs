@@ -1,6 +1,10 @@
 // harness.mjs — runs the REAL js/app.js inside jsdom with a virtual clock,
 // so we can fast-forward entire training sessions and inject the specific
 // failure modes mobile Safari produces (dropped "ended" events, blocked play()).
+//
+// jsdom does NO layout: it cannot tell you that text is clipped, that a button
+// is off-screen, or that rotating the phone breaks the screen. Those questions
+// belong to tests/layout.mjs, which drives a real browser.
 import { JSDOM } from "jsdom";
 import fs from "node:fs";
 import path from "node:path";

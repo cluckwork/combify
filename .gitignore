@@ -12,3 +12,6 @@ package-lock.json
 
 # Module copies the test harness generates at runtime
 tests/.tmp/
+
+# Screenshots from `npm run test:layout:shots`
+tests/.shots/

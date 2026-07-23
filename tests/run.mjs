@@ -581,9 +581,14 @@ async function collectSpokenVsShown(app, ms) {
     `"${app.doc.getElementById("stats").textContent}"`);
   await app.clock.advance(60000); // run both rounds out
   check("session finishes", app.phase() === "Done", app.phase());
-  const summary = app.doc.getElementById("stats").textContent;
-  check("finish screen summarises the session", /2 rounds/.test(summary) && /punches/.test(summary), `"${summary}"`);
-  check("summary includes a duration", /\d+:\d\d/.test(summary), `"${summary}"`);
+  const statsEl = app.doc.getElementById("stats");
+  const heroNum = statsEl.querySelector(".finish__hero .stat-num");
+  const meta = statsEl.querySelector(".finish__meta");
+  const summary = statsEl.textContent;
+  check("punch total is the headline", !!heroNum && Number(heroNum.textContent.replace(/,/g, "")) > 0,
+    `hero="${heroNum && heroNum.textContent}"`);
+  check("rounds shown in the supporting line", /2 rounds/.test(meta.textContent), `"${meta.textContent}"`);
+  check("summary includes a duration", /\d+:\d\d/.test(meta.textContent), `"${meta.textContent}"`);
   const stored = JSON.parse(peekStore()["combify.history.v1"] || "{}");
   check("history persisted", stored.totals && stored.totals.rounds === 2, JSON.stringify(stored.totals));
   check("counted exactly one session", stored.totals.sessions === 1, String(stored.totals?.sessions));
@@ -708,9 +713,12 @@ async function collectSpokenVsShown(app, ms) {
   const stats = app.doc.getElementById("stats");
   // Without requestAnimationFrame the counts must land on their final values
   // immediately, so the summary is never left showing zeros.
-  check("counts are final, not stuck at zero", !/\b0 punches\b/.test(stats.textContent), `"${stats.textContent}"`);
-  check("summary reads as expected", /1 round · \d+ punches · \d+:\d\d/.test(stats.textContent),
-    `"${stats.textContent}"`);
+  const hero0 = stats.querySelector(".finish__hero .stat-num");
+  check("counts are final, not stuck at zero", hero0 && hero0.textContent !== "0", `hero="${hero0 && hero0.textContent}"`);
+  check("summary reads as expected",
+    /1 round/.test(stats.querySelector(".finish__meta").textContent) &&
+    /\d+:\d\d/.test(stats.querySelector(".finish__meta").textContent),
+    `"${stats.querySelector(".finish__meta").textContent}"`);
   check("flame shows from the very first session", !!stats.querySelector(".flame"), "no flame on day 1");
   results.push(`     (day 1: "${stats.textContent}")`);
   app.restore();
@@ -741,7 +749,7 @@ async function collectSpokenVsShown(app, ms) {
   app.setSeg("pace", "1500"); app.setSeg("level", "beginner");
   app.click("startBtn");
   await app.clock.advance(30000);
-  const punchNode = app.doc.querySelectorAll("#stats .stat-num")[1];
+  const punchNode = app.doc.querySelector("#stats .finish__hero .stat-num");
   check("a punch counter exists", !!punchNode, "not found");
   const midway = punchNode ? punchNode.textContent : "";
   check("starts below the final total (it counts up)", midway !== "" && Number(midway.replace(/,/g, "")) >= 0);
@@ -773,13 +781,68 @@ async function collectSpokenVsShown(app, ms) {
   app.click("startBtn");
   await app.clock.advance(30000);
   await app.realWait(1600);
-  const punchNode = app.doc.querySelectorAll("#stats .stat-num")[1];
+  const punchNode = app.doc.querySelector("#stats .finish__hero .stat-num");
   const stored = JSON.parse(peekStore()["combify.history.v1"] || "{}");
   check("count-up still completes without haptics",
     Number(punchNode.textContent.replace(/,/g, "")) === stored.totals.punches,
     `showed ${punchNode.textContent}, threw ${stored.totals?.punches}`);
   app.restore();
   clearStore();
+}
+
+// -------------------------------------------------- 33. full-screen focus mode
+{
+  section("33. Focus mode expands the screen mid-session");
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  const appEl = app.doc.querySelector(".app");
+  app.set("rounds", 2); app.set("workSec", 20); app.set("restSec", 10);
+
+  check("normal screen before starting", appEl.dataset.focus !== "1", `focus=${appEl.dataset.focus}`);
+  app.click("startBtn");
+  await app.clock.advance(500);
+  check("expands during the countdown", appEl.dataset.focus === "1", `focus=${appEl.dataset.focus}`);
+  await app.clock.advance(4000);
+  check("stays expanded through work", appEl.dataset.focus === "1" && app.phase() === "Work", app.phase());
+  await app.clock.advance(20000);
+  check("stays expanded through rest", appEl.dataset.focus === "1" && app.phase() === "Rest", app.phase());
+
+  // Pausing must bring the settings back — that's the whole interaction model.
+  app.click("startBtn");
+  await app.clock.advance(200);
+  check("pausing returns to the normal screen", appEl.dataset.focus !== "1", `focus=${appEl.dataset.focus}`);
+  check("settings reachable while paused", !!app.doc.getElementById("level"), "settings missing");
+  app.click("startBtn");
+  await app.clock.advance(200);
+  check("resuming expands again", appEl.dataset.focus === "1", `focus=${appEl.dataset.focus}`);
+
+  await app.clock.advance(60000);
+  check("session finished", app.phase() === "Done", app.phase());
+  check("finishing returns to the normal screen", appEl.dataset.focus !== "1", `focus=${appEl.dataset.focus}`);
+  app.click("resetBtn");
+  await app.clock.advance(200);
+  check("reset leaves the normal screen", appEl.dataset.focus !== "1", `focus=${appEl.dataset.focus}`);
+  app.restore();
+  clearStore();
+}
+
+// ------------------------------------- 34. layout rules exist for every device
+{
+  section("34. Portrait, landscape and desktop layouts");
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const url = await import("node:url");
+  const repo = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "..");
+  const css = fs.readFileSync(path.join(repo, "css/styles.css"), "utf8");
+  check("landscape gets its own layout", /@media\s*\(orientation:\s*landscape\)/.test(css));
+  check("landscape switches to a side-by-side stage", /orientation:\s*landscape\)[\s\S]{0,400}flex-direction:\s*row/.test(css));
+  check("big screens get their own sizing", /@media\s*\(min-width:\s*900px\)/.test(css));
+  check("stage can grow to fill the screen", /\.app\[data-focus="1"\]\s*\.stage[\s\S]{0,200}flex:\s*1/.test(css));
+  check("app is at least a full viewport tall", /min-height:\s*100dvh/.test(css));
+  // The combo is the thing read from across the room: it must scale with the
+  // viewport, not sit at a fixed size.
+  check("combo text scales with the viewport", /\.app\[data-focus="1"\]\s*\.combo[\s\S]{0,160}font-size:\s*clamp\(/.test(css));
+  check("motion still opt-out", /prefers-reduced-motion/.test(css));
 }
 
 console.log(results.join("\n"));
