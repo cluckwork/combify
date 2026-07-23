@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.10.2",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Ten ways to say well done",
+    notes: [
+      "The finish screen now congratulates you differently each time — \"Strong finish.\", \"Round's yours.\", \"In the bank.\" and more — instead of the same \"Nice work.\" every session.",
+    ],
+  },
+  {
     v: "1.10.1",
     date: "2026-07-23",
     size: "patch",

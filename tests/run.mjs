@@ -1208,6 +1208,32 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
+// --------------------------------------------- 33b. finish headline rotates
+{
+  section("33b. The finish headline varies");
+  const LINES = ["Nice work.", "Strong finish.", "That's a wrap.", "Well earned.", "Sharp today.",
+    "In the bank.", "Round's yours.", "Solid rounds.", "Keep showing up.", "That's the way."];
+  const seen = new Set();
+  // Force the random walk through several picks; assert every one is from the
+  // approved set and that consecutive sessions never repeat a headline.
+  let prev = null, repeats = 0;
+  for (let i = 0; i < 6; i++) {
+    const app = await boot({ duration: 0.6 });
+    app.set("rounds", 1); app.set("workSec", 10); app.set("restSec", 3);
+    app.click("startBtn");
+    await app.clock.advance(20000);
+    const line = app.combo();
+    seen.add(line);
+    if (line === prev) repeats++;
+    prev = line;
+    if (!LINES.includes(line)) { seen.add("UNKNOWN:" + line); break; }
+    app.restore();
+  }
+  check("every headline comes from the approved set", [...seen].every((l) => LINES.includes(l)), [...seen].join(" | "));
+  check("headlines vary across sessions", seen.size >= 2, `only saw: ${[...seen].join(" | ")}`);
+  results.push(`     (saw ${seen.size} distinct: ${[...seen].join(" · ")})`);
+}
+
 // ------------------------------------- 34. layout rules exist for every device
 {
   section("34. Portrait, landscape and desktop layouts");

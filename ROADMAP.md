@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.10.1 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.10.2 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,11 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.10.2** — **Rotating finish headlines.** Ten coach-voice
+  lines ("Strong finish.", "Well earned.", "In the bank."…) picked at random,
+  never the same twice in a row within a visit. All shorter than "Press start
+  to begin", so no new layout risk at display size. Test 33b asserts every
+  headline comes from the approved set and that it varies across sessions.
 - **2026-07-23 — v1.10.1** — **Fullscreen uses the whole phone.** Reported as
   "the maximum size of my iPhone isn't being utilized" — the body applied
   safe-area padding globally, so in focus mode the stage's surface never

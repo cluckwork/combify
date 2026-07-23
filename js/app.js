@@ -1048,6 +1048,32 @@ function beginPhase(seconds) {
 }
 function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned10 = false; ringBell(1); render(); startComboLoop(); }
 function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
+// The headline when a session ends — one of these, never the same twice in a
+// row. Coach's voice: short, earned, no exclamation points. All of them fit on
+// one or two lines at display size (each is shorter than "Press start to
+// begin", which already renders everywhere).
+const FINISH_LINES = [
+  "Nice work.",
+  "Strong finish.",
+  "That's a wrap.",
+  "Well earned.",
+  "Sharp today.",
+  "In the bank.",
+  "Round's yours.",
+  "Solid rounds.",
+  "Keep showing up.",
+  "That's the way.",
+];
+let lastFinishLine = "";
+function finishLine() {
+  let pick;
+  do {
+    pick = FINISH_LINES[Math.floor(Math.random() * FINISH_LINES.length)];
+  } while (pick === lastFinishLine);
+  lastFinishLine = pick;
+  return pick;
+}
+
 // ---------- The finish finale ----------
 // Everything at once was overloading: bell + ripple + headline + count-up all
 // landing together. So the finish is staged. Act 1: the dial alone, moved to
@@ -1097,7 +1123,7 @@ function finish() {
   stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3);
   // The streak lives in the summary below; repeating it here in display type
   // read as a bug rather than a flourish.
-  el.combo.textContent = "Nice work.";
+  el.combo.textContent = finishLine();
   el.combo.style.removeProperty("--fit");
   if (el.comboName) el.comboName.textContent = "";
   el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running");
