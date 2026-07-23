@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-22 · **Current version:** v1.6.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-22 · **Current version:** v1.7.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -388,6 +388,21 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.7.0** — **Combo pop, stepped countdown, and four bug fixes.**
+  Every new combo now lands with a small pop, so someone watching from across
+  the room sees a new one arrived instead of having to re-read the text. The
+  3-2-1 countdown disc is back to hard per-second steps (work and rest keep the
+  smooth sweep) — three big chunks read as "get ready", a sweep just looked like
+  a short round. Fixed: **Resume was a dead button** if you paused during the
+  countdown (the click handler had no branch for that phase, so every press just
+  paused again — Reset was the only escape); the **finish ripple was centred on
+  the stage, not the dial**, so it bloomed off-centre from the very circle it
+  comes out of, and drifted further whenever the layout changed height — it is
+  now anchored to the dial at exactly the ring's radius; **finishing and
+  resetting no longer drop out of fullscreen** (the collapse yanked the layout
+  mid-celebration, and Reset dumped you back into browser chrome you then had to
+  escape again). Leaving fullscreen is the user's call now. 146 behaviour + 225
+  layout checks green.
 - **2026-07-23 — v1.6.0** — **True fullscreen sessions.** Starting a session now
   requests real browser fullscreen where the platform allows it (Android
   Chrome, desktops; iPhone Safari has no fullscreen API — there the installed

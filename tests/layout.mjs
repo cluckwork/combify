@@ -108,6 +108,30 @@ const base = `http://127.0.0.1:${server.address().port}/index.html`;
 const browser = await chromium.launch();
 if (SHOTS) fs.mkdirSync(shotDir, { recursive: true });
 
+// Clicks are dispatched inside the page rather than through page.click(). A
+// real Playwright click carries a user gesture, so the app requests genuine
+// fullscreen — and that call parked page.click() for ~5 SECONDS, long enough
+// that the 3s countdown was over before any assertion about it could run (the
+// countdown-steps check was silently measuring the work phase). Layout here is
+// driven by data-focus and 100dvh, which behave identically either way; the
+// real fullscreen lifecycle is covered in run.mjs (section 10b).
+const tap = (page, id = "startBtn") => page.evaluate((i) => document.getElementById(i).click(), id);
+
+// Headless Chromium freezes CSS transitions while the page sits idle: 3.6s
+// into a session the fold-away had reached only 4% opacity, because nothing
+// had woken the renderer since the click. waitForFunction polls on animation
+// frames, so it both wakes the page and waits for the real end state rather
+// than guessing a duration. Never fails the run on its own — the assertion
+// that follows is what reports.
+// Measures rendered HEIGHT, not opacity: the two properties have different
+// durations (0.18s vs 0.35s), so opacity hits zero while the panels still
+// occupy a few hundred pixels — which is what "edge-to-edge" actually cares
+// about.
+const settled = (page, hidden) => page.waitForFunction(
+  (want) => [document.querySelector(".topbar"), document.getElementById("settings"), document.querySelector(".about")]
+    .every((e) => { const h = e.getBoundingClientRect().height; return want ? h < 1 : h > 1; }),
+  hidden, { timeout: 5000 }).catch(() => {});
+
 // Drive a session to a given phase, with the clock sped up so it's quick.
 async function startSession(page, { work = 8, rest = 5, rounds = 2 } = {}) {
   await page.evaluate(({ work, rest, rounds }) => {
@@ -118,7 +142,7 @@ async function startSession(page, { work = 8, rest = 5, rounds = 2 } = {}) {
     document.getElementById("rounds").dataset.value = rounds;
     document.getElementById("rounds").querySelector(".step__val").textContent = rounds;
   }, { work, rest, rounds });
-  await page.click("#startBtn");
+  await tap(page);
 }
 
 for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONLY.toLowerCase()))) {
@@ -145,8 +169,17 @@ for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(O
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-ready.png`) });
 
   // ---- Mid-round (focus mode) ----
-  await startSession(page, FAST ? { work: 4, rest: 2, rounds: 1 } : undefined);
+  // work must outlast every probe, screenshot and pause below, or the session
+  // finishes mid-assertion and focus mode is already gone (a 4s work phase
+  // failed exactly that way once --shots was added).
+  await startSession(page, FAST ? { work: 14, rest: 2, rounds: 1 } : undefined);
+  // NOTE: the countdown's stepping is asserted in run.mjs (section 10e), not
+  // here. Headless Chromium throttles timers until an evaluate() wakes the
+  // renderer, so the 3s countdown either freezes or fires in a burst that the
+  // app's real-time catch-up correctly skips through — neither of which says
+  // anything about the ring. The virtual clock in jsdom answers it exactly.
   await page.waitForTimeout(3600); // countdown done, into work
+  await settled(page, true);
   m = await page.evaluate(probe);
   check("focus mode engaged", m.focus === "1", `focus=${m.focus}`);
   check("settings hidden mid-round", !m.settingsVisible);
@@ -201,16 +234,17 @@ for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(O
   if (SHOTS) await page.screenshot({ path: path.join(shotDir, `${dev.name.replace(/\s+/g, "-")}-longcombo.png`) });
 
   // ---- Pause returns the settings ----
-  await page.click("#startBtn");
+  await tap(page);
   await page.waitForTimeout(250);
+  await settled(page, false);
   m = await page.evaluate(probe);
   check("pausing brings settings back", m.settingsVisible, "settings still hidden");
   check("pausing leaves focus mode", m.focus !== "1", `focus=${m.focus}`);
   check("no horizontal scroll when paused", m.docScrollW <= m.docClientW + 1, `${m.docScrollW} > ${m.docClientW}`);
 
   // ---- Finish screen ----
-  await page.click("#startBtn");            // resume
-  await page.waitForTimeout(FAST ? 7000 : 30000);   // let the rounds run out
+  await tap(page);            // resume
+  await page.waitForTimeout(FAST ? 16000 : 30000);   // let the rounds run out
   m = await page.evaluate(probe);
   const phase = await page.textContent("#phase");
   check("session reached the finish screen", phase.trim() === "Done", phase);
@@ -234,18 +268,31 @@ for (const dev of DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(O
 // ---------------------------------------------------------------------------
 lines.push(`\n── Rotating mid-session ──`);
 if (!ONLY || "rotating mid-session".includes(ONLY.toLowerCase())) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  // Its own browser, not a context on the shared one. Rotation is simulated by
+  // setViewportSize, and Chromium refuses to resize a window left in a
+  // maximized/fullscreen state — which the 1920×1080 device above puts it in.
+  // Sharing the browser made this section die with a protocol error that looked
+  // like an app bug and wasn't.
+  const rotBrowser = await chromium.launch();
+  const ctx = await rotBrowser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
+  // Rotation is simulated by resizing the window, and Chromium refuses to
+  // resize one in a fullscreen state — which starting a session puts it in.
+  // Exiting element fullscreen first is NOT enough: the window stays flagged
+  // and the resize still fails. So this page never enters fullscreen at all.
+  // What's under test here is the orientation layout, which is driven by
+  // data-focus and media queries and is identical either way; the fullscreen
+  // lifecycle itself is covered in run.mjs section 10b.
+  await page.addInitScript(() => {
+    const no = () => Promise.reject(new Error("fullscreen disabled for rotation tests"));
+    Element.prototype.requestFullscreen = no;
+    Element.prototype.webkitRequestFullscreen = no;
+  });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(base, { waitUntil: "networkidle" });
   await startSession(page, { work: 30, rest: 10, rounds: 2 });
   await page.waitForTimeout(3600);
-  // The app goes properly fullscreen on start, and Chromium refuses to resize
-  // a fullscreen window. Rotation here is simulated BY resizing, so drop out
-  // of fullscreen first — the focus-mode layout is identical either way.
-  await page.evaluate(() => document.exitFullscreen && document.exitFullscreen().catch(() => {}));
-  await page.waitForTimeout(150);
 
   const clockBefore = await page.textContent("#clock");
   const comboBefore = await page.textContent("#combo");
@@ -295,6 +342,7 @@ if (!ONLY || "rotating mid-session".includes(ONLY.toLowerCase())) {
   check("finish screen survives rotation", m2.docScrollW <= m2.docClientW + 1, `${m2.docScrollW} > ${m2.docClientW}`);
   check("finish summary still on screen after rotating", m2.stats.bottom <= m2.vh + 1, `${m2.stats.bottom} vs ${m2.vh}`);
   await ctx.close();
+  await rotBrowser.close();
 }
 
 await browser.close();

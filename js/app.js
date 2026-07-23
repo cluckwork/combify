@@ -771,10 +771,15 @@ const DIAL_CIRCUMFERENCE = 2 * Math.PI * 54;
 // uses — so the ring can never disagree with the clock. While running it is
 // fractional (that's what makes the sweep smooth); paused it holds on the
 // frozen whole-second value, which is also where resume() restarts the clock.
+//
+// The COUNTDOWN is deliberately the exception: it stays on whole seconds so
+// the disc jumps 3 → 2 → 1 in hard steps. Three big chunks read as "get
+// ready" far better than a smooth sweep, which just looks like a short round.
 function phaseFractionLeft() {
   const total = state.phase === "work" ? getWork() : state.phase === "rest" ? getRest() : state.phase === "countdown" ? 3 : 0;
   if (!(total > 0)) return 0;
-  const left = state.running ? (state.phaseEndsAt - Date.now()) / 1000 / total : state.secondsLeft / total;
+  const stepped = state.phase === "countdown" || !state.running;
+  const left = stepped ? state.secondsLeft / total : (state.phaseEndsAt - Date.now()) / 1000 / total;
   return Math.max(0, Math.min(1, left));
 }
 function renderProgress() {
@@ -782,20 +787,22 @@ function renderProgress() {
   el.dialFill.style.strokeDasharray = String(DIAL_CIRCUMFERENCE);
   el.dialFill.style.strokeDashoffset = String(DIAL_CIRCUMFERENCE * (1 - phaseFractionLeft()));
 }
-// Redraw the ring every frame while a session runs, so it drains seamlessly
-// instead of ticking down in one-second steps. Self-terminating: pause, reset
-// and done all clear state.running, and the next frame simply doesn't
-// reschedule. Reduced-motion users (and jsdom, which has no rAF) keep the
-// per-second updates from render().
+// Redraw the ring every frame during work and rest, so it drains seamlessly
+// instead of ticking down in one-second steps. NOT during the countdown —
+// that one is meant to step (see phaseFractionLeft), and render() already
+// redraws it once a second. Self-terminating: pause, reset and done all clear
+// state.running, and the next frame simply doesn't reschedule. Reduced-motion
+// users (and jsdom, which has no rAF) keep the per-second updates throughout.
 let dialRaf = 0;
+function smoothPhase() { return state.phase === "work" || state.phase === "rest"; }
 function dialLoop() {
   dialRaf = 0;
-  if (!state.running) return;
+  if (!state.running || !smoothPhase()) return;
   renderProgress();
   dialRaf = requestAnimationFrame(dialLoop);
 }
 function startDialLoop() {
-  if (!dialRaf && state.running && motionOK()) dialRaf = requestAnimationFrame(dialLoop);
+  if (!dialRaf && state.running && smoothPhase() && motionOK()) dialRaf = requestAnimationFrame(dialLoop);
 }
 
 // Render a combo as separate move tokens rather than one string. Each token
@@ -822,6 +829,20 @@ function showCombo(combo) {
   // the size a 3-move one wants to be.
   const n = combo.length;
   el.combo.style.setProperty("--fit", n <= 4 ? "1" : n <= 6 ? "0.88" : n <= 9 ? "0.78" : "0.68");
+  popCombo();
+}
+
+// Each new combo lands with a small pop. Watching from across the room the
+// text alone changes too quietly — especially when two combos share moves —
+// so the movement, not the reading, is what says "next one". The reflow is
+// required: without it the class is removed and re-added inside one frame and
+// the browser never restarts the animation, so a fast pace would pop once and
+// then sit still. Opt-out lives in CSS (prefers-reduced-motion), which is why
+// the class is added unconditionally here.
+function popCombo() {
+  el.combo.classList.remove("is-pop");
+  void el.combo.offsetWidth;
+  el.combo.classList.add("is-pop");
 }
 
 // ---------- Combo calling (only during work) ----------
@@ -873,7 +894,7 @@ function enterWork() { state.phase = "work"; beginPhase(getWork()); state.warned
 function enterRest() { state.phase = "rest"; beginPhase(getRest()); ringBell(2); stopComboLoop(); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
 function finish() {
   state.phase = "done"; state.running = false;
-  stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); exitFullscreen(); ringBell(3);
+  stopComboLoop(); clearInterval(state.tickTimer); releaseWakeLock(); ringBell(3);
   // The streak lives in the summary below; repeating it here in display type
   // read as a bug rather than a flourish.
   el.combo.textContent = "Nice work.";
@@ -945,14 +966,11 @@ function enterFullscreen() {
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
 }
-function exitFullscreen() {
-  if (!(document.fullscreenElement || document.webkitFullscreenElement)) return;
-  const exit = document.exitFullscreen || document.webkitExitFullscreen;
-  try {
-    const p = exit && exit.call(document);
-    if (p && p.catch) p.catch(() => {});
-  } catch (e) {}
-}
+// Nothing in the app gives fullscreen back. Finishing and resetting both used
+// to, and both were wrong: the screen collapsing out of fullscreen mid-
+// celebration yanked the layout, and hitting Reset to go again dumped you back
+// to a browser chrome you then had to escape a second time. Leaving is the
+// user's call — Esc on a desktop, the system gesture on a phone.
 
 // ---------- Start / pause / reset ----------
 function start() {
@@ -972,12 +990,16 @@ function start() {
 }
 function pause() { state.running = false; clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
 function resume() { state.running = true; enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = setInterval(tick, 1000); acquireWakeLock(); render(); }
-function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); exitFullscreen(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
+function reset() { clearInterval(state.tickTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
+// "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1
+// left the button with no branch that matched, so every further press just
+// called pause() again — a dead Resume button you could only escape with Reset.
+const PAUSABLE = ["countdown", "work", "rest"];
 el.startBtn.addEventListener("click", () => {
   if (!state.running && state.phase === "ready") start();
-  else if (!state.running && (state.phase === "work" || state.phase === "rest")) resume();
+  else if (!state.running && PAUSABLE.includes(state.phase)) resume();
   else if (!state.running && state.phase === "done") { reset(); start(); }
   else pause();
 });

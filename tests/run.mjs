@@ -197,6 +197,47 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// ------------------------------------------------------ 10a. combo pop cue
+{
+  section("10a. Every new combo pops");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 40); app.set("restSec", 5);
+  app.setSeg("pace", "1500");
+  const combo = app.doc.getElementById("combo");
+  app.click("startBtn");
+  await app.clock.advance(4000); // through the countdown, first combo called
+  check("first combo carries the pop class", combo.classList.contains("is-pop"),
+    `class="${combo.className}"`);
+  // The class is re-applied per combo; without the reflow in popCombo the
+  // browser would never restart the animation on the second one.
+  // Strip it and let the next combo land. Deliberately NOT asserting the text
+  // changed: combos only avoid repeating back-to-back, so the same one can
+  // legitimately come round again and that made this flake.
+  combo.classList.remove("is-pop");
+  await app.clock.advance(12000);
+  check("the next combo pops too", combo.classList.contains("is-pop"), `class="${combo.className}"`);
+  app.restore();
+}
+
+// -------------------------------------------------- 10e. countdown ring steps
+{
+  section("10e. The countdown ring steps by the second");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 30); app.set("restSec", 5);
+  const off = () => parseFloat(app.doc.getElementById("dialFill").style.strokeDashoffset);
+  app.click("startBtn");
+  await app.clock.advance(100);
+  const at3 = off();
+  await app.clock.advance(400);   // 500ms in — same second, disc must not move
+  check("disc holds still inside a countdown second", off() === at3, `${at3} → ${off()}`);
+  await app.clock.advance(700);   // 1.2s in — crossed the boundary
+  const at2 = off();
+  check("disc jumps at the second boundary", at2 > at3, `${at3} → ${at2}`);
+  await app.clock.advance(400);
+  check("and holds again until the next one", off() === at2, `${at2} → ${off()}`);
+  app.restore();
+}
+
 // ------------------------------------------------- 10b. fullscreen lifecycle
 {
   section("10b. Fullscreen follows the session");
@@ -213,7 +254,35 @@ async function countCombos(app, ms, step = 200) {
   check("resume doesn't re-request while already fullscreen",
     app.fsLog.filter((x) => x === "enter").length === 1, app.fsLog.join(","));
   await app.clock.advance(15000); // work runs out → done
-  check("fullscreen released when the session finishes", app.fsLog.includes("exit"), app.fsLog.join(","));
+  // Finishing must NOT drop out: the collapse yanked the layout mid-celebration.
+  check("still fullscreen on the finish screen", !app.fsLog.includes("exit"), app.fsLog.join(","));
+  app.click("resetBtn");
+  await app.clock.advance(500);
+  check("reset restarts without leaving fullscreen", !app.fsLog.includes("exit"), app.fsLog.join(","));
+  app.restore();
+}
+
+// ---------------------------------------- 10d. pause/resume in every phase
+{
+  section("10d. Resume works from any pausable phase");
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 30); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(1000);           // still in the 3-2-1 countdown
+  check("countdown is the phase under test", app.phase() === "Get Ready", app.phase());
+  app.click("startBtn");                   // pause DURING the countdown
+  const pausedAt = app.clockText();
+  await app.clock.advance(2000);
+  check("countdown freezes while paused", app.clockText() === pausedAt, `${pausedAt} → ${app.clockText()}`);
+  app.click("startBtn");                   // resume — used to be a dead button
+  await app.clock.advance(4000);
+  check("resume from the countdown reaches Work", app.phase() === "Work", app.phase());
+  // And the ordinary case still works.
+  app.click("startBtn");
+  await app.clock.advance(500);
+  app.click("startBtn");
+  await app.clock.advance(3000);
+  check("resume from Work keeps running", app.phase() === "Work" && app.clockText() !== "00:30", app.clockText());
   app.restore();
 }
 

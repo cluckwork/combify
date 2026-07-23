@@ -518,6 +518,17 @@ label,
    read as special against the otherwise teal palette. */
 .stage { position: relative; overflow: hidden; }
 
+/* Each new combo arrives with a quick pop — overshoots a touch and settles,
+   the same shape as the finish total's landing so the app has one idiom for
+   "this just changed". Kept small: at display size a big scale reads as the
+   text lurching. */
+@keyframes comboPop {
+  0%   { transform: scale(0.955); }
+  55%  { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+.combo.is-pop { animation: comboPop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.35); }
+
 @keyframes finishRise {
   from { opacity: 0; transform: translateY(8px) scale(0.97); }
   to   { opacity: 1; transform: none; }
@@ -530,14 +541,20 @@ label,
 /* A single ring breathing outward behind the clock — celebratory without
    turning into confetti. */
 @keyframes ringOut {
-  from { opacity: 0.45; transform: translate(-50%, -50%) scale(0.55); }
-  to   { opacity: 0;    transform: translate(-50%, -50%) scale(1.5); }
+  from { opacity: 0.45; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0;    transform: translate(-50%, -50%) scale(1.9); }
 }
-.stage[data-phase="done"]::after {
+/* Anchored to the DIAL, not the stage. Centred on the stage it was centred on
+   nothing — the dial sits above the stage's middle (combo and summary take the
+   lower half), so the ripple bloomed off-centre from the very circle it is
+   supposed to come out of, and drifted further whenever the layout changed
+   height. Sized at 90% of the dial, which is exactly the ring's inset, so it
+   starts ON the ring and expands outward at every screen size. */
+.stage[data-phase="done"] .dial::after {
   content: "";
   position: absolute;
   top: 50%; left: 50%;
-  width: 230px; height: 230px;
+  width: 90%; height: 90%;
   border: 2px solid var(--accent);
   border-radius: 50%;
   animation: ringOut 1.8s ease-out 2 both;
@@ -626,11 +643,12 @@ label,
 @media (prefers-reduced-motion: reduce) {
   .stage[data-phase="done"] .combo,
   .stage[data-phase="done"] .stats,
-  .stage[data-phase="done"]::after,
+  .stage[data-phase="done"] .dial::after,
   .flame,
   .stat-num.is-pop,
+  .combo.is-pop,
   .stage[data-phase="countdown"] .dial__pulse { animation: none; }
-  .stage[data-phase="done"]::after { display: none; }
+  .stage[data-phase="done"] .dial::after { display: none; }
 }
 
 .about__version {
