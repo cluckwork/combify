@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.12.0 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.13.0 (v1.12.0 live on GitHub Pages; v1.13.0 not yet pushed)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -269,6 +269,13 @@ Directly serves the business goal.
 - 💡 **Next for this loop:** nothing prompts a member to come back — the streak
   is only visible if they already opened the app. A reason to return (or, much
   later, a notification) is the missing half.
+- ⏳ **Retention measurement (decided 2026-07-23, build BEFORE wide sharing):**
+  anonymous device ID + a session-complete ping to a free Cloudflare Worker,
+  with an offline queue. The per-device data already exists in localStorage
+  (streaks/sessions) — this just makes it visible. Measures the roadmap's own
+  success metric (devices that train a 2nd time). Deliberately NOT built yet:
+  at 3–5 testers, asking beats dashboards. Page-view analytics can't measure
+  retention; don't substitute it. Effort **M**.
 - **Signature combos** — named combos from Bakr ("Bakr's Special") as their own
   selectable set; makes the app feel personally his. Effort **S–M**.
 - **Shareable gym link** — one link Bakr texts every member; maybe a lightweight
@@ -398,6 +405,32 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.13.0** — **The start intro (finale's mirror) + the rare
+  stutter's likely root cause.** Reported: "5" still occasionally eaten at
+  start despite the settle beat, and rare residual word-stutter. Start now
+  has choreography instead of a delay: the dial FLIPs from the folding
+  settings layout to a fixed dead-centre overlay (bigger: min(70vw,66vh,
+  320px)), the countdown runs there — pulse waves held until the clock
+  actually starts, so wave 1 lands on tick 1 — and enterWork glides it home
+  (650ms, inside the 1.6s first-call runway), mirroring the finish finale.
+  Fixed positioning means layout churn underneath cannot move it; the
+  transform is compositor-only. Reduced-motion/jsdom keep the old settle-beat
+  path. The stutter: v1.11.8 parked clips at zero at every PAUSE site but
+  missed the NATURAL END — a finished element sits at its end position, and
+  the 3rd occurrence of a word in one combo (pool of 2: "2" appears 5× in
+  the 10 combo) reused it with a rewind seek issued AT PLAY TIME, the exact
+  "t-two" race. Now parkOnEnded rewinds every element the moment it finishes
+  (idle-time seek), the watchdog path parks dropped-ended elements, playSfx
+  parks after each sound runs its course (sfx have no watchdog), and the
+  play-time rewind is guarded to displaced elements only. Also: deepPrime is
+  deferred while a work round is live (a ~20-element muted prime burst on the
+  speaking pipeline was audible as a mid-word hiccup). Harness now models
+  end-position (currentTime=duration at playback end) so un-parked elements
+  are test-visible; layout suite waits for the entrance to land before
+  steady-state probes (mid-glide the dial legitimately crosses the empty
+  combo area). NOTE: stutter fixes address the last mechanisms findable in
+  code — confirmation of "zero" must come from real phones. 209 behaviour +
+  262 layout green.
 - **2026-07-23 — v1.12.0** — **Session length up front, rest-end warning, voice
   toggle removed, audio split into its own module.** The ready screen's clock
   now shows the whole session's length (rounds×work + rests between them,

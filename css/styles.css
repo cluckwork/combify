@@ -865,6 +865,34 @@ label {
 
 
 /* ==========================================================================
+   The start intro (js: startIntro/endIntro) — the finale's mirror. On Start
+   the dial lifts out of the folding settings chrome and drifts to the DEAD
+   CENTRE of the screen, growing as it goes; the 5-4-3-2-1 counts down there,
+   centre stage, while the chrome fold and the OS fullscreen transition spend
+   their jank behind deliberate choreography instead of eating the first
+   beat. The bell glides it home as round 1 begins. The drift itself is a
+   measured FLIP transform set inline (exact in any orientation); fixed
+   positioning keeps the dial pinned to the true screen centre no matter how
+   the layout churns underneath. Never applied under reduced motion.
+   ========================================================================== */
+.stage.is-intro .stage__meta {
+  position: fixed;
+  inset: 0;
+  z-index: 2;              /* over the stage, under the floating controls (6) */
+  display: grid;
+  place-items: center;
+  pointer-events: none;    /* pause/exit stay tappable straight through it */
+}
+.stage.is-intro .dial {
+  width: min(70vw, 66vh, 320px);   /* centre stage earns a bigger dial */
+  will-change: transform;
+}
+/* Everything else steps aside while the dial holds the centre; the ordinary
+   layout fades back in as the glide brings it home. */
+.stage__main { transition: opacity 0.4s ease; }
+.stage.is-intro .stage__main { opacity: 0; }
+
+/* ==========================================================================
    The finish finale (js: startFinale). Act 1: dial alone at dead centre (a
    measured transform set inline), ripple blooming. Act 2: the glide back.
    Act 3: headline then numbers, staggered. Under reduced motion none of these

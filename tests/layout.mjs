@@ -159,6 +159,14 @@ const settled = (page, hidden) => page.waitForFunction(
 const reachPhase = (page, want, timeout) => page.waitForFunction(
   (w) => document.getElementById("stage").dataset.phase === w, want, { timeout }).catch(() => {});
 
+// The start intro glides the dial home over round 1's first ~0.7s (an inline
+// transform + transition, cleaned up when it lands). Mid-glide the dial
+// legitimately crosses the still-empty combo area — exactly like the finale's
+// glide — so steady-state layout probes must let the choreography land first.
+const entranceDone = (page) => page.waitForFunction(
+  () => { const d = document.querySelector(".dial"); return d && !d.style.transform && !d.style.transition; },
+  undefined, { timeout: 4000 }).catch(() => {});
+
 // Drive a session to a given phase, with the clock sped up so it's quick.
 async function startSession(page, { work = 8, rest = 5, rounds = 2 } = {}) {
   await page.evaluate(({ work, rest, rounds }) => {
@@ -232,6 +240,7 @@ async function runDevice(dev) {
   // anything about the ring. The virtual clock in jsdom answers it exactly.
   await reachPhase(page, "work", 15000); // countdown done, into work
   await settled(page, true);
+  await entranceDone(page);
   m = await page.evaluate(probe);
   check("focus mode engaged", m.focus === "1", `focus=${m.focus}`);
   check("settings hidden mid-round", !m.settingsVisible);
@@ -381,6 +390,7 @@ async function runRotation() {
   // asserting against a mid-round screen.
   await startSession(page, { work: 12, rest: 3, rounds: 1 });
   await reachPhase(page, "work", 15000);
+  await entranceDone(page);
 
   const clockBefore = await page.textContent("#clock");
   const comboBefore = await page.textContent("#combo");

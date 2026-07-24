@@ -208,7 +208,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, finaleTimer: null, settleTimer: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, finaleTimer: null, settleTimer: null, introTimer: null };
 
 // ---------- Screen wake lock ----------
 // Keeps the screen on while a session runs, so a member who sets the phone
@@ -659,6 +659,7 @@ function beginPhase(seconds) {
 }
 function enterWork() {
   state.phase = "work"; beginPhase(getWork()); state.warned10 = false;
+  endIntro(); // round 1 only: the dial glides home off centre stage as the bell rings
   // The countdown's "Get ready..." must not survive into the round — the
   // first call is 1.6s away and the leftover text read as a hang. A no-break
   // space keeps the line box so the layout doesn't shift twice.
@@ -865,32 +866,112 @@ const COUNTDOWN_SECONDS = 5;
     if (elapsed < 1200) { beginPhase(COUNTDOWN_SECONDS); render(); }
   }));
 
+// ---------- The start intro: the finale's mirror ----------
+// The Start tap sets off a storm — the settings chrome folds away, the OS
+// fullscreen transition resizes everything, priming unlocks the audio — and
+// the v1.11.7 settle beat (140ms) wasn't always long enough to hide it: on a
+// slow phone the "5" was still being eaten. Instead of hiding the storm,
+// choreograph over it: the dial lifts out of the folding layout and DRIFTS to
+// the dead centre of the screen, growing as it goes, and the 5-4-3-2-1 counts
+// down there — centre stage, nothing else moving, every frame compositor-only
+// (a transform on its own layer, immune to the layout churn behind it). As
+// the round begins the bell rings and the dial glides home, mirroring the
+// finish finale, so a session opens and closes on the same move.
+// Under reduced motion (and in jsdom) none of this runs — the old settle-beat
+// path remains, and everything simply appears.
+const INTRO_DRIFT_MS = 450;   // drift to the centre
+const INTRO_GLIDE_MS = 650;   // glide home — same length as the finale's glide
+
+// FLIP the dial from wherever it currently is to the fixed centre-stage spot
+// the .is-intro class puts it in. Measured, not guessed — exact in any
+// orientation, and correct even mid-restart when the dial is somewhere odd.
+function startIntro() {
+  if (!motionOK() || !el.app || el.app.dataset.focus !== "1") return false;
+  const dial = el.stage.querySelector(".dial");
+  if (!dial) return false;
+  clearTimeout(state.introTimer);
+  dial.style.transition = ""; // a leftover glide must not pollute the measurements
+  dial.style.transform = "";
+  const from = dial.getBoundingClientRect();
+  el.stage.classList.add("is-intro");
+  const to = dial.getBoundingClientRect();
+  const scale = to.width > 0 ? from.width / to.width : 1;
+  const dx = (from.left + from.width / 2) - (to.left + to.width / 2);
+  const dy = (from.top + from.height / 2) - (to.top + to.height / 2);
+  if (dx || dy || scale !== 1) {
+    dial.style.transform = `translate(${Math.round(dx)}px, ${Math.round(dy)}px) scale(${scale.toFixed(3)})`;
+    void dial.offsetWidth; // commit the starting frame before animating out of it
+    dial.style.transition = `transform ${INTRO_DRIFT_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
+    dial.style.transform = "";
+    state.introTimer = setTimeout(() => { dial.style.transition = ""; }, INTRO_DRIFT_MS + 80);
+  }
+  return true;
+}
+// The reverse FLIP: centre stage back to the resting layout spot, as the
+// round's first bell rings. 650ms, well inside the 1.6s first-call runway, so
+// the glide is finished long before the first combo is spoken.
+function endIntro() {
+  if (!el.stage.classList.contains("is-intro")) return;
+  clearTimeout(state.introTimer);
+  const dial = el.stage.querySelector(".dial");
+  if (!dial) { el.stage.classList.remove("is-intro"); return; }
+  dial.style.transition = "";
+  dial.style.transform = "";
+  const from = dial.getBoundingClientRect();
+  el.stage.classList.remove("is-intro");
+  const to = dial.getBoundingClientRect();
+  const scale = to.width > 0 ? from.width / to.width : 1;
+  const dx = (from.left + from.width / 2) - (to.left + to.width / 2);
+  const dy = (from.top + from.height / 2) - (to.top + to.height / 2);
+  if (dx || dy || scale !== 1) {
+    dial.style.transform = `translate(${Math.round(dx)}px, ${Math.round(dy)}px) scale(${scale.toFixed(3)})`;
+    void dial.offsetWidth;
+    dial.style.transition = `transform ${INTRO_GLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
+    dial.style.transform = "";
+    state.introTimer = setTimeout(() => { dial.style.transition = ""; }, INTRO_GLIDE_MS + 80);
+  }
+}
+// Instant teardown for exits and resets — no glide, just gone.
+function clearIntro() {
+  clearTimeout(state.introTimer);
+  el.stage.classList.remove("is-intro");
+  const dial = el.stage.querySelector(".dial");
+  if (dial) { dial.style.transform = ""; dial.style.transition = ""; }
+}
+
+// Force-restart the pulse waves: a CSS animation only restarts on an
+// attribute CHANGE, so this guarantees the five waves fire every time
+// regardless of the attribute's history.
+function armPulse() {
+  const pulse = el.stage.querySelector(".dial__pulse");
+  if (!pulse) return;
+  pulse.style.animation = "none";
+  void pulse.offsetWidth; // reflow — the next animation start is guaranteed fresh
+  pulse.style.removeProperty("animation");
+}
+
 // Both entrances to a session end here. The countdown state paints on THIS
-// frame; the clock starts one settle beat later, so any residual layout or
-// device jank from the transition is absorbed inside an intentional pause
-// instead of surfacing as "5 -- 4-3-2-1". The countdown itself is the loading
-// screen — this just makes sure it starts on a clean frame. The pulse element
-// is re-armed by force: a CSS animation only restarts on an attribute CHANGE,
-// so this guarantees the five waves fire every time regardless of the
-// attribute's history.
+// frame; the clock starts once the entrance has played — after the drift when
+// the intro runs, after a short settle beat when it doesn't — so start-tap
+// jank is spent inside intentional choreography instead of surfacing as
+// "5 -- 4-3-2-1" or a swallowed "5". The pulse is held until the clock
+// genuinely starts, so wave 1 lands on the same beat as the first tick.
 function armCountdownStart() {
   state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
   el.combo.textContent = "Get ready...";
   if (el.comboName) el.comboName.textContent = "";
   render();
   const pulse = el.stage.querySelector(".dial__pulse");
-  if (pulse) {
-    pulse.style.animation = "none";
-    void pulse.offsetWidth; // reflow — the next animation start is guaranteed fresh
-    pulse.style.removeProperty("animation");
-  }
+  if (pulse) pulse.style.animation = "none";
+  const drifted = startIntro();
   clearTimeout(state.settleTimer);
   state.settleTimer = setTimeout(() => {
-    beginPhase(COUNTDOWN_SECONDS); // re-anchor: the 5 seconds start NOW, post-settle
+    armPulse();
+    beginPhase(COUNTDOWN_SECONDS); // re-anchor: the 5 seconds start NOW, post-entrance
     playTick();
     render();
     state.tickTimer = alignedTicker();
-  }, 140);
+  }, drifted ? INTRO_DRIFT_MS + 150 : 140);
 }
 
 function start() {
@@ -909,8 +990,8 @@ function pause() { state.running = false; clearInterval(state.tickTimer); clearT
 // switching apps) is exactly the thing that used to leave the rest of the
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
-function resume() { state.running = true; armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
-function reset() { clearInterval(state.tickTimer); clearTimeout(state.settleTimer); stopComboLoop(); clearFinale(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
+function resume() { state.running = true; armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
+function reset() { clearInterval(state.tickTimer); clearTimeout(state.settleTimer); stopComboLoop(); clearFinale(); clearIntro(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
 // "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1

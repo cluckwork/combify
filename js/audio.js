@@ -116,9 +116,22 @@ const SFX_FILES = { bell: "bell.mp3", tick: "tick.wav", warning: "warning.mp3", 
 const SFX_KEYS = Object.keys(SFX_FILES);
 const sfxCache = {};
 const sfx = { bell: true, tick: true, warning: true, blip: true, land: true };
+
+// Park at zero the moment a sound finishes on its own. v1.11.8 parked
+// elements at every PAUSE site but missed the natural end: an element that
+// completes its file sits at the end position, and the next play() of that
+// element had to issue the rewind at play time — an async seek on iOS racing
+// playback start, the "t-two" mechanism. With a pool of 2 that reuse happens
+// on the THIRD occurrence of the same word ("2" appears five times in the 10
+// combo), which is why the residual stutter was rare but never zero.
+// Rewinding here lands the seek in idle time, every time.
+function parkOnEnded(a) {
+  a.addEventListener("ended", () => { try { a.currentTime = 0; } catch (e) {} });
+  return a;
+}
 function preloadSfx() {
   SFX_KEYS.forEach((key) => {
-    const a = new Audio(SFX_DIR + SFX_FILES[key]);
+    const a = parkOnEnded(new Audio(SFX_DIR + SFX_FILES[key]));
     a.preload = "auto";
     sfxCache[key] = a;
     a.addEventListener("error", () => { sfx[key] = false; }, { once: true });
@@ -197,7 +210,7 @@ function playSfx(key, fallback, rate = 1) {
   if (!sfx[key]) { fallback(); return; }
   const node = getPooledSfx(key);
   if (!node) { fallback(); return; }
-  try { node.currentTime = 0; } catch (e) {}
+  try { if (node.currentTime > 0.05) node.currentTime = 0; } catch (e) {}
   // playbackRate with preservesPitch off is a pitch bend — one blip file
   // becomes the whole rising scale of the count-up.
   try {
@@ -207,6 +220,15 @@ function playSfx(key, fallback, rate = 1) {
   } catch (e) {}
   const p = node.play();
   if (p && p.catch) p.catch(fallback);
+  // Park after the sound has run its course. parkOnEnded covers the normal
+  // case; this covers dropped "ended" events, which sfx have no watchdog to
+  // notice. Same park-at-zero doctrine as the voice: the seek lands in idle
+  // time, never at the next play. The paused check means a still-ringing
+  // bell (or a pool-mate mid-sound) is never touched.
+  const durMs = node.duration && isFinite(node.duration) ? (node.duration * 1000) / rate : 1000;
+  setTimeout(() => {
+    try { if (node.paused && node.currentTime > 0.05) node.currentTime = 0; } catch (e) {}
+  }, durMs + 250);
 }
 
 // Ring the bell `times` in a row (1 = round start, 3 = session over).
@@ -362,7 +384,7 @@ const failedClips = new Set();
 const CLIPS_GIVE_UP_AT = 4;
 function preloadClips() {
   CLIP_KEYS.forEach((key) => {
-    const a = new Audio(CLIP_DIR + key + CLIP_EXT);
+    const a = parkOnEnded(new Audio(CLIP_DIR + key + CLIP_EXT));
     a.preload = "auto";
     clipCache[key] = a;
     a.addEventListener("error", () => {
@@ -442,7 +464,7 @@ function eachPool(fn) {
     const pool = clipPool[key] && clipPool[key].length
       ? clipPool[key]
       : (clipCache[key] ? [clipCache[key]] : []);
-    while (pool.length < UNLOCK_POOL_SIZE) pool.push(new Audio(CLIP_DIR + key + CLIP_EXT));
+    while (pool.length < UNLOCK_POOL_SIZE) pool.push(parkOnEnded(new Audio(CLIP_DIR + key + CLIP_EXT)));
     clipPool[key] = pool;
     fn(pool);
   });
@@ -451,7 +473,7 @@ function eachPool(fn) {
     const pool = sfxPool[key] && sfxPool[key].length
       ? sfxPool[key]
       : (sfxCache[key] ? [sfxCache[key]] : []);
-    while (pool.length < SFX_POOL_SIZE[key]) pool.push(new Audio(SFX_DIR + SFX_FILES[key]));
+    while (pool.length < SFX_POOL_SIZE[key]) pool.push(parkOnEnded(new Audio(SFX_DIR + SFX_FILES[key])));
     sfxPool[key] = pool;
     fn(pool);
   });
@@ -470,6 +492,14 @@ export function unlockAudioForMobile() {
 // the Start tap. One shot per pending request.
 function deepPrime() {
   if (!deepPrimePending) return;
+  // Never top up mid-work-round: ~20 muted play() calls land on the same
+  // media pipeline the voice is speaking through, and on a phone that burst
+  // is audible as a mid-word hiccup. Rare — it takes the first tap after
+  // Start landing DURING a round — but rare stutters are the ones left. Any
+  // tap outside work (the countdown, pause, rest, the finish screen) does
+  // the job instead; until then the playback layer's retry absorbs a
+  // blocked spare, exactly as it does before any deep prime.
+  if (hooks.stillInWork()) return;
   deepPrimePending = false;
   try {
     eachPool((pool) => { for (let i = 1; i < pool.length; i++) primeElement(pool[i]); });
@@ -486,7 +516,7 @@ function getPooledClip(key) {
   const pool = clipPool[key];
   if (!pool || !pool.length) {
     const src = clipCache[key];
-    return src ? src.cloneNode() : null;
+    return src ? parkOnEnded(src.cloneNode()) : null; // clones don't inherit listeners
   }
   const i = (poolIndex[key] || 0) % pool.length;
   poolIndex[key] = i + 1;
@@ -494,7 +524,7 @@ function getPooledClip(key) {
 }
 function getPooledSfx(key) {
   const pool = sfxPool[key];
-  if (!pool || !pool.length) return sfxCache[key] ? sfxCache[key].cloneNode() : null;
+  if (!pool || !pool.length) return sfxCache[key] ? parkOnEnded(sfxCache[key].cloneNode()) : null;
   const i = (poolIndex["__sfx_" + key] || 0) % pool.length;
   poolIndex["__sfx_" + key] = i + 1;
   return pool[i];
@@ -565,7 +595,10 @@ function playClips(keys, onDone) {
     node.onended = null;
     node.onerror = null;
     node.muted = false; // priming mutes elements; never inherit that into playback
-    try { node.currentTime = 0; } catch (e) {}
+    // Belt only: every finish/cut/park site rewinds elements during idle time,
+    // so this is normally a no-op. Guarded like primeElement — issuing a
+    // redundant seek HERE is the play-time race this file works to avoid.
+    try { if (node.currentTime > 0.05) node.currentTime = 0; } catch (e) {}
     voice.current = node;
 
     const startedAt = Date.now();
@@ -596,6 +629,11 @@ function playClips(keys, onDone) {
       // so they were spoken twice and the cadence went out.
       const elapsed = Date.now() - startedAt;
       if (elapsed < 120) { try { node.pause(); node.currentTime = 0; } catch (e) {} retryOr(afterWord); return; }
+      // Park the word we just finished. The parkOnEnded listener covers the
+      // normal case; this covers the watchdog case, where "ended" was dropped
+      // and the element is sitting at its end position with no event to park
+      // it. The seek lands in the word gap — idle time — never at play time.
+      try { node.pause(); if (node.currentTime > 0.05) node.currentTime = 0; } catch (e) {}
       afterWord();
     });
     const skip = once(() => { try { node.pause(); node.currentTime = 0; } catch (e) {} retryOr(playNext); });

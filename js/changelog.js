@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.13.0",
+    date: "2026-07-23",
+    size: "minor",
+    title: "A proper entrance, and the last stutter hunted",
+    notes: [
+      "Starting a session now has a real entrance: the ring drifts to the centre of the screen and grows, the countdown happens there — big, centre stage — and the bell glides it back as round 1 begins. No more \"5\" getting eaten while the screen sorts itself out.",
+      "Found and fixed the likely cause of the rare word-stutter: a repeated word in one combo (like the 2s in the 10 combo) could reuse a clip that was still sitting at its end, forcing a last-instant rewind that iOS sometimes played over. Every clip now rewinds the moment it finishes.",
+      "Tapping the screen mid-round can no longer trigger a burst of background audio work that could hiccup the word being spoken.",
+    ],
+  },
+  {
     v: "1.12.0",
     date: "2026-07-23",
     size: "minor",

@@ -592,6 +592,81 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// ---------------------------------------------- 10p. the start intro lifecycle
+{
+  section("10p. The countdown takes centre stage (start intro)");
+  // animate:true provides requestAnimationFrame, which is what motionOK()
+  // keys on — the intro must run here and must NOT run in the no-motion boots
+  // every other section uses.
+  const app = await boot({ duration: 0.6, animate: true });
+  app.set("rounds", 1); app.set("workSec", 10); app.set("restSec", 3);
+  const stage = app.doc.getElementById("stage");
+  app.click("startBtn");
+  await app.clock.advance(300); // mid-entrance: drift is 450ms
+  check("dial is centre stage during the countdown", stage.classList.contains("is-intro"), "no is-intro class");
+  check("countdown phase painted immediately", app.phase() === "Get Ready", app.phase());
+  await app.clock.advance(6000); // entrance + full countdown → work
+  check("intro ends when the round begins", !stage.classList.contains("is-intro"), "is-intro still set");
+  check("round is underway", app.phase() === "Work", app.phase());
+  // Exit mid-countdown must tear the intro down, not leave a fixed dial
+  // floating over the settings screen.
+  app.click("resetBtn");            // restart → back into a countdown + intro
+  await app.clock.advance(300);
+  check("restart re-enters the intro", stage.classList.contains("is-intro"), "no is-intro on restart");
+  app.click("startBtn");            // pause mid-entrance
+  app.click("exitBtn");
+  await app.clock.advance(200);
+  check("exit clears the intro completely", !stage.classList.contains("is-intro"), "is-intro survived exit");
+  app.restore();
+
+  // And without animation support the intro never engages — the old settle
+  // beat carries the start, and the countdown still works.
+  const b = await boot({ duration: 0.6 });
+  b.set("rounds", 1); b.set("workSec", 10); b.set("restSec", 3);
+  b.click("startBtn");
+  await b.clock.advance(300);
+  check("no intro without motion support", !b.doc.getElementById("stage").classList.contains("is-intro"),
+    "is-intro applied in a no-motion environment");
+  await b.clock.advance(6000);
+  check("countdown still reaches Work without the intro", b.phase() === "Work", b.phase());
+  b.restore();
+}
+
+// ------------------------------------- 10q. clips park at zero when they finish
+{
+  section("10q. Every element parks at zero the moment it finishes");
+  // v1.11.8 parked elements at every PAUSE site but missed the natural end:
+  // an element that completed its file sat at the end position, and its next
+  // reuse (the 3rd occurrence of a word in one combo — "2" appears five times
+  // in the 10 combo) issued the rewind seek AT PLAY TIME, racing playback on
+  // iOS — the rare residual "t-two" stutter. Elements must now be rewound the
+  // moment they finish, so the seek always lands in idle time.
+  const parked = (app) => app.stats.live.filter((a) => a.paused && a.currentTime > 0.05)
+    .map((a) => `${a.key}@${a.currentTime}`);
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 5);
+  app.setSeg("pace", "1500"); app.setSeg("level", "advanced"); // repeated-word combos
+  app.click("startBtn");
+  await app.clock.advance(30000);
+  app.click("startBtn"); // pause — nothing is sounding now
+  await app.clock.advance(2000);
+  check("no element left sitting at its end position", parked(app).length === 0,
+    parked(app).slice(0, 5).join(", "));
+  app.restore();
+
+  // The hard case: every "ended" event dropped, so only the watchdog can park.
+  const b = await boot({ duration: 0.6, dropEnded: true });
+  b.set("rounds", 1); b.set("workSec", 60); b.set("restSec", 5);
+  b.setSeg("pace", "1500"); b.setSeg("level", "advanced");
+  b.click("startBtn");
+  await b.clock.advance(30000);
+  b.click("startBtn");
+  await b.clock.advance(3000); // give the last watchdog time to fire and park
+  check("watchdog-advanced elements are parked too", parked(b).length === 0,
+    parked(b).slice(0, 5).join(", "));
+  b.restore();
+}
+
 // ------------------------------------------------------ 11. element count sanity
 {
   section("11. Audio element count (iOS decoder pressure)");

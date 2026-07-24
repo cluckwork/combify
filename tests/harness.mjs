@@ -114,6 +114,12 @@ export function makeAudioFactory(clock, cfg) {
       this._endTimer = clock.setTimeout(() => {
         this._endTimer = null;
         if (!this.paused) { this.paused = true; stats.playing--; if (this.isVoice) stats.voicePlaying--; }
+        // Faithful to real elements: playback that completes leaves the
+        // element sitting at its END position, whether or not the "ended"
+        // event is delivered. This is what makes un-parked elements visible
+        // to tests — a reused element at end-position forces a rewind seek
+        // at play time, which on iOS races playback (the "t-two" stutter).
+        this.currentTime = this.duration;
         if (!drop) this._emit("ended");
       }, this.duration * 1000);
       return Promise.resolve();
