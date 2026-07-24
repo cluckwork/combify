@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.18.0",
+    date: "2026-07-24",
+    size: "minor",
+    title: "Problem reports triage themselves",
+    notes: [
+      "Behind the scenes, every problem report now also files itself into the team's tracking sheet, where an automated daily check reads new reports, diagnoses the attached logs, and notifies the developer — so issues get looked at even before anyone opens their inbox.",
+    ],
+  },
+  {
     v: "1.17.3",
     date: "2026-07-24",
     size: "patch",

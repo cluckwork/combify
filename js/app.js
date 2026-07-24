@@ -210,6 +210,11 @@ function completeWorkRound() {
 // accounts), and the developer pastes it into the debugging loop. Kept
 // deliberately minimal: no forms, no screenshots, one native prompt.
 const REPORT_TO = "jduterme77@gmail.com";
+// The machine-readable copy of every report: a Google Form that feeds the
+// team's response Sheet. The Sheet's published CSV is what the scheduled
+// triage routine reads — this is the automated half of the report pipeline.
+const REPORT_SHEET_FORM = "https://docs.google.com/forms/d/e/1FAIpQLSfQKqR0pFmlELTxbUR80_dBaMBwfWj4QeCp_H39xq2zLYdfHg/formResponse";
+const REPORT_SHEET_FIELDS = { description: "entry.1825277287", log: "entry.227585221" };
 (function wireReport() {
   const foot = document.querySelector(".foot");
   const modal = document.getElementById("reportModal");
@@ -238,6 +243,20 @@ const REPORT_TO = "jduterme77@gmail.com";
     sendBtn.disabled = true; sendBtn.textContent = "Sending…";
     const text = auditReport(desc.slice(0, 500),
       `Combify v${VERSION} — sent to ${REPORT_TO}\nUA: ${navigator.userAgent || "?"}`);
+    // Fire-and-forget copy into the Sheet (no-cors: the response is opaque,
+    // so delivery can't be confirmed — the email below is the confirmed
+    // channel and the fallback trigger).
+    try {
+      const row = new URLSearchParams();
+      row.set(REPORT_SHEET_FIELDS.description, desc.slice(0, 500));
+      row.set(REPORT_SHEET_FIELDS.log, text);
+      fetch(REPORT_SHEET_FORM, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: row.toString(),
+      }).catch(() => {});
+    } catch (e) {}
     // Preferred path: straight to the developer's inbox via formsubmit.co (a
     // free relay — this app has no server of its own). The member just gets
     // thanked. NOTE: the relay's FIRST submission triggers a one-time

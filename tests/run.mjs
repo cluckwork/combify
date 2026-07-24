@@ -1523,9 +1523,12 @@ async function collectSpokenVsShown(app, ms) {
   textEl.value = "the bell rang twice at the end";
   click(app.doc.getElementById("reportSend"));
   await app.clock.advance(50);
-  check("report POSTs to the relay silently", posts.length === 1 && posts[0].url.includes("formsubmit.co"));
-  check("report carries the member's words", posts.length && posts[0].body.includes("the bell rang twice at the end"));
-  check("report carries the session's sound log", posts.length && posts[0].body.includes("PROBLEM REPORT") && /word/.test(posts[0].body));
+  const relayPost = posts.find((p) => p.url.includes("formsubmit.co"));
+  const sheetPost = posts.find((p) => p.url.includes("docs.google.com"));
+  check("report POSTs to the email relay silently", !!relayPost);
+  check("report also files itself into the triage Sheet", !!sheetPost && sheetPost.body.includes("entry."));
+  check("report carries the member's words", !!relayPost && relayPost.body.includes("the bell rang twice at the end"));
+  check("report carries the session's sound log", !!relayPost && relayPost.body.includes("PROBLEM REPORT") && /word/.test(relayPost.body));
   check("member sees the thank-you", !app.doc.getElementById("reportThanks").hidden);
   await app.clock.advance(2500);
   check("dialog closes itself after thanking", modal.hidden);
