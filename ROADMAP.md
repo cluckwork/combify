@@ -423,9 +423,10 @@ Captured so they're not lost; not planned yet.
   properties while others snapped ("appears 3/4 down then slides") — now the
   settings fade out (160ms), the layout swaps while dark (.is-entering
   suspends the fold transition so everything snaps invisibly), the countdown
-  fades in (300ms), and the clock starts at +760ms. WATCH ITEM from founder:
-  the finish count-up's landing ding sometimes skips or lags — re-evaluate on
-  this stabilised build before chasing it. 208 behaviour + 262 layout green.
+  fades in (300ms), and the clock starts at +760ms. Watch item (landing ding
+  skipping/lagging) CLOSED same day: founder confirmed it works on this
+  build — it was v1.13.x fallout, not pre-existing. 211 behaviour + 262
+  layout green.
 - **2026-07-23 — v1.13.1** — **Centre-stage countdown reverted; entrance is a
   hold, not a move.** Founder feedback on v1.13.0 within hours: the centred
   dial hid "Get ready..." and the dial's normal position was fine — the ask
