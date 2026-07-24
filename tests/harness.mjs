@@ -284,11 +284,21 @@ export async function boot(cfg = {}) {
     }
   }
   // Unique filename per boot so Node's module cache doesn't hand back the
-  // already-initialised app from a previous test.
-  const appPath = path.join(SCRATCH, `app_t_${Date.now()}_${Math.random().toString(36).slice(2)}.mjs`);
-  fs.writeFileSync(appPath, fs.readFileSync(appFile));
+  // already-initialised app from a previous test. audio.js needs the same
+  // treatment: it is stateful and DOM-bound (element pools, the shared
+  // AudioContext, document listeners), so a cached instance from an earlier
+  // boot would arrive still wired to that boot's document and fake audio.
+  // The other siblings (combos/stats/version) are safe to share.
+  const uniq = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const audioName = `audio_t_${uniq}.mjs`;
+  fs.writeFileSync(path.join(SCRATCH, audioName), fs.readFileSync(path.join(REPO, "js/audio.js")));
+  const appPath = path.join(SCRATCH, `app_t_${uniq}.mjs`);
+  // Point the app copy at its private audio copy. (Old revisions under APP_JS
+  // predate audio.js — the replace is simply a no-op there.)
+  fs.writeFileSync(appPath, fs.readFileSync(appFile, "utf8").replace('"./audio.js"', `"./${audioName}"`));
   await import("file://" + appPath);
   fs.unlinkSync(appPath);
+  fs.unlinkSync(path.join(SCRATCH, audioName));
 
   const doc = window.document;
   const api = {

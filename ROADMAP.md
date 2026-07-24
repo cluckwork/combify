@@ -4,7 +4,7 @@
 > of a session, read this one. It holds the vision, every idea we've had, what's
 > built, what's next, and what only you can do.
 >
-> **Last updated:** 2026-07-23 · **Current version:** v1.11.8 (live on GitHub Pages)
+> **Last updated:** 2026-07-23 · **Current version:** v1.12.0 (live on GitHub Pages)
 >
 > The running version is shown in the app's About section and comes from
 > `js/version.js`. Bumping it also renames the service worker cache, which is
@@ -104,8 +104,9 @@ Short version here; full trade-offs in each feature spec and the Decision Log.
 1. ~~**Voice quality**~~ ✅ **DECIDED** — AI voice clips generated via **ElevenLabs**.
    Clip-playback system is built (provider-agnostic); now needs the 12 clips
    generated and dropped into `audio/`. → see **6.1**
-2. **Music** — play-your-own in the background *(recommended)* / full Spotify
-   integration / skip? → see **6.2**
+2. ~~**Music**~~ ✅ **DECIDED (2026-07-23) — deferred.** Research found iOS
+   forces a hard trade-off (see 6.2); founder chose to skip music coexistence
+   for now.
 3. **Breakdown animation** — green-light the 2D-silhouette proof-of-concept
    (jab + cross) before committing to all moves? → see **6.3**
 
@@ -179,32 +180,33 @@ These are blockers I can't clear for you, and they're high-leverage:
 - **Open questions:** if a word chains awkwardly, we may later add a few
   whole-combo clips for common combos — not needed for now.
 
-### 6.2 — Music while training 🟡 · M2
+### 6.2 — Music while training ✅ DECIDED: deferred (2026-07-23) · M2
 
 - **What:** let people shadowbox to their own music alongside the bell/voice.
 - **Why:** people strongly associate shadowboxing with music; its absence feels
   dead.
-- **Reality check:** a phone already plays background music from Spotify/Apple
-  Music while another app runs. So "connecting" may be unnecessary — we mainly
-  need our audio to coexist and not kill their music.
-- **Options:**
-  - **A) Play-your-own — recommended.** User starts their music app, then opens
-    Combify; music continues under the bell/voice. Add "Open Spotify / Apple
-    Music" shortcut buttons. Works today, no logins, no cost.
-  - **B) Full Spotify integration.** Pick playlists / control playback in-app via
-    the Web Playback SDK. Requires **every user** to have Spotify **Premium**, log
-    in through Spotify, plus app registration. Apple Music is a separate SDK. Big
-    build. Later milestone.
-- **Tasks:**
-  - [ ] Decide the option
-  - [ ] (A) Add quick-launch buttons; verify our audio ducks/coexists on iOS +
-        Android without stopping background playback
-  - [ ] (B) — deferred; scope separately if we ever commit
-- **Done when:** a user can have their playlist going and hear both the music and
-  the callouts comfortably.
-- **Effort:** A = **S** · B = **XL**
-- **Open questions:** does our WebAudio bell interrupt background music on iOS?
-  (Needs a real-device test — may require configuring the audio session.)
+- **Decision:** **deferred** — founder's call after the research below. Keep
+  this section: it documents a REAL platform constraint so we never re-argue
+  or re-research it.
+- **What the research found (don't relitigate — this is WebKit source, not
+  guesswork):** on iPhone, a web app must choose ONE of:
+  1. **Always audible (today's behavior).** Our sounds ride the media pipeline
+     and ignore the silent switch — but the page's audio session goes to
+     Apple's `MediaPlayback` category, which **pauses Spotify/Apple Music** at
+     our first sound. Music coexistence is broken on iOS today.
+  2. **Mix with music** — set `navigator.audioSession.type = "transient"`
+     (Safari 16.4+; verified in WebKit's `DOMAudioSession.cpp` that this maps
+     to Apple's `Ambient` category). Music keeps playing under our bells and
+     voice, **but the silent switch then mutes ALL of Combify** — the exact
+     "bells don't work" failure v1.8.2/v1.8.3 fought, since most phones sit on
+     silent. Native apps can have both (`.playback + .mixWithOthers`); web
+     apps cannot express that combination. Nothing detects whether music is
+     playing or the switch is flipped, so the app can't choose dynamically.
+  - Android is fine either way: Chrome ducks short sounds natively and doesn't
+    implement the Audio Session API.
+- **If we ever revisit:** the sane shape is a "Keep my music playing" toggle in
+  More options (off by default; sets `transient` when on, with a hint that the
+  silent switch must be off). Effort **S**.
 
 ### 6.3 — "Break it down": animated combo breakdown 💡 · M3 · ← the big one
 
@@ -306,7 +308,8 @@ Directly serves the business goal.
   | --- | --- |
   | `index.html` | Page structure |
   | `css/styles.css` | All styling (dark, boxing-red, mobile-first) |
-  | `js/app.js` | Timer, bell, voice, settings controls |
+  | `js/app.js` | Timer, phases, settings controls, rendering |
+  | `js/audio.js` | Everything that makes sound: bell/sfx, voice clips, pools, priming |
   | `js/combos.js` | **The combo playbook — edit this to change combos** |
   | `manifest.json` | PWA install metadata |
   | `sw.js` | Offline caching |
@@ -335,6 +338,13 @@ Choices made and *why*, so we don't relitigate them.
   infrastructure only when usage justifies it.
 - **Pace = the gap *after* a callout finishes** — so the voice never talks over
   itself and pace changes apply live (fixed the pace/voice mismatch).
+- **No voice on/off toggle (v1.12.0)** — the caller is the whole point of the
+  app; nobody trains with it silent on purpose, and the volume rocker covers
+  "quieter". One less control on the settings screen. (Note: the iPhone silent
+  switch deliberately does NOT mute the voice — see 6.2 — so "silence the
+  phone" means the volume buttons.)
+- **Music coexistence deferred (v1.12.0)** — iOS makes it a hard either/or
+  with silent-switch audibility; audibility wins for now. Full findings in 6.2.
 - **Name: "Combify," branded "by Boxing With Bakr"** — product-sounding, not a
   school project; still tied to the gym.
 
@@ -388,6 +398,30 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.12.0** — **Session length up front, rest-end warning, voice
+  toggle removed, audio split into its own module.** The ready screen's clock
+  now shows the whole session's length (rounds×work + rests between them,
+  updating live as settings change) instead of 00:00 — "how long will this
+  take?" was the question the screen wasn't answering. Rest now ends like a
+  round begins: the two-beep heads-up at 10s left (skipped when rest ≤ 10s —
+  it would land on the rest bell), then the countdown TICK at 3-2-1 — the tick
+  already means "get ready" from the pre-round 5-4-3-2-1, so each sound keeps
+  one meaning (work keeps its clapper flourish; the two ends sound different
+  on purpose). The "Call combos out loud" switch is gone (founder's call: the
+  caller IS the app), taking `voiceOn` plumbing and the switch CSS with it.
+  The entire audio system (~660 lines: context, sfx, pools, priming, the voice
+  chain) moved verbatim from app.js to js/audio.js behind a four-hook
+  interface (stillInWork / msLeftInPhase / wordGap / onWord); app.js is now
+  1,020 lines of timer/UI. The move surfaced a real harness gap: app.js got a
+  fresh module per boot but audio.js resolved to one cached path, so boot 2
+  inherited boot 1's audio wired to a dead document — each boot now gets its
+  own audio copy. Music coexistence was researched down to WebKit source and
+  DEFERRED: on iOS it's a hard either/or against silent-switch audibility
+  (full findings + the revisit shape recorded in §6.2). New tests: rest-end
+  cues (long and short rests), ready-screen total (boot value, live updates,
+  no-rest single round, restored after exit). 199 behaviour + 262 layout
+  green, including the count-up blip-sync assertions — the finale audio
+  survived the module move untouched.
 - **2026-07-23 — v1.11.8** — **The "t-two" stutter root cause + four fixes.**
   The stutter's phonetic signature (word onset, hiccup, word again) pinned it:
   currentTime assignment is an ASYNC seek on iOS, and an element paused

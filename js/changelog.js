@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.12.0",
+    date: "2026-07-23",
+    size: "minor",
+    title: "Know your session, never miss the bell",
+    notes: [
+      "The main screen now shows how long your whole session will take with your current settings — rounds plus rests — instead of a dead 00:00.",
+      "Rest now warns you before it ends: the two-beep heads-up with 10 seconds left, then the same 3-2-1 ticks as the pre-round countdown — so the bell never catches you with your hands down.",
+      "The \"Call combos out loud\" switch is gone. The voice is always on — it's the whole point of Combify — and the volume buttons cover the rest.",
+    ],
+  },
+  {
     v: "1.11.8",
     date: "2026-07-23",
     size: "patch",

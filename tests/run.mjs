@@ -43,6 +43,33 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
+// -------------------------------------- 1b. ready screen shows session length
+{
+  section("1b. Ready screen shows the whole session's length");
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  // Defaults: 3 rounds × 120s work + 2 × 30s rest = 420s. The clock must
+  // answer "how long will this take?" instead of showing 00:00.
+  check("total time shown at boot", app.clockText() === "07:00", app.clockText());
+  // Changing a setting through the real UI updates it live.
+  const plus = app.doc.querySelectorAll("#rounds .step__btn")[1];
+  plus.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  check("total follows the settings (4 rounds)", app.clockText() === "09:30", app.clockText());
+  // One round means no rest at all — the session ends on the bell.
+  const minus = app.doc.querySelectorAll("#rounds .step__btn")[0];
+  for (let i = 0; i < 3; i++) minus.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  check("a single round counts no rest", app.clockText() === "02:00", app.clockText());
+  // And exiting a session lands back on the total, not a dead 00:00.
+  app.click("startBtn");
+  await app.clock.advance(1000);
+  app.click("startBtn"); // pause mid-countdown
+  app.click("exitBtn");
+  await app.clock.advance(200);
+  check("back on the ready screen, the total returns", app.clockText() === "02:00", app.clockText());
+  app.restore();
+  clearStore();
+}
+
 // ------------------------------------------------- 2. THE BUG: ended dropped
 {
   section("2. iOS drops EVERY 'ended' event (the reported bug)");
@@ -155,22 +182,47 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
-// ------------------------------------------------------------ 8. voice toggle
+// ------------------------------------------------------- 8. rest-end warning
+// (This section replaced the voice on/off toggle tests when the toggle was
+// removed in v1.12.0 — the voice is always on now.)
 {
-  section("8. Voice switched off");
+  section("8. Rest warns before it ends");
   const app = await boot({ duration: 0.6 });
-  app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 10);
+  app.set("rounds", 2); app.set("workSec", 15); app.set("restSec", 20);
   app.setSeg("pace", "1500");
-  app.doc.getElementById("voiceOn").checked = false;
   app.click("startBtn");
-  const afterPriming = app.stats.plays; // Start primes the pool — those plays are expected
-  const { n } = await countCombos(app, 30000);
-  const duringRound = app.stats.plays - afterPriming;
-  check("combos still displayed with voice off", n >= 4, `${n}`);
-  check("no VOICE clips played during round with voice off",
-    Object.keys(app.stats.byKey).filter((k) => !["bell", "tick", "warning", "blip", "land"].includes(k)).every((k) => app.stats.byKey[k] <= 2),
-    `plays during round: ${duringRound}, byKey=${JSON.stringify(app.stats.byKey)}`);
+  await app.clock.advance(6500);           // countdown → into work
+  await app.clock.advance(15000);          // work runs out → rest begins (20s)
+  check("in Rest for this test", app.phase() === "Rest", app.phase());
+  const warnBase = app.stats.byKey.warning || 0;
+  const tickBase = app.stats.byKey.tick || 0;
+  await app.clock.advance(8000);           // still >10s left — must stay quiet
+  check("no early warning deep inside rest", (app.stats.byKey.warning || 0) === warnBase,
+    `${(app.stats.byKey.warning || 0) - warnBase} extra`);
+  await app.clock.advance(3000);           // crosses the 10s-left boundary
+  check("the 10-second heads-up plays in rest", (app.stats.byKey.warning || 0) === warnBase + 1,
+    `warning plays: ${warnBase} → ${app.stats.byKey.warning || 0}`);
+  await app.clock.advance(8000);           // through 3-2-1 into the next round
+  check("the last three seconds tick like the countdown", (app.stats.byKey.tick || 0) >= tickBase + 3,
+    `tick plays: ${tickBase} → ${app.stats.byKey.tick || 0}`);
+  check("round 2 starts after the run-in", app.phase() === "Work", app.phase());
   app.restore();
+
+  // A rest of 10s or less skips the heads-up (it would fire on top of the rest
+  // bell) but keeps the 3-2-1 run-in.
+  const b = await boot({ duration: 0.6 });
+  b.set("rounds", 2); b.set("workSec", 15); b.set("restSec", 10);
+  b.click("startBtn");
+  await b.clock.advance(6500);
+  await b.clock.advance(15000);            // into the 10s rest
+  const warnBase2 = b.stats.byKey.warning || 0;
+  const tickBase2 = b.stats.byKey.tick || 0;
+  await b.clock.advance(9500);             // nearly the whole rest
+  check("a short rest skips the 10s heads-up", (b.stats.byKey.warning || 0) === warnBase2,
+    `${(b.stats.byKey.warning || 0) - warnBase2} extra`);
+  check("but keeps the 3-2-1 run-in", (b.stats.byKey.tick || 0) >= tickBase2 + 3,
+    `tick plays: ${tickBase2} → ${b.stats.byKey.tick || 0}`);
+  b.restore();
 }
 
 // --------------------------------------------------------- 9. wake lock detail
@@ -658,8 +710,6 @@ async function countCombos(app, ms, step = 200) {
   tapSeg(a, "level", 0.9);        // → advanced (3rd of 3 segments)
   tapSeg(a, "pace", 0.9);         // → Fast
   clickPlus(a, "rounds"); clickPlus(a, "rounds");   // 3 → 5
-  a.doc.getElementById("voiceOn").checked = false;
-  a.doc.getElementById("voiceOn").dispatchEvent(new a.window.Event("change", { bubbles: true }));
 
   const want = {
     level: a.doc.getElementById("level").dataset.value,
@@ -682,8 +732,6 @@ async function countCombos(app, ms, step = 200) {
   check("stepper display matches restored value",
     b.doc.querySelector("#rounds .step__val").textContent === want.rounds,
     b.doc.querySelector("#rounds .step__val").textContent);
-  check("voice toggle restored", b.doc.getElementById("voiceOn").checked === false,
-    String(b.doc.getElementById("voiceOn").checked));
   // and the restored settings must actually drive the session
   b.click("startBtn");
   await b.clock.advance(6500);
