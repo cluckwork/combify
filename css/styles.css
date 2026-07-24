@@ -963,9 +963,12 @@ button.foot__link {
   inset: 0;
   z-index: 50;
   display: flex;
-  align-items: center;
+  /* Anchored high, not centred: the iPhone keyboard owns the bottom ~40%
+     of the screen the moment the textarea focuses, and a centred card sat
+     half-behind it. Up here the whole card stays visible while typing. */
+  align-items: flex-start;
   justify-content: center;
-  padding: 20px;
+  padding: max(8vh, calc(env(safe-area-inset-top) + 28px)) 20px 20px;
   /* A blurred, darker scrim: the card must read as a layer ABOVE the app,
      not a box sharing its background ("clashes with the background"). */
   background: rgba(0, 0, 0, 0.72);

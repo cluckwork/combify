@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.17.3",
+    date: "2026-07-24",
+    size: "patch",
+    title: "Report card clears the keyboard",
+    notes: [
+      "The report card now sits in the upper part of the screen, so the phone keyboard no longer covers it while you type.",
+    ],
+  },
+  {
     v: "1.17.2",
     date: "2026-07-24",
     size: "patch",
