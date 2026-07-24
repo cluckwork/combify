@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.17.2",
+    date: "2026-07-24",
+    size: "patch",
+    title: "Report card, properly dressed",
+    notes: [
+      "The report card now looks like Combify: the app's own title style, a quiet Cancel, a compact teal Send, and a smooth entrance — instead of two oversized buttons filling the card.",
+    ],
+  },
+  {
     v: "1.17.1",
     date: "2026-07-24",
     size: "patch",

@@ -984,8 +984,40 @@ button.foot__link {
   gap: 10px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
 }
-.report__title { margin: 0; font-size: 14px; font-weight: 700; }
-.report__sub { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+/* Title in the app's own label idiom — mono, uppercase, tracked — so the
+   card reads as Combify, not as a generic dialog. */
+.report__title {
+  margin: 0;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.report__sub { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+/* Dialog actions are compact and right-aligned — the app's full-width .btn
+   made Cancel as loud as Send and the pair swallowed the card. Cancel goes
+   quiet (ghost); Send keeps the accent. */
+.report__actions .btn {
+  flex: 0 0 auto;
+  padding: 9px 18px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+.report__actions #reportCancel {
+  background: none;
+  color: var(--muted);
+}
+.report__actions #reportCancel:hover { color: var(--text); }
+@keyframes reportIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+.report__card { animation: reportIn 0.18s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .report__card { animation: none; }
+}
 .report__text {
   width: 100%;
   resize: none;
