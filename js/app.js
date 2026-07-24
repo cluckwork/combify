@@ -383,8 +383,16 @@ function buzz(pattern) {
 // slows into the total and lands with a pop. The slowing half ticks a small
 // haptic on each change — because the changes naturally thin out as it
 // decelerates, that reads as the count "settling" rather than a buzz.
-function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = false, glow = null } = {}) {
+function countUp(node, to, { ms = 0, pop = false, haptics = false, sound = false, glow = null } = {}) {
   if (!motionOK() || to <= 0) { node.textContent = to.toLocaleString(); return; }
+  // The riff scales with what was earned: one blip per punch up to two
+  // dozen, uniform strides above that, and the whole climb lasts longer the
+  // bigger the total — a 6-punch warm-down is a quick run up the scale, a
+  // 100-punch session a proper drumroll. Bounds keep it snappy: 0.5s floor
+  // so tiny counts still read as a run-up, ~2.2s ceiling so big ones never
+  // drag. Callers can still pass ms to override.
+  const MAX_STEPS = Math.min(to, 24);
+  if (!ms) ms = Math.max(500, Math.min(2200, 55 * MAX_STEPS + 6 * Math.min(to, 100)));
   // A precomputed SCHEDULE, not time-sampling. Sampling an easing curve per
   // frame meant a dropped frame skipped numbers ("the numbers skip a few
   // because of lag"). Here every shown value is decided up front — small
@@ -392,7 +400,6 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = fal
   // late frame fires the next step LATE rather than skipping it. At most one
   // step fires per frame, so a stall stretches the count instead of
   // machine-gunning the tail. Each step is one number + one blip, always.
-  const MAX_STEPS = 18;
   const values = [];
   if (to <= MAX_STEPS) {
     for (let v = 1; v <= to; v++) values.push(v);
@@ -508,7 +515,8 @@ function buildFinishSummary(streak, streakBit) {
   heroNum.style.minWidth = String(session.punches.toLocaleString().length) + "ch";
   heroNum.style.textAlign = "center";
   const staged = el.stage.classList.contains("is-finale") && !el.stage.classList.contains("is-finale-reveal");
-  el.stats.__runCountUp = () => countUp(digits, session.punches, { ms: 1200, pop: true, haptics: true, sound: true, glow: halo });
+  // No fixed ms: countUp sizes the climb to the punch total itself.
+  el.stats.__runCountUp = () => countUp(digits, session.punches, { pop: true, haptics: true, sound: true, glow: halo });
   if (!staged) el.stats.__runCountUp();
 
   // Everything else is supporting detail on one quieter line.

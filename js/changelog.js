@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.16.2",
+    date: "2026-07-24",
+    size: "patch",
+    title: "The count-up scales with your session",
+    notes: [
+      "The rising blips now match what you actually did: up to two dozen punches, every single one gets its own note — the riff IS your count. Bigger totals climb longer (a 100-punch session earns a proper drumroll, ~2 seconds), small ones stay quick, and the sound still runs on its own clock so nothing on screen can glitch it.",
+    ],
+  },
+  {
     v: "1.16.1",
     date: "2026-07-24",
     size: "patch",
