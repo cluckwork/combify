@@ -405,6 +405,40 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-24 — v1.15.0** — **The sound engine rebuilt around the keeper.**
+  Third real-phone log (1632 events, three sessions) + founder's ears drove
+  a consolidation: (1) SILENT KEEPER — a looping silence.wav media element
+  started inside the Start tap and held all session. Warms the audio route
+  (first plays were 105-124ms late vs 35ms warm — "the 5 starts late /
+  4-3-2-1 early"; round-2 countdowns, already warm, were perfect) and holds
+  the audio session in playback category, which makes Web Audio ignore the
+  ring/silent switch. (2) WEB AUDIO SFX — with the switch problem closed by
+  the keeper, every one-shot sfx prefers a decoded buffer (~2ms start
+  precision, immune to main-thread stalls); pooled media elements remain the
+  fallback, gated on silenceOk so a failed keeper degrades gracefully. The
+  count-up riff is scheduled in ONE shot on the audio clock (the log showed
+  per-step timers lurching 230ms and media blips reused mid-sound, play()
+  no-ops — "the blip is HORRENDOUS"); stopBlipRiff cuts it on restart. (3)
+  SLIP ZOMBIE — slip's first pool element sat wedged "playing at 0:00" all
+  session (play() never started, never rejected; iOS flushed 4 rejects at
+  once minutes later): every other slip a 2s hole, then failedClips → TTS
+  robot voice — "every combo glitching". Fix: zombie pickup heal
+  (pause+load), watchdog dead-at-zero → heal + retry on the twin (test 37,
+  wedge modeled in FakeAudio; fails pre-fix). slip.mp3 verified clean at
+  source — the phone's SW cache was poisoned; clip load errors now retry
+  once with a cache-busting query before black-marking (harness load()
+  re-emits error for missing files; tests 13/14 fire errors twice). (4)
+  CADENCE — afterWord parks the just-finished word (chain-owned, ended-only;
+  reuse ≥2 words away) removing the +50-80ms play()-from-ended outliers.
+  Keeper released 8s after the finale (guarded vs restart). Suite repairs
+  from the fidelity change: seeksWhilePlaying keyed on _sounding (not
+  !paused — ended elements keep paused=false), layout's buffer
+  instrumentation now tells blip (0.070s) from tick (0.090s) by decoded
+  length and no longer counts finish bells/countdown ticks as early blips.
+  234 behaviour + 100/100 chaos + 262 layout green. Founder A/B still owed:
+  one session audit-on vs audit-off (his hint that audit-mode overhead may
+  contribute); next audit log should show sfx:wa/blip:riff events and no
+  word:tts, no watchdog holes.
 - **2026-07-23 — v1.14.1** — **First flight-recorder log actioned: blip
   rhythm, tick tempo, launch-into-bell, prime skip.** Founder ran v1.14.0 on
   a real iPhone with audit mode armed; the 381-event log + founder's ears

@@ -8,6 +8,7 @@ import {
   configureVoice, speakCombo, stopVoice,
   armAudio, unlockAudioForMobile, markNeedsReprime,
   ringBell, playTick, playWarning, playBlip, playLand, parkIdleSfx,
+  startAudioSession, stopAudioSession, scheduleBlipRiff, stopBlipRiff,
 } from "./audio.js";
 import { audit, auditOn, setAudit, auditDump } from "./audit.js";
 
@@ -311,6 +312,7 @@ document.addEventListener("visibilitychange", () => {
     return;
   }
   armAudio();
+  if (state.running) startAudioSession(); // best-effort; a rejection just means no keeper until the next tap
   if (state.running && state.phase === "work" && !state.comboTimer) startComboLoop();
 });
 
@@ -373,6 +375,13 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = fal
     return ((lo + hi) / 2) * ms;
   };
   const times = values.map((_, i) => timeFor((i + 1) / values.length));
+  // The riff is best scheduled in ONE shot on the audio clock, where no
+  // main-thread stall can touch it (the second real-phone log showed even
+  // timers lurching 230ms during the finale). When Web Audio isn't
+  // available the per-step playBlip below covers it.
+  const riffOn = sound && scheduleBlipRiff(
+    times.slice(0, -1),
+    values.map((_, i) => 0.7 + ((i + 1) / values.length) * 1.1).slice(0, -1));
   // Chained one-shot timers, not requestAnimationFrame. rAF ties every step
   // to the compositor, and the first real-phone audit log showed exactly
   // what that costs: dropped frames mid-finale turned the blip scale's
@@ -395,10 +404,10 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = fal
     if (glow) glow.style.opacity = String(0.85 * frac);
     const now = Date.now();
     if (haptics && frac > 0.55 && now - lastBuzz > 45) { buzz(7); lastBuzz = now; }
-    if (sound && next < values.length) playBlip(frac); // the landing replaces the final blip
+    if (sound && !riffOn && next < values.length) playBlip(frac); // the landing replaces the final blip
     // Park the blips that just finished, from our own call stack, so every
     // step ahead starts at zero — see the note above parkIdleSfx.
-    if (sound) parkIdleSfx();
+    if (sound && !riffOn) parkIdleSfx();
     if (next < values.length) {
       setTimeout(step, Math.max(50, times[next] - (Date.now() - started)));
       return;
@@ -807,6 +816,7 @@ function startFinale() {
   }, FINALE_HOLD_MS);
 }
 function clearFinale() {
+  stopBlipRiff(); // a restart mid-riff must not leave scheduled blips ringing into the countdown
   clearTimeout(state.finaleTimer);
   el.stage.classList.remove("is-finale", "is-finale-reveal");
   const meta = el.stage.querySelector(".stage__meta");
@@ -817,6 +827,9 @@ function finish() {
   state.phase = "done"; state.running = false;
   audit("phase", "done");
   parkIdleSfx(); // blips and the landing hit start the finale parked at zero
+  // Hand the audio session back (to Spotify etc.) once the celebration is
+  // over. Guarded: a restart re-arms the keeper and must not lose it.
+  setTimeout(() => { if (state.phase === "done" && !state.running) stopAudioSession(); }, 8000);
   // Three bell strikes: the traditional end of the fight. A composed victory
   // jingle was tried here (v1.9.1) and rejected by the founder — the boxing
   // bell IS the sound of finishing.
@@ -1017,6 +1030,7 @@ function armCountdownStart() {
 function start() {
   armAudio();
   unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
+  startAudioSession(); // the silent keeper: warms the route, holds the session — see audio.js
   enterFullscreen();
   state.running = true;
   acquireWakeLock();
@@ -1024,14 +1038,14 @@ function start() {
   resetSessionTally();
   beginEntrance();
 }
-function pause() { state.running = false; audit("phase", "paused"); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
+function pause() { state.running = false; audit("phase", "paused"); stopAudioSession(); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
 // Resuming is a tap like any other, so it is also the moment to re-arm audio:
 // whatever suspended the context while you were paused (a call, a lock screen,
 // switching apps) is exactly the thing that used to leave the rest of the
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
-function resume() { state.running = true; audit("phase", `resume ${state.phase}`); armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
-function reset() { clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
+function resume() { state.running = true; audit("phase", `resume ${state.phase}`); armAudio(); unlockAudioForMobile(); startAudioSession(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
+function reset() { clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); stopAudioSession(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
 // "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1
@@ -1058,6 +1072,7 @@ function restartSession() {
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   armAudio();
   unlockAudioForMobile(); // free unless a background revoked the unlock
+  startAudioSession();
   enterFullscreen();
   resetSessionTally();
   delete el.stats.dataset.finished; // next finish must rebuild its summary

@@ -1,5 +1,5 @@
 // tests.mjs — comprehensive behavioural tests against the real js/app.js
-import { boot, clearStore, peekStore } from "./harness.mjs";
+import { boot, clearStore, peekStore, runAndSample } from "./harness.mjs";
 
 let pass = 0, fail = 0;
 const results = [];
@@ -682,8 +682,12 @@ async function countCombos(app, ms, step = 200) {
 {
   section("13. Clip files missing → TTS fallback");
   const app = await boot({ duration: 0.6, failLoad: true });
-  // simulate load errors on the preloaded clips
-  for (const a of app.stats.live) if (a._l.error) for (const fn of a._l.error) fn({ type: "error" });
+  // Simulate PERSISTENT load errors on the preloaded clips: twice each,
+  // because the first error is absorbed by the cache-bust retry (v1.15) —
+  // a genuinely broken file errors again on the refetch.
+  for (let round = 0; round < 2; round++) {
+    for (const a of app.stats.live) if (a._l.error) for (const fn of [...a._l.error]) fn({ type: "error" });
+  }
   app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 10);
   app.setSeg("pace", "1500");
   app.click("startBtn");
@@ -697,7 +701,9 @@ async function countCombos(app, ms, step = 200) {
 {
   section("14. TTS + iOS never fires onend");
   const app = await boot({ duration: 0.6, dropSpeechEnd: true });
-  for (const a of app.stats.live) if (a._l.error) for (const fn of a._l.error) fn({ type: "error" });
+  for (let round = 0; round < 2; round++) {
+    for (const a of app.stats.live) if (a._l.error) for (const fn of [...a._l.error]) fn({ type: "error" });
+  }
   app.set("rounds", 1); app.set("workSec", 120); app.set("restSec", 10);
   app.setSeg("pace", "1500");
   app.click("startBtn");
@@ -1455,6 +1461,37 @@ async function collectSpokenVsShown(app, ms) {
   }
   check("combos were launched at all", launched >= 6, `${launched}`);
   check("none launched within 1.25s of a bell", intoBell === 0, `${intoBell} launched into the bell`);
+  app.restore();
+  clearStore();
+}
+
+// ------------------------- 37. a wedged element can't keep swallowing a word
+// The second real-phone log: slip's first pool element got stuck "playing"
+// at 0:00 for an entire session — a play() iOS neither started nor rejected.
+// Every other slip landed on the zombie: a 2-second silent hole where the
+// word should be, three times, then a robot-voice fallback. The fix heals
+// the element (load()) and retries the word on the pool's twin.
+{
+  section("37. A wedged clip element cannot silently skip its word");
+  clearStore();
+  let zombie = null;
+  const app = await boot({
+    duration: 0.6, rngSeed: 11,
+    playWedged: (el) => {
+      if (el.key !== "slip" || el.muted) return false;
+      if (!zombie) zombie = el; // first slip element wedges, forever — like the real log
+      return el === zombie;
+    },
+  });
+  app.set("rounds", 1); app.set("workSec", 40); app.set("restSec", 5);
+  app.setSeg("pace", "500"); app.setSeg("level", "intermediate");
+  app.click("startBtn");
+  const seen = await runAndSample(app, 60000);
+  const slipShown = seen.reduce((n, s) => n + (s.combo.match(/slip/g) || []).length, 0);
+  const slipHeard = app.stats.audible.filter((a) => a.key === "slip" && !a.muted).length;
+  check("combos with slip occurred", slipShown >= 2, `${slipShown} shown`);
+  check("every shown slip was heard (zombie healed, word retried)",
+    slipHeard >= slipShown, `shown ${slipShown}, heard ${slipHeard}`);
   app.restore();
   clearStore();
 }

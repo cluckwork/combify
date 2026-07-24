@@ -101,8 +101,10 @@ export function makeAudioFactory(clock, cfg) {
     // voice that's an artifact by definition (mid-word jump).
     get currentTime() { return this._seekTarget != null ? this._seekTarget : this._ct; }
     set currentTime(v) {
-      stats.seeks.push({ t: clock.now, key: this.key, from: this._ct, to: v, playing: !this.paused, voice: this.isVoice });
-      if (!this.paused) stats.seeksWhilePlaying.push({ t: clock.now, key: this.key, voice: this.isVoice });
+      // "playing" means emitting sound (_sounding) — NOT !paused, which per
+      // spec stays false after a natural end (an ended element is idle).
+      stats.seeks.push({ t: clock.now, key: this.key, from: this._ct, to: v, playing: this._sounding, voice: this.isVoice });
+      if (this._sounding) stats.seeksWhilePlaying.push({ t: clock.now, key: this.key, voice: this.isVoice });
       if (v < this.duration) this.ended = false; // spec: seeking clears the ended flag
       const lat = chaos && chaos.seekLatency ? chaos.seekLatency() : 0;
       if (lat > 0) {
@@ -118,6 +120,22 @@ export function makeAudioFactory(clock, cfg) {
       for (const fn of this._l[t] || []) fn.call(this, { type: t });
     }
     cloneNode() { const a = new FakeAudio(this.src); return a; }
+    // load() aborts whatever the element was doing and resets it — the
+    // app's zombie heal relies on this (a wedged play() that neither starts
+    // nor rejects, as the second real-phone log showed for slip).
+    load() {
+      if (this._endTimer) { clock.clear(this._endTimer); this._endTimer = null; }
+      if (this._sounding) { this._sounding = false; stats.playing--; if (this.isVoice) stats.voicePlaying--; }
+      this.paused = true; this._ct = 0; this._seekTarget = null; this.ended = false;
+      // Faithful: load() restarts resource selection — a missing file fires
+      // "error" again (the clip cache-bust retry depends on this).
+      if (!cfg.deferMetadata) {
+        clock.setTimeout(() => {
+          if (this.exists) { this._emit("loadeddata"); this._emit("canplaythrough"); }
+          else this._emit("error");
+        }, 5);
+      }
+    }
     pause() {
       if (this._sounding) {
         // A pause of an audibly playing voice element cuts a word short.
@@ -140,6 +158,13 @@ export function makeAudioFactory(clock, cfg) {
       if (!this.exists) {   // missing file: record the wasted attempt
         stats.missingPlayAttempts.push({ t: clock.now, src: this.src });
         return Promise.reject(new Error("NotSupportedError"));
+      }
+      // cfg.playWedged: iOS's nastiest failure, seen on a real phone — the
+      // play() neither starts nor rejects. The element claims "playing",
+      // sits at 0:00 forever, and no event ever fires.
+      if (typeof cfg.playWedged === "function" && cfg.playWedged(this)) {
+        this.paused = false;
+        return Promise.resolve();
       }
       stats.plays++;
       stats.byKey[this.key] = (stats.byKey[this.key] || 0) + 1;

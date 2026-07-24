@@ -213,6 +213,7 @@ function synthBell(times = 1) {
 // (momentary focus loss) shouldn't cost the whole session its real bell.
 function playSfx(key, fallback, rate = 1) {
   if (!sfx[key]) { fallback(); return; }
+  if (playSfxBuffer(key, rate)) return; // sample-accurate path — see loadSfxBuffers
   const node = getPooledSfx(key);
   if (!node) { fallback(); return; }
   // Rewind only an element genuinely left mid-file (a missed park site). An
@@ -306,6 +307,115 @@ export function playBlip(progress) {
   const rate = 0.7 + progress * 1.1; // ~0.7x → 1.8x: a clear low-to-high climb
   playSfx("blip", () => synthBlip(rate), rate);
 }
+
+// ---------- The audio-session keeper ----------
+// A looping SILENT media element, started inside the Start tap and held for
+// the whole session. Two jobs no audible sound can do:
+//   1. Warm the audio route from t=0. iOS spins its output hardware up
+//      lazily: the second real-phone audit log showed the session's first
+//      plays arriving 105-124ms late while later ones took ~35ms — heard as
+//      "the 5 starts late or 4-3-2-1 is early". (Round 2's countdown, route
+//      already warm, was perfectly even at 34-36ms.) With the keeper
+//      looping, the route is hot before the first tick.
+//   2. Hold the audio session in "playback" category. Web Audio on its own
+//      is muted by the ring/silent switch — but while any media element is
+//      playing, iOS ignores the switch for the whole session. That is what
+//      lets the count-up riff below ride sample-accurate Web Audio and
+//      still sound on a silent phone.
+let silenceEl = null;
+let silenceOk = false; // did the keeper actually start? gates the Web Audio riff
+function getSilence() {
+  if (!silenceEl) {
+    silenceEl = new Audio(SFX_DIR + "silence.wav");
+    silenceEl.loop = true;
+    silenceEl.preload = "auto";
+  }
+  return silenceEl;
+}
+export function startAudioSession() {
+  armAudio();
+  const s = getSilence();
+  s.muted = false;
+  s.loop = true;
+  try {
+    const p = s.play();
+    if (p && p.then) p.then(() => { silenceOk = true; }, () => { silenceOk = false; audit("session:reject"); });
+    else silenceOk = true;
+  } catch (e) { silenceOk = false; }
+  audit("session", "keeper start");
+}
+export function stopAudioSession() {
+  silenceOk = false;
+  if (!silenceEl) return;
+  try { silenceEl.pause(); silenceEl.currentTime = 0; } catch (e) {}
+  audit("session", "keeper stop");
+}
+
+// ---------- Sample-accurate sfx (the keeper makes it safe) ----------
+// The second audit log ended the media-element era for tight timing: the
+// session's first plays came out 105-124ms late (cold route), busy moments
+// added +50-90ms spikes, and at the count-up's 50-70ms cadence iOS delayed
+// even our timers by 230ms and reused elements still mid-sound — "the blip
+// is HORRENDOUS". Web Audio buffers start with ~2ms precision and don't
+// care what the main thread is doing. Its one fatal flaw — muted by the
+// ring/silent switch — is closed by the session keeper above, so every
+// one-shot sfx now PREFERS a decoded buffer while the keeper is confirmed
+// running, with the pooled media elements as the proven fallback. The
+// VOICE stays on media elements (see CLIP_DIR) — that doctrine is unchanged.
+const sfxBuffers = {};
+function loadSfxBuffers() {
+  const ctx = getAudioCtx();
+  if (!ctx || typeof fetch !== "function" || !ctx.decodeAudioData) return;
+  SFX_KEYS.forEach((key) => {
+    if (key in sfxBuffers) return; // loaded or loading
+    sfxBuffers[key] = null;
+    fetch(SFX_DIR + SFX_FILES[key])
+      .then((r) => r.arrayBuffer())
+      .then((b) => new Promise((res, rej) => ctx.decodeAudioData(b, res, rej)))
+      .then((buf) => { sfxBuffers[key] = buf; })
+      .catch(() => { delete sfxBuffers[key]; });
+  });
+}
+function playSfxBuffer(key, rate) {
+  if (!silenceOk || !sfxBuffers[key]) return false;
+  const ctx = getAudioCtx();
+  if (!ctx || ctx.state !== "running" || !ctx.createBufferSource) return false;
+  try {
+    const src = ctx.createBufferSource();
+    src.buffer = sfxBuffers[key];
+    src.playbackRate.value = rate;
+    src.connect(ctx.destination);
+    src.start();
+    audit("sfx:wa", rate !== 1 ? `${key} r=${rate.toFixed(2)}` : key);
+    return true;
+  } catch (e) { return false; }
+}
+// The count-up riff, scheduled in ONE shot on the audio clock — immune to
+// main-thread stalls entirely. Sources are kept so a restart can cut them.
+let riffSources = [];
+export function scheduleBlipRiff(offsetsMs, rates) {
+  if (!silenceOk || !sfxBuffers.blip) return false;
+  const ctx = getAudioCtx();
+  if (!ctx || ctx.state !== "running" || !ctx.createBufferSource) return false;
+  try {
+    stopBlipRiff();
+    const t0 = ctx.currentTime + 0.03;
+    for (let i = 0; i < offsetsMs.length; i++) {
+      const src = ctx.createBufferSource();
+      src.buffer = sfxBuffers.blip;
+      src.playbackRate.value = rates[i];
+      src.connect(ctx.destination);
+      src.start(t0 + offsetsMs[i] / 1000);
+      riffSources.push(src);
+    }
+    audit("blip:riff", `${offsetsMs.length} steps on the audio clock`);
+    return true;
+  } catch (e) { return false; }
+}
+export function stopBlipRiff() {
+  riffSources.forEach((s) => { try { s.stop(); } catch (e) {} });
+  riffSources = [];
+}
 function synthLand() {
   withAudio((ctx) => {
     const t = ctx.currentTime;
@@ -371,9 +481,20 @@ function preloadClips() {
     a.preload = "auto";
     clipCache[key] = a;
     a.addEventListener("error", () => {
+      // One retry AROUND the cache before black-marking the word: a
+      // poisoned service-worker cache entry fails decode forever — the
+      // founder's phone served a broken slip.mp3 all day, every slip a
+      // robot voice. A query-string miss falls through the SW cache to the
+      // network. (Not {once:true}: the retry's own failure must still land
+      // in failedClips.)
+      if (!a.__retried) {
+        a.__retried = true;
+        audit("clip:refetch", key);
+        try { a.src = CLIP_DIR + key + CLIP_EXT + "?r=" + Date.now(); a.load(); return; } catch (e) {}
+      }
       failedClips.add(key);
       if (failedClips.size >= CLIPS_GIVE_UP_AT) voice.useClips = false;
-    }, { once: true });
+    });
     // A file that later loads fine clears its own black mark, so one bad
     // moment on a phone's connection isn't permanent.
     a.addEventListener("canplaythrough", () => failedClips.delete(key), { once: true });
@@ -476,9 +597,11 @@ export function unlockAudioForMobile() {
   audit("audio:prime", needsReprime ? "reprime" : "first");
   try {
     eachPool((pool) => primeElement(pool[0]));
+    primeElement(getSilence()); // the keeper needs the gesture blessing too
     deepPrimePending = true;
     audioUnlocked = true;
     needsReprime = false;
+    setTimeout(loadSfxBuffers, 300); // off the tap; decoded before the first tick needs them
   } catch (e) { /* retry on the next tap */ }
 }
 // Top up the spare slots inside a later gesture, spreading the cost away from
@@ -595,6 +718,16 @@ function playClips(keys, onDone) {
     // be. The chain continues either way; a missing clip must never stop it.
     if (!node) { audit("word:tts", key); sayOneWord(key, playNext); return; }
     try { audit("word", `${key} a${attempt} ct=${node.currentTime.toFixed(2)}${node.ended ? " ended" : ""}${node.paused ? "" : " PLAYING"}`); } catch (e) {}
+    // Zombie pickup. The chain speaks strictly one word at a time, so a
+    // pooled element claiming to be MID-PLAYBACK here is wedged — a play()
+    // iOS neither started nor rejected. The second real-phone log showed
+    // slip's first element stuck "playing" at 0:00 for an entire session,
+    // silently swallowing every other slip. load() aborts the wedged
+    // request and refetches (instant — the file is in the SW cache).
+    if (node.paused === false && !node.ended) {
+      audit("word:heal", key);
+      try { node.pause(); node.load(); } catch (e) {}
+    }
     // Never let two clips sound at once. Without this a retry (or a late
     // event) could start the next word on top of one still playing, which is
     // heard as words cutting each other off and the cadence going ragged.
@@ -626,6 +759,14 @@ function playClips(keys, onDone) {
     };
     const afterWord = () => {
       if (!chainAlive()) return;
+      // Park the word that just finished: it reports .ended (idle), and
+      // round-robin puts its earliest reuse two words (>1.2s) away, so the
+      // async seek has ample time to land. Removes the play()-from-ended
+      // internal rewind whose occasional +50-80ms (second real-phone log:
+      // scattered word onsets at 73-107ms vs the usual ~30ms, every one an
+      // "ended" replay) was heard as combo cadence glitch. A chain-owned
+      // moment — nothing like v1.13.0's stale-event parking.
+      try { if (node.ended) node.currentTime = 0; } catch (e) {}
       if (!hooks.stillInWork()) { onDone(); return; }
       // Owned by the module so stopVoice can cancel it — an anonymous timer
       // here was the zombie that interleaved two chains.
@@ -667,7 +808,23 @@ function playClips(keys, onDone) {
     // back to a fixed guess when duration isn't known yet — common on iOS,
     // where metadata often hasn't loaded at first play.
     const durMs = node.duration && isFinite(node.duration) ? node.duration * 1000 : 1200;
-    clipWatchdog = setTimeout(() => { audit("word:watchdog", key); finished(); }, durMs + 800);
+    clipWatchdog = setTimeout(() => {
+      // A watchdog firing with the element still parked at the start means
+      // NOTHING played — a wedged play(), not a slow one. Counting that as
+      // "spoken" is how slip vanished for half a session (second real-phone
+      // log: three 2-second holes where slip should have been). Hard-reset
+      // the element and retry the word on the pool's other element instead.
+      let deadAtZero = false;
+      try { deadAtZero = !node.ended && node.currentTime < 0.05; } catch (e) {}
+      if (deadAtZero) {
+        audit("word:heal", key + " (watchdog)");
+        try { node.pause(); node.load(); } catch (e) {}
+        once(() => retryOr(playNext))();
+        return;
+      }
+      audit("word:watchdog", key);
+      finished();
+    }, durMs + 800);
   };
 
   playNext();

@@ -5,7 +5,7 @@
 // version makes old installs throw away whatever they were holding instead of
 // serving a stale app. A service worker can't import ES modules, hence the
 // duplicated literal.
-const CACHE = "combify-v1.14.1";
+const CACHE = "combify-v1.15.0";
 const ASSETS = [
   "./",
   "./index.html",
@@ -32,7 +32,7 @@ const ASSETS = [
   "./audio/5.mp3", "./audio/6.mp3", "./audio/7.mp3", "./audio/8.mp3",
   "./audio/slip.mp3", "./audio/roll.mp3", "./audio/block.mp3", "./audio/pivot.mp3",
   "./audio/sfx/bell.mp3", "./audio/sfx/tick.wav", "./audio/sfx/warning.mp3",
-  "./audio/sfx/blip.wav", "./audio/sfx/land.wav",
+  "./audio/sfx/blip.wav", "./audio/sfx/land.wav", "./audio/sfx/silence.wav",
 ];
 
 self.addEventListener("install", (event) => {

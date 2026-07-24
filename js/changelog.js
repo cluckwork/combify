@@ -21,6 +21,20 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.15.0",
+    date: "2026-07-24",
+    size: "minor",
+    title: "A new sound engine — precise, warm, self-healing",
+    notes: [
+      "Every bell, tick, warning and blip now plays through a precision audio engine that starts sounds within a couple of milliseconds, no matter how busy the phone is — and it still works with the silent switch on. The count-up riff is scheduled as one piece of music, so it physically cannot stutter.",
+      "The phone's speaker is warmed up the moment you tap Start, so the first countdown ticks land on tempo instead of the \"5\" arriving late (the speaker used to wake up ~100ms slow).",
+      "Fixed the vanishing \"slip\": one of its players got permanently stuck and silently swallowed the word — with a 2-second dead pause — every other time it appeared, eventually leaving only a robot voice. Stuck players are now detected, reset, and the word retries instantly on its twin.",
+      "A corrupted cached sound can no longer blacklist a word for the day — the app now re-downloads a failing file fresh from the network, and this update refreshes every cached sound anyway.",
+      "Combo cadence tightened: each word is rewound the moment it finishes, removing the occasional 50-80ms late start that made combos feel loose.",
+      "Music apps get their audio back a few seconds after the finish celebration ends.",
+    ],
+  },
+  {
     v: "1.14.1",
     date: "2026-07-23",
     size: "patch",

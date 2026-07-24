@@ -197,10 +197,13 @@ async function runDevice(dev) {
       if (!this.muted && this.src) window.__sfxLog.push({ src: this.src.split("/").pop(), t: performance.now() });
       return orig.call(this);
     };
-    // Count-up blips go through Web Audio when the decoded buffer is ready.
+    // Sfx go through Web Audio buffers when decoded (v1.15). Tell the blip
+    // apart by decoded length: blip.wav is exactly 0.070s, the next-shortest
+    // (tick.wav) 0.090s — 0.08 splits two fixed values with margin.
     const bs = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (...a) {
-      window.__sfxLog.push({ src: "blip-buffer", t: performance.now() });
+      const blip = this.buffer && this.buffer.duration > 0 && this.buffer.duration <= 0.08;
+      window.__sfxLog.push({ src: blip ? "blip-buffer" : "sfx-buffer", t: performance.now() });
       return bs.apply(this, a);
     };
   });
