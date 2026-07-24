@@ -592,32 +592,46 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
-// ------------------------------------------ 10p. the entrance holds the clock
+// -------------------------------------------- 10p. the entrance crossfade
 {
-  section("10p. The countdown holds while the entrance settles");
+  section("10p. The entrance crossfades, then the countdown holds");
   // With motion (animate:true provides the requestAnimationFrame that
-  // motionOK() keys on) the fold-away transition is real, so the clock must
-  // hold "5" — visibly painted, "Get ready..." on screen — until the
-  // entrance has finished, and only then tick.
+  // motionOK() keys on) the start is a crossfade: settings fade out, the
+  // layout swaps while dark, the countdown fades in — and only then does the
+  // clock start ticking.
   const app = await boot({ duration: 0.6, animate: true });
   app.set("rounds", 1); app.set("workSec", 10); app.set("restSec", 3);
+  const appEl = app.doc.querySelector(".app");
   app.click("startBtn");
   // Priming inside the Start tap plays one muted tick element — baseline it
   // so only REAL (audible, post-tap) ticks are counted below.
   const tickBase = app.stats.byKey.tick || 0;
   await app.clock.advance(50);
-  check("countdown painted on the tap's frame", app.phase() === "Get Ready" && app.clockText() === "5",
+  check("screen fades out first (layout not yet swapped)",
+    appEl.classList.contains("is-entering") && app.phase() === "Ready",
+    `entering=${appEl.classList.contains("is-entering")} phase=${app.phase()}`);
+  await app.clock.advance(250); // fade-out (160ms) + swap + class release (40ms)
+  check("countdown layout arrives behind the fade", app.phase() === "Get Ready" && app.clockText() === "5",
     `${app.phase()} / ${app.clockText()}`);
-  check("Get ready stays on screen through the entrance", app.combo() === "Get ready...", app.combo());
-  await app.clock.advance(550); // inside the entrance hold (750ms)
+  check("fade released after the swap", !appEl.classList.contains("is-entering"), "still fading");
+  check("Get ready is on screen", app.combo() === "Get ready...", app.combo());
+  await app.clock.advance(300); // t=600: still inside the post-swap hold (760ms)
   check("clock still holding 5 mid-entrance", app.clockText() === "5", app.clockText());
   check("no tick before the entrance lands", (app.stats.byKey.tick || 0) === tickBase,
     `${(app.stats.byKey.tick || 0) - tickBase} early ticks`);
-  await app.clock.advance(300); // crosses the 750ms hold
+  await app.clock.advance(300); // t=900: crosses fade (160) + settle (600)
   check("first tick fires once the entrance settles", (app.stats.byKey.tick || 0) >= tickBase + 1,
     `${(app.stats.byKey.tick || 0) - tickBase} ticks`);
   await app.clock.advance(5500); // full countdown from the re-anchored clock
   check("round is underway", app.phase() === "Work", app.phase());
+  // Pausing mid-session and exiting must never strand the app faded out.
+  app.click("resetBtn"); // restart: no crossfade needed (layout unchanged)
+  await app.clock.advance(100);
+  check("restart skips the crossfade (already fullscreen)", !appEl.classList.contains("is-entering"),
+    "is-entering on restart");
+  app.click("startBtn"); app.click("exitBtn");
+  await app.clock.advance(100);
+  check("exit leaves the app fully visible", !appEl.classList.contains("is-entering"), "stranded invisible");
   app.restore();
 
   // Without motion the fold doesn't animate, so only the short beat applies.
@@ -630,41 +644,6 @@ async function countCombos(app, ms, step = 200) {
     `${(b.stats.byKey.tick || 0) - tickBaseB} ticks after 300ms`);
   await b.clock.advance(6000);
   check("countdown still reaches Work", b.phase() === "Work", b.phase());
-  b.restore();
-}
-
-// ------------------------------------- 10q. clips park at zero when they finish
-{
-  section("10q. Every element parks at zero the moment it finishes");
-  // v1.11.8 parked elements at every PAUSE site but missed the natural end:
-  // an element that completed its file sat at the end position, and its next
-  // reuse (the 3rd occurrence of a word in one combo — "2" appears five times
-  // in the 10 combo) issued the rewind seek AT PLAY TIME, racing playback on
-  // iOS — the rare residual "t-two" stutter. Elements must now be rewound the
-  // moment they finish, so the seek always lands in idle time.
-  const parked = (app) => app.stats.live.filter((a) => a.paused && a.currentTime > 0.05)
-    .map((a) => `${a.key}@${a.currentTime}`);
-  const app = await boot({ duration: 0.6 });
-  app.set("rounds", 1); app.set("workSec", 60); app.set("restSec", 5);
-  app.setSeg("pace", "1500"); app.setSeg("level", "advanced"); // repeated-word combos
-  app.click("startBtn");
-  await app.clock.advance(30000);
-  app.click("startBtn"); // pause — nothing is sounding now
-  await app.clock.advance(2000);
-  check("no element left sitting at its end position", parked(app).length === 0,
-    parked(app).slice(0, 5).join(", "));
-  app.restore();
-
-  // The hard case: every "ended" event dropped, so only the watchdog can park.
-  const b = await boot({ duration: 0.6, dropEnded: true });
-  b.set("rounds", 1); b.set("workSec", 60); b.set("restSec", 5);
-  b.setSeg("pace", "1500"); b.setSeg("level", "advanced");
-  b.click("startBtn");
-  await b.clock.advance(30000);
-  b.click("startBtn");
-  await b.clock.advance(3000); // give the last watchdog time to fire and park
-  check("watchdog-advanced elements are parked too", parked(b).length === 0,
-    parked(b).slice(0, 5).join(", "));
   b.restore();
 }
 

@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.13.2",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Ghost words fixed, start truly seamless",
+    notes: [
+      "Fixed words collapsing to a ghost of themselves (\"six\" → \"s\", \"slip\" → \"lip\") — this morning's stutter fix backfired on real phones, so the voice is back on the proven pipeline. The old rare stutter may occasionally return until it can be diagnosed properly on a real device.",
+      "The start is now one clean crossfade: the settings screen fades out and the countdown fades in — no more layout jumping partway and then sliding the rest.",
+    ],
+  },
+  {
     v: "1.13.1",
     date: "2026-07-23",
     size: "patch",

@@ -208,7 +208,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, finaleTimer: null, settleTimer: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, finaleTimer: null, settleTimer: null, entranceTimer: null };
 
 // ---------- Screen wake lock ----------
 // Keeps the screen on while a session runs, so a member who sets the phone
@@ -876,24 +876,45 @@ function armPulse() {
   pulse.style.removeProperty("animation");
 }
 
-// How long the clock holds after the countdown paints. The Start tap sets off
-// a storm — the settings chrome folds away (0.6s, see the focus-mode CSS; the
-// two durations move together), the OS fullscreen transition resizes
-// everything, priming unlocks the audio — and a 140ms beat wasn't always
-// enough: on a slow phone the "5" was still being eaten. So the entrance IS
-// the wait: "5" and "Get ready..." paint on the tap's frame and simply hold,
-// in place, until the fold has finished; only then is the clock re-anchored,
-// the first tick played, and the pulse released — wave 1 lands on tick 1.
-// (A centre-stage countdown was tried here (v1.13.0) and pulled on feedback:
-// it hid "Get ready..." and moved the dial for no real gain.)
-// Without motion (reduced-motion, jsdom) the fold doesn't animate, so the
-// short beat is all that's needed.
-const ENTRANCE_SETTLE_MS = 750;
+// ---------- The entrance crossfade ----------
+// The ready screen and the fullscreen countdown are two genuinely different
+// layouts: page padding, stage size, type scale, chrome. Morphing between
+// them animated SOME of that (the chrome fold) while the rest snapped on the
+// tap's frame — seen as the countdown "appearing 3/4 of the way down, then
+// smoothly moving" (v1.13.1 feedback). A layout this different isn't
+// morphable, so don't morph it: fade the settings screen out, swap the whole
+// layout while the screen is dark (everything snaps, invisibly — the
+// .is-entering CSS suspends the fold transition for exactly this reason),
+// then fade the countdown screen in. Seamless by construction, on every
+// device and orientation, because nothing that moves is ever visible.
+// (v1.13.0 tried a centre-stage countdown here — pulled on feedback; v1.13.1
+// tried hold-in-place over a slowed fold — the unanimated properties still
+// snapped. This is attempt three, and the mechanism is finally shaped like
+// the problem.)
+const ENTRANCE_FADE_MS = 160;    // settings screen fades out
+const ENTRANCE_SETTLE_MS = 600;  // covers the fade-in (0.3s CSS) before the clock starts
+function beginEntrance() {
+  if (!motionOK() || !el.app) { armCountdownStart(); return; }
+  el.app.classList.add("is-entering");
+  clearTimeout(state.entranceTimer);
+  state.entranceTimer = setTimeout(() => {
+    armCountdownStart(); // swaps to the countdown layout while the screen is dark
+    state.entranceTimer = setTimeout(() => el.app.classList.remove("is-entering"), 40);
+  }, ENTRANCE_FADE_MS);
+}
+// A pause or exit inside the entrance window must never strand the app
+// invisible — the fade class and its timer go down with the session.
+function clearEntrance() {
+  clearTimeout(state.entranceTimer);
+  if (el.app) el.app.classList.remove("is-entering");
+}
 
-// Both entrances to a session end here. The countdown state paints on THIS
-// frame; the clock starts once the entrance has settled, so start-tap jank is
-// spent inside an intentional hold instead of surfacing as "5 -- 4-3-2-1" or
-// a swallowed "5". The pulse is held until the clock genuinely starts.
+// Both entrances to a session end here — start() via the crossfade above,
+// restart directly (its layout doesn't change, so there's nothing to hide).
+// The countdown paints, then the clock HOLDS until the entrance has settled,
+// so start jank is spent inside intentional choreography instead of
+// surfacing as "5 -- 4-3-2-1" or a swallowed "5". The pulse is held with it,
+// so wave 1 lands on tick 1.
 function armCountdownStart() {
   state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
   el.combo.textContent = "Get ready...";
@@ -919,16 +940,16 @@ function start() {
   acquireWakeLock();
   el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running");
   resetSessionTally();
-  armCountdownStart();
+  beginEntrance();
 }
-function pause() { state.running = false; clearInterval(state.tickTimer); clearTimeout(state.settleTimer); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
+function pause() { state.running = false; clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
 // Resuming is a tap like any other, so it is also the moment to re-arm audio:
 // whatever suspended the context while you were paused (a call, a lock screen,
 // switching apps) is exactly the thing that used to leave the rest of the
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
 function resume() { state.running = true; armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
-function reset() { clearInterval(state.tickTimer); clearTimeout(state.settleTimer); stopComboLoop(); clearFinale(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
+function reset() { clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
 // "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1

@@ -198,12 +198,28 @@ body:has(.app[data-focus="1"]) { padding: 0; }
   border-width: 0;
   overflow: hidden;
   pointer-events: none;
-  /* The entrance: slower and gentler than the old 0.18s/0.3s fold, which read
-     as a lurch — and whose jank landed on the countdown's first beat. The
-     clock now holds until this finishes (ENTRANCE_SETTLE_MS in app.js keeps
-     margin over the 0.6s here; move them together). */
+  /* Kept gentle for any path that still animates the fold visibly (e.g.
+     reduced-motion environments never enter the crossfade below). During a
+     normal start this transition never shows: .is-entering suspends it and
+     the swap happens behind the fade. */
   transition: opacity 0.4s ease 0.05s, max-height 0.6s cubic-bezier(0.3, 0.7, 0.2, 1);
 }
+
+/* The entrance crossfade (js: beginEntrance). The ready screen and the
+   fullscreen countdown are two genuinely different layouts — padding, stage
+   size, type scale — and morphing between them animated some properties
+   while others snapped: an instant jump, then a glide. Not morphable, so
+   not morphed: fade out, swap everything while the screen is dark, fade the
+   countdown in. While .is-entering is on, the fold must SNAP — a transition
+   still running under the fade would be caught mid-flight when the screen
+   returns, recreating the exact seam this exists to remove. */
+.app { transition: opacity 0.3s ease; }
+.app.is-entering { opacity: 0; transition: opacity 0.16s ease; }
+.app.is-entering .topbar,
+.app.is-entering .settings,
+.app.is-entering .install,
+.app.is-entering .foot,
+.app.is-entering .about { transition: none; }
 /* ACTUALLY full screen: no column max-width, no page padding, no card chrome —
    the stage IS the screen. The controls float over it as icons (below), so not
    a single pixel band is reserved for buttons. */

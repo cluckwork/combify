@@ -405,6 +405,27 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.13.2** — **v1.13.0's audio "fix" REVERTED after real-device
+  failure; entrance rebuilt as a crossfade.** Founder testing on a real phone:
+  frequent "ghost words" — "six"→"s", "slip"→"lip", "pivot"→"puh", worse at
+  slower paces — beginning with v1.13.x. The v1.13.0 park-on-finish scheme
+  (parkOnEnded seek-at-ended, finished-path pause+park, sfx park timers,
+  guarded play-time seek, deepPrime work-gate) interacted with iOS's late/
+  stale "ended" delivery in ways jsdom cannot model: a stale event could
+  PAUSE or SEEK an element mid-word on its next use. js/audio.js was restored
+  WHOLESALE to the v1.12.0 pipeline (git show b201b38:js/audio.js) — the
+  known state with only the rare stutter. LESSON, recorded also in memory:
+  audio-pipeline changes must not ship on harness-green alone; the harness
+  cannot see seek races or stale-event timing. Next attempt at the rare
+  stutter starts with a real-device reproduction, likely via instrumented
+  logging. The entrance became a CROSSFADE (attempt three): the ready screen
+  and fullscreen countdown are different layouts and morphing animated some
+  properties while others snapped ("appears 3/4 down then slides") — now the
+  settings fade out (160ms), the layout swaps while dark (.is-entering
+  suspends the fold transition so everything snaps invisibly), the countdown
+  fades in (300ms), and the clock starts at +760ms. WATCH ITEM from founder:
+  the finish count-up's landing ding sometimes skips or lags — re-evaluate on
+  this stabilised build before chasing it. 208 behaviour + 262 layout green.
 - **2026-07-23 — v1.13.1** — **Centre-stage countdown reverted; entrance is a
   hold, not a move.** Founder feedback on v1.13.0 within hours: the centred
   dial hid "Get ready..." and the dial's normal position was fine — the ask
