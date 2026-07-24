@@ -215,6 +215,33 @@ const REPORT_TO = "jduterme77@gmail.com";
 // triage routine reads — this is the automated half of the report pipeline.
 const REPORT_SHEET_FORM = "https://docs.google.com/forms/d/e/1FAIpQLSfQKqR0pFmlELTxbUR80_dBaMBwfWj4QeCp_H39xq2zLYdfHg/formResponse";
 const REPORT_SHEET_FIELDS = { description: "entry.1825277287", log: "entry.227585221" };
+
+// ---------- Anonymous usage pings ----------
+// One tiny row into the same sheet when a session starts and finishes, so
+// the daily email can say "3 members trained today, 9 sessions, 412
+// punches". Anonymous by construction: a random per-device id, the app
+// version, and the session's own numbers — no names, no personal data.
+// Fire-and-forget; an offline session just goes uncounted.
+function usageId() {
+  try {
+    let id = localStorage.getItem("combify.uid");
+    if (!id) { id = Math.random().toString(16).slice(2, 10); localStorage.setItem("combify.uid", id); }
+    return id;
+  } catch (e) { return "anon"; }
+}
+function pingUsage(kind, extra) {
+  try {
+    const row = new URLSearchParams();
+    row.set(REPORT_SHEET_FIELDS.description, "SESSION_PING");
+    row.set(REPORT_SHEET_FIELDS.log, JSON.stringify(Object.assign({ u: usageId(), v: VERSION, k: kind }, extra || {})));
+    fetch(REPORT_SHEET_FORM, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: row.toString(),
+    }).catch(() => {});
+  } catch (e) {}
+}
 (function wireReport() {
   const foot = document.querySelector(".foot");
   const modal = document.getElementById("reportModal");
@@ -957,6 +984,7 @@ function finish() {
   state.phase = "done"; state.running = false;
   audit("phase", "done");
   auditPersist(); // the session's story survives a reload for problem reports
+  pingUsage("finish", { rounds: session.rounds, punches: session.punches, secs: session.seconds });
   parkIdleSfx(); // blips and the landing hit start the finale parked at zero
   // Hand the audio session back (to Spotify etc.) once the celebration is
   // over. Guarded: a restart re-arms the keeper and must not lose it.
@@ -1162,6 +1190,7 @@ function start() {
   armAudio();
   unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
   startAudioSession(); // the silent keeper: warms the route, holds the session — see audio.js
+  pingUsage("start");
   enterFullscreen();
   state.running = true;
   acquireWakeLock();
@@ -1204,6 +1233,7 @@ function restartSession() {
   armAudio();
   unlockAudioForMobile(); // free unless a background revoked the unlock
   startAudioSession();
+  pingUsage("start"); // a restart is a fresh session for the daily numbers
   enterFullscreen();
   resetSessionTally();
   delete el.stats.dataset.finished; // next finish must rebuild its summary

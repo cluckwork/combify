@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.19.0",
+    date: "2026-07-24",
+    size: "minor",
+    title: "The app counts its own training days",
+    notes: [
+      "Combify now keeps an anonymous tally of how much it's being used — sessions started and finished, punches thrown — so the team can see the app earning its keep day by day. Fully anonymous: a random device number, never a name or anything personal.",
+    ],
+  },
+  {
     v: "1.18.0",
     date: "2026-07-24",
     size: "minor",
