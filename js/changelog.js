@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.17.1",
+    date: "2026-07-24",
+    size: "patch",
+    title: "Count-up locked to the sound, report card polished",
+    notes: [
+      "The climbing numbers now track the rising blips exactly: the sound keeps the beat (it can't lag), and the screen follows it frame by frame instead of falling behind when the phone is busy.",
+      "The report card now sits properly above the app — blurred, dimmed background and a real shadow — and sending a report no longer leaves the app slightly zoomed in.",
+    ],
+  },
+  {
     v: "1.17.0",
     date: "2026-07-24",
     size: "minor",

@@ -891,7 +891,9 @@ export function speakCombo(combo, onDone) {
 // callback of the current chain — gap timers, watchdogs, late "ended" events),
 // clear the owned timers, and silence whatever is mid-word.
 export function stopVoice() {
-  audit("voice:stop", "chain " + voiceChain);
+  // Not logged before anything ever spoke — the boot-time reset() calls
+  // this and put a stray "voice:stop chain 0" at the top of every log.
+  if (voiceChain > 0 || voice.current) audit("voice:stop", "chain " + voiceChain);
   voiceChain++;
   clearTimeout(clipWatchdog);
   clearTimeout(wordGapTimer);

@@ -473,19 +473,10 @@ function countUp(node, to, { ms = 0, pop = false, haptics = false, sound = false
   const riffOn = sound && scheduleBlipRiff(
     times.slice(0, -1),
     values.map((_, i) => 0.7 + ((i + 1) / values.length) * 1.1).slice(0, -1));
-  // Chained one-shot timers, not requestAnimationFrame. rAF ties every step
-  // to the compositor, and the first real-phone audit log showed exactly
-  // what that costs: dropped frames mid-finale turned the blip scale's
-  // steady 50ms floor into 50-50-110-139ms lurches — founder: "the blips
-  // were 100% glitching at the end". A foreground timer jitters a few ms,
-  // not a frame. The chain keeps the rAF loop's stall behavior: at most one
-  // step pending, each scheduled from real elapsed time, so a slow patch
-  // stretches the count instead of machine-gunning the tail, and 50ms stays
-  // the floor between audible steps.
   const started = Date.now();
   let next = 0;
   let lastBuzz = 0;
-  const step = () => {
+  const applyStep = () => {
     const value = values[next];
     const frac = (next + 1) / values.length;
     next++;
@@ -499,10 +490,8 @@ function countUp(node, to, { ms = 0, pop = false, haptics = false, sound = false
     // Park the blips that just finished, from our own call stack, so every
     // step ahead starts at zero — see the note above parkIdleSfx.
     if (sound && !riffOn) parkIdleSfx();
-    if (next < values.length) {
-      setTimeout(step, Math.max(50, times[next] - (Date.now() - started)));
-      return;
-    }
+  };
+  const land = () => {
     node.textContent = to.toLocaleString();
     if (glow) glow.style.opacity = "1"; // crest exactly at the landing
     if (pop) {
@@ -520,7 +509,37 @@ function countUp(node, to, { ms = 0, pop = false, haptics = false, sound = false
     if (sound) playLand(); // the satisfying arrival
     if (haptics) buzz([18, 45, 30]); // the landing: two beats, firmer than the ticks
   };
-  setTimeout(step, Math.max(0, times[0]));
+  if (riffOn) {
+    // The riff is on the audio clock and CANNOT lag — so the screen chases
+    // the sound, not the other way round. Every frame shows whichever step
+    // the riff has reached RIGHT NOW; a dropped frame skips the missed
+    // numbers at the next frame instead of running late (the founder heard
+    // exactly that drift: "the animations lag behind the coherence of the
+    // sounds"). Skipping displayed numbers is safe here because the AUDIO
+    // carries the count — the reverse of the old rAF glitch, where a late
+    // frame dragged the blips down with it.
+    const frame = () => {
+      const elapsed = Date.now() - started;
+      while (next < values.length && elapsed >= times[next]) applyStep();
+      if (next < values.length) { requestAnimationFrame(frame); return; }
+      land();
+    };
+    requestAnimationFrame(frame);
+  } else {
+    // Media-fallback path: the sound is per-step, so keep the chained
+    // one-shot timers — at most one step pending, each scheduled from real
+    // elapsed time, 50ms floor. Here stretching beats skipping: a skipped
+    // step would be a skipped BLIP.
+    const step = () => {
+      applyStep();
+      if (next < values.length) {
+        setTimeout(step, Math.max(50, times[next] - (Date.now() - started)));
+        return;
+      }
+      land();
+    };
+    setTimeout(step, Math.max(0, times[0]));
+  }
 }
 
 // The end-of-session summary: "2 rounds · 32 punches · 6:40 · 3 days in a row",
