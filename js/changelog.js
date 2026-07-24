@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.16.0",
+    date: "2026-07-24",
+    size: "minor",
+    title: "Report a problem, straight from the app",
+    notes: [
+      "New \"Report a problem\" link in the footer: describe what went wrong in a sentence, and the report — including a technical log of your last session's sounds — goes out through your phone's share sheet. That log is what lets problems get diagnosed and fixed fast, exactly, instead of guessed at.",
+      "The log records automatically in the background (it's tiny and costs nothing), so a problem can be reported after it happens — no setup needed. It also survives closing the app.",
+    ],
+  },
+  {
     v: "1.15.0",
     date: "2026-07-24",
     size: "minor",

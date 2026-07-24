@@ -15,13 +15,18 @@
 //   3. Back on the settings screen, tap "Copy audit log", paste it to the
 //      developer. Five more taps on the version turns it off.
 //
-// Costs nothing when off — every call is one boolean test. When on, a call
-// is one object push; no DOM, no string formatting until dump time.
+// Recording is ALWAYS on (since v1.16): a call is one object push — ~4 per
+// second during a session, no DOM, no string formatting until dump time. The
+// founder's verified-clean v1.15 sessions all ran with it fully armed, which
+// settled the overhead question. Always-on is what makes member bug reports
+// work: nobody pre-arms a recorder before a bug happens. The `enabled` flag
+// now only reveals the developer's manual "Copy audit log" button.
 //
 // Deliberately generic — nothing in this file knows it lives in a boxing
 // app — so it can be lifted whole into any future project.
 
 const KEY = "combify.audit";
+const LAST_KEY = "combify.audit.lastSession";
 const CAP = 4000; // ring buffer; a long session logs well under this
 const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 
@@ -42,9 +47,31 @@ export function setAudit(on) {
 // One event. tag is a short fixed word ("word", "sfx", "phase"); detail is
 // anything cheap to build — prefer passing pieces over pre-formatting.
 export function audit(tag, detail) {
-  if (!enabled) return;
   if (buf.length >= CAP) { buf.splice(0, CAP >> 2); dropped += CAP >> 2; }
   buf.push({ t: now() - t0, tag, d: detail == null ? "" : String(detail) });
+}
+
+// Keep the finished session's story so a problem report filed after a reload
+// (or after "it glitched so I closed the app") still carries evidence.
+// Called at finish/reset; skipped for near-empty buffers so a fresh boot
+// can't overwrite a real session's log with nothing.
+export function auditPersist() {
+  if (buf.length < 30) return;
+  try { localStorage.setItem(LAST_KEY, auditDump(`persisted ${new Date().toISOString()}`)); } catch (e) {}
+}
+
+// A member-filed problem report: their words + the freshest log available
+// (the live buffer, or the persisted previous session when the buffer is
+// too empty to be the story they're describing).
+export function auditReport(description, header) {
+  let body = auditDump(header);
+  if (buf.length < 30) {
+    try {
+      const last = localStorage.getItem(LAST_KEY);
+      if (last) body = `${header}\n(previous session's log)\n${last}`;
+    } catch (e) {}
+  }
+  return `PROBLEM REPORT\n${description}\n\n${body}`;
 }
 
 // The whole story as text, oldest first, millisecond timestamps relative to

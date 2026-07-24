@@ -405,6 +405,26 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-24 — v1.16.0** — **Member-facing problem reports.** Founder
+  verified v1.15.0 clean on a real phone (4 sessions, all paces + restart:
+  blips fixed, slip fixed, no stutters) and asked for a bug-report channel
+  for the client phase; scoped deliberately minimal on his "don't
+  overcomplicate" instinct. "Report a problem" footer link → native prompt
+  for a one-sentence description → auditReport() bundles it with the
+  freshest flight-recorder log → navigator.share (share sheet → Messages/
+  Mail to REPORT_TO = the founder's email) with clipboard+prompt fallback.
+  No server, no forms, no screenshots — delete-able in one commit if
+  unused. Recording is now ALWAYS ON (audit() ungated; auditOnset too):
+  members never pre-arm a recorder, and the founder's verified sessions ran
+  fully armed, settling the overhead question. The 5-tap audit mode now
+  only reveals the developer copy button. auditPersist() at finish/reset
+  keeps the last session's log in localStorage (skipped under 30 events so
+  a fresh boot can't clobber a real story) — reports filed after a reload
+  carry the previous session. Known remaining imperfection, documented not
+  fixed by choice: ~1 word in 15 starts 60-137ms late (iOS media pipeline
+  under load); inaudible per founder, and the fix would mean moving VOICE
+  to Web Audio — the one forbidden migration. 239 behaviour + 40/40 chaos
+  + 262 layout green.
 - **2026-07-24 — v1.15.0** — **The sound engine rebuilt around the keeper.**
   Third real-phone log (1632 events, three sessions) + founder's ears drove
   a consolidation: (1) SILENT KEEPER — a looping silence.wav media element

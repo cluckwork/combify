@@ -15,16 +15,15 @@
 //   armAudio(), unlockAudioForMobile(), markNeedsReprime()
 
 import { MOVES, comboToSpeech } from "./combos.js";
-import { audit, auditOn } from "./audit.js";
+import { audit } from "./audit.js";
 
 // Record the moment audio ACTUALLY starts — the element's "playing" event —
 // not just when play() was called. The delta between the two is iOS's start
 // latency, and its VARIANCE is what the founder hears as sounds coming out
 // non-uniform ("without uniformity, the product will be poor"). auditDump
-// turns these ":out" events into a per-sound uniformity report. Costs
-// nothing while audit mode is off; while on, one one-shot listener per play.
+// turns these ":out" events into a per-sound uniformity report. One one-shot
+// listener per play — always on, so member problem reports carry onsets.
 function auditOnset(tag, key, node) {
-  if (!auditOn()) return;
   const called = Date.now();
   const onPlaying = () => {
     node.removeEventListener("playing", onPlaying);

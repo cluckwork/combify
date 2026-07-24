@@ -1496,6 +1496,36 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
+// ------------------- 38. Report a problem: description + session log travel
+// The member-facing exit for the flight recorder. No audit arming needed —
+// recording is always on — and jsdom has no share sheet, so the report must
+// land in the copyable prompt fallback carrying both the member's words and
+// the session's sound log.
+{
+  section("38. Report a problem ships the description and the log");
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 15); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(40000);
+  const reportBtn = [...app.doc.querySelectorAll(".foot button")].find((b) => /report/i.test(b.textContent));
+  check("footer has a Report a problem button", !!reportBtn);
+  const prompts = [];
+  app.window.prompt = (msg, text) => {
+    prompts.push({ msg, text });
+    return msg.startsWith("What went wrong") ? "the bell rang twice at the end" : null;
+  };
+  reportBtn.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  await app.clock.advance(100);
+  const sent = prompts.find((p) => p.text);
+  check("report lands in a copyable prompt (no share sheet here)", !!sent);
+  check("report carries the member's words", !!sent && sent.text.includes("the bell rang twice at the end"));
+  check("report carries the session's sound log", !!sent && sent.text.includes("PROBLEM REPORT") && / word {2}/.test(sent.text));
+  check("report names where to send it", !!sent && sent.msg.includes("jduterme77@gmail.com"));
+  app.restore();
+  clearStore();
+}
+
 // ---------------------------- 35. Audit mode: the on-device flight recorder
 // The founder path, end to end: five taps arm it, a session records, "Copy
 // audit log" exports a log that actually contains the diagnostic events,

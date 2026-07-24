@@ -10,7 +10,7 @@ import {
   ringBell, playTick, playWarning, playBlip, playLand, parkIdleSfx,
   startAudioSession, stopAudioSession, scheduleBlipRiff, stopBlipRiff,
 } from "./audio.js";
-import { audit, auditOn, setAudit, auditDump } from "./audit.js";
+import { audit, auditOn, setAudit, auditDump, auditPersist, auditReport } from "./audit.js";
 
 // ---------- Segmented control: tap a segment, or swipe across it ----------
 function initSeg(id) {
@@ -201,6 +201,38 @@ function completeWorkRound() {
 (function showVersion() {
   const slot = document.getElementById("appVersion");
   if (slot) slot.textContent = `${VERSION} · ${RELEASED}`;
+})();
+
+// ---------- Problem reports ----------
+// The one member-facing piece of the flight recorder: "Report a problem" in
+// the footer. A sentence from the member + the log of their last session
+// travels via the phone's share sheet (Messages/Mail — no server, no
+// accounts), and the developer pastes it into the debugging loop. Kept
+// deliberately minimal: no forms, no screenshots, one native prompt.
+const REPORT_TO = "jduterme77@gmail.com";
+(function wireReport() {
+  const foot = document.querySelector(".foot");
+  if (!foot) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "foot__link";
+  btn.textContent = "Report a problem";
+  btn.addEventListener("click", async () => {
+    let desc = null;
+    try { desc = window.prompt("What went wrong? A sentence or two helps a lot:"); } catch (e) {}
+    if (!desc) return; // cancelled or empty — no report
+    const text = auditReport(String(desc).slice(0, 500),
+      `Combify v${VERSION} — sent to ${REPORT_TO}\nUA: ${navigator.userAgent || "?"}`);
+    if (navigator.share) {
+      try { await navigator.share({ title: "Combify problem report", text }); audit("report", "shared"); return; }
+      catch (e) { /* share cancelled or blocked — fall through to copy */ }
+    }
+    let copied = false;
+    try { await navigator.clipboard.writeText(text); copied = true; } catch (e) {}
+    try { window.prompt(`Send this to ${REPORT_TO}${copied ? " — it's copied for you" : " — copy it from here"}:`, text); } catch (e) {}
+    audit("report", "manual");
+  });
+  foot.appendChild(btn);
 })();
 
 // ---------- Audit mode (the on-device flight recorder, js/audit.js) ----------
@@ -826,6 +858,7 @@ function clearFinale() {
 function finish() {
   state.phase = "done"; state.running = false;
   audit("phase", "done");
+  auditPersist(); // the session's story survives a reload for problem reports
   parkIdleSfx(); // blips and the landing hit start the finale parked at zero
   // Hand the audio session back (to Spotify etc.) once the celebration is
   // over. Guarded: a restart re-arms the keeper and must not lose it.
@@ -1045,7 +1078,7 @@ function pause() { state.running = false; audit("phase", "paused"); stopAudioSes
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
 function resume() { state.running = true; audit("phase", `resume ${state.phase}`); armAudio(); unlockAudioForMobile(); startAudioSession(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
-function reset() { clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); stopAudioSession(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
+function reset() { auditPersist(); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); stopAudioSession(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
 // "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1
