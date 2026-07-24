@@ -15,6 +15,7 @@
 //   armAudio(), unlockAudioForMobile(), markNeedsReprime()
 
 import { MOVES, comboToSpeech } from "./combos.js";
+import { audit } from "./audit.js";
 
 // ---------- Hooks into app state ----------
 // The voice chain must stop the instant the round does, and refuses to start a
@@ -206,6 +207,7 @@ function playSfx(key, fallback, rate = 1) {
   // freshly-primed element plays clean, which is why the first strike mostly
   // didn't). NOT fixed by parking on "ended" — v1.13.0 tried that and iOS's
   // stale/late event delivery seeked elements mid-use: ghost words.
+  try { audit("sfx", `${key}${rate !== 1 ? " r=" + rate.toFixed(2) : ""} ct=${node.currentTime.toFixed(2)}${node.ended ? " ended" : ""}${node.paused ? "" : " PLAYING"}`); } catch (e) {}
   try { if (!node.ended && node.currentTime > 0.05) node.currentTime = 0; } catch (e) {}
   // playbackRate with preservesPitch off is a pitch bend — one blip file
   // becomes the whole rising scale of the count-up.
@@ -215,7 +217,7 @@ function playSfx(key, fallback, rate = 1) {
     node.playbackRate = rate;
   } catch (e) {}
   const p = node.play();
-  if (p && p.catch) p.catch(fallback);
+  if (p && p.catch) p.catch(() => { audit("sfx:reject", key); fallback(); });
 }
 
 // Ring the bell `times` in a row (1 = round start, 3 = session over).
@@ -443,6 +445,7 @@ function eachPool(fn) {
 }
 export function unlockAudioForMobile() {
   if (audioUnlocked && !needsReprime) return;
+  audit("audio:prime", needsReprime ? "reprime" : "first");
   try {
     eachPool((pool) => primeElement(pool[0]));
     deepPrimePending = true;
@@ -454,6 +457,7 @@ export function unlockAudioForMobile() {
 // the Start tap. One shot per pending request.
 function deepPrime() {
   if (!deepPrimePending) return;
+  audit("audio:deepPrime");
   deepPrimePending = false;
   try {
     eachPool((pool) => { for (let i = 1; i < pool.length; i++) primeElement(pool[i]); });
@@ -537,7 +541,8 @@ function playClips(keys, onDone) {
     // No element for this word — its file is missing or failed. Say it with
     // text-to-speech rather than leaving a silent hole where a punch should
     // be. The chain continues either way; a missing clip must never stop it.
-    if (!node) { sayOneWord(key, playNext); return; }
+    if (!node) { audit("word:tts", key); sayOneWord(key, playNext); return; }
+    try { audit("word", `${key} a${attempt} ct=${node.currentTime.toFixed(2)}${node.ended ? " ended" : ""}${node.paused ? "" : " PLAYING"}`); } catch (e) {}
     // Never let two clips sound at once. Without this a retry (or a late
     // event) could start the next word on top of one still playing, which is
     // heard as words cutting each other off and the cadence going ragged.
@@ -582,21 +587,34 @@ function playClips(keys, onDone) {
       // of duration was too eager — it retried words that had played fine,
       // so they were spoken twice and the cadence went out.
       const elapsed = Date.now() - startedAt;
+      audit("word:end", `${key} ${elapsed}ms${elapsed < 120 ? " phantom-retry" : ""}`);
       if (elapsed < 120) { try { node.pause(); node.currentTime = 0; } catch (e) {} retryOr(afterWord); return; }
       afterWord();
     });
-    const skip = once(() => { try { node.pause(); node.currentTime = 0; } catch (e) {} retryOr(playNext); });
+    const skip = once(() => { audit("word:error", key); try { node.pause(); node.currentTime = 0; } catch (e) {} retryOr(playNext); });
 
-    node.onended = finished;
+    // Stale-event guard. A REAL ended has already flipped the element to
+    // paused with .ended set before the event fires. iOS also delivers
+    // "ended" events from an element's PREVIOUS use, late — arriving while
+    // the element is audibly mid-way through its CURRENT word (the very
+    // delivery quirk that made v1.13.0's parking cut words to ghosts).
+    // Unguarded, a stale event either replayed a word that was playing fine
+    // (elapsed < 120 read it as a phantom → retry) or advanced the chain
+    // early so the next word displaced this one mid-syllable. An element
+    // that's genuinely wedged is still covered by the watchdog.
+    node.onended = () => {
+      if (node.paused || node.ended) { finished(); return; }
+      audit("word:stale-ignored", key);
+    };
     node.onerror = skip;
     const p = node.play();
-    if (p && p.catch) p.catch(skip);
+    if (p && p.catch) p.catch(() => { audit("word:reject", key); skip(); });
 
     // Fall forward once the clip's own length has elapsed (plus slack). Falls
     // back to a fixed guess when duration isn't known yet — common on iOS,
     // where metadata often hasn't loaded at first play.
     const durMs = node.duration && isFinite(node.duration) ? node.duration * 1000 : 1200;
-    clipWatchdog = setTimeout(finished, durMs + 800);
+    clipWatchdog = setTimeout(() => { audit("word:watchdog", key); finished(); }, durMs + 800);
   };
 
   playNext();
@@ -664,6 +682,7 @@ export function speakCombo(combo, onDone) {
 // callback of the current chain — gap timers, watchdogs, late "ended" events),
 // clear the owned timers, and silence whatever is mid-word.
 export function stopVoice() {
+  audit("voice:stop", "chain " + voiceChain);
   voiceChain++;
   clearTimeout(clipWatchdog);
   clearTimeout(wordGapTimer);

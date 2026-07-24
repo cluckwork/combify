@@ -43,13 +43,30 @@ export class Clock {
   }
 }
 
+// ---------- Deterministic PRNG ----------
+// Same seed, same session — the chaos suite's whole contract. A failing run
+// is reported by seed and reproduced with `node tests/chaos.mjs --seed N`.
+export function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // ---------- Fake audio ----------
+// cfg.chaos arms the iOS-misbehavior model: { rng, seekLatency() → ms,
+// dropP, lateP, staleP, rejectP }. Off (undefined), every behavior collapses
+// to the old polite synchronous model, so the main suite is unaffected.
 export function makeAudioFactory(clock, cfg) {
-  const stats = { created: 0, plays: 0, byKey: {}, live: [], maxConcurrent: 0, playing: 0, voicePlaying: 0, maxVoiceConcurrent: 0, overlapEvents: [], missingPlayAttempts: [], phantoms: [], audible: [] };
+  const stats = { created: 0, plays: 0, byKey: {}, live: [], maxConcurrent: 0, playing: 0, voicePlaying: 0, maxVoiceConcurrent: 0, overlapEvents: [], missingPlayAttempts: [], phantoms: [], audible: [], seeks: [], seeksWhilePlaying: [], seekRaces: [], cutShort: [], rejects: 0, chaosLog: [] };
+  const chaos = cfg.chaos || null;
   class FakeAudio {
     constructor(src = "") {
       this.src = src; this.preload = ""; this.muted = false; this.paused = true;
-      this.currentTime = 0; this.duration = cfg.duration ?? 0.6;
+      this._ct = 0; this._seekTarget = null; this.duration = cfg.duration ?? 0.6;
       this.ended = false;
       this._l = {}; this.onended = null; this.onerror = null;
       this._endTimer = null;
@@ -72,6 +89,23 @@ export function makeAudioFactory(clock, cfg) {
     }
     get key() { const m = /([^/]+)\.(?:mp3|wav)$/.exec(this.src); return m ? m[1] : "?"; }
     get isVoice() { return !this.src.includes("/sfx/"); }
+    // currentTime is an accessor so chaos can model what iOS really does:
+    // assignment is an ASYNC seek that completes later, while reads report
+    // the pending target (per spec). Without chaos the seek is synchronous,
+    // exactly like the old plain property. Every app-issued seek is recorded;
+    // a seek on an audibly playing element is its own stat because for the
+    // voice that's an artifact by definition (mid-word jump).
+    get currentTime() { return this._seekTarget != null ? this._seekTarget : this._ct; }
+    set currentTime(v) {
+      stats.seeks.push({ t: clock.now, key: this.key, from: this._ct, to: v, playing: !this.paused, voice: this.isVoice });
+      if (!this.paused) stats.seeksWhilePlaying.push({ t: clock.now, key: this.key, voice: this.isVoice });
+      if (v < this.duration) this.ended = false; // spec: seeking clears the ended flag
+      const lat = chaos && chaos.seekLatency ? chaos.seekLatency() : 0;
+      if (lat > 0) {
+        this._seekTarget = v;
+        clock.setTimeout(() => { if (this._seekTarget != null) { this._ct = this._seekTarget; this._seekTarget = null; } }, lat);
+      } else { this._ct = v; }
+    }
     addEventListener(t, fn) { (this._l[t] = this._l[t] || []).push(fn); }
     removeEventListener(t, fn) { this._l[t] = (this._l[t] || []).filter((f) => f !== fn); }
     _emit(t) {
@@ -80,20 +114,42 @@ export function makeAudioFactory(clock, cfg) {
       for (const fn of this._l[t] || []) fn.call(this, { type: t });
     }
     cloneNode() { const a = new FakeAudio(this.src); return a; }
-    pause() { if (!this.paused) { this.paused = true; stats.playing--; if (this.isVoice) stats.voicePlaying--; } if (this._endTimer) { clock.clear(this._endTimer); this._endTimer = null; } }
+    pause() {
+      if (!this.paused) {
+        // A pause of an audibly playing voice element cuts a word short.
+        // Legitimate at phase boundaries (the bell cuts a word, stopVoice on
+        // rest/finish); anywhere else it IS the ghost-word artifact — the
+        // chaos suite asserts on exactly that distinction. Muted plays are
+        // priming, not words: inaudible, so pausing them cuts nothing.
+        if (this.isVoice && !this.muted) stats.cutShort.push({ t: clock.now, key: this.key, at: this._ct });
+        this.paused = true; stats.playing--; if (this.isVoice) stats.voicePlaying--;
+      }
+      if (this._endTimer) { clock.clear(this._endTimer); this._endTimer = null; }
+    }
     play() {
       if (cfg.playRejects) return Promise.reject(new Error("NotAllowedError"));
+      if (chaos && chaos.rejectP && chaos.rng() < chaos.rejectP) {
+        stats.rejects++;
+        return Promise.reject(new Error("NotAllowedError"));
+      }
       if (!this.exists) {   // missing file: record the wasted attempt
         stats.missingPlayAttempts.push({ t: clock.now, src: this.src });
         return Promise.reject(new Error("NotSupportedError"));
       }
       stats.plays++;
       stats.byKey[this.key] = (stats.byKey[this.key] || 0) + 1;
+      // A seek still in flight when play() lands is the double-seek race the
+      // v1.13.3 fix exists for — attack, jump, attack again on real iOS.
+      // Recorded, then resolved so playback proceeds from the target.
+      if (this._seekTarget != null) {
+        stats.seekRaces.push({ t: clock.now, key: this.key, voice: this.isVoice });
+        this._ct = this._seekTarget; this._seekTarget = null;
+      }
       // Faithful to the spec: play() on an element that ended rewinds to the
       // start itself — the app leans on this instead of seeking manually
       // (a manual seek on top of this internal one is the double-seek race
-      // heard as "p-pivot" and double bell strikes).
-      if (this.ended) { this.currentTime = 0; this.ended = false; }
+      // heard as "p-pivot" and double bell strikes). Internal, so no stats.
+      if (this.ended) { this._ct = 0; this.ended = false; }
       // phantomEnded: the element reports "ended" almost immediately without
       // ever producing audio — a decode that quietly failed. The chain thinks
       // the word was spoken, so the listener hears a gap where a punch should
@@ -105,7 +161,7 @@ export function makeAudioFactory(clock, cfg) {
         this._endTimer = clock.setTimeout(() => { this._endTimer = null; this._emit("ended"); }, 10);
         return Promise.resolve();
       }
-      stats.audible.push({ t: clock.now, key: this.key, voice: this.isVoice });
+      stats.audible.push({ t: clock.now, key: this.key, voice: this.isVoice, muted: this.muted });
       if (this.paused) {
         this.paused = false; stats.playing++;
         stats.maxConcurrent = Math.max(stats.maxConcurrent, stats.playing);
@@ -125,8 +181,39 @@ export function makeAudioFactory(clock, cfg) {
         // event is delivered. This is what makes un-parked elements visible
         // to tests — a reused element at end-position forces a rewind seek
         // at play time, which on iOS races playback (the "t-two" stutter).
-        this.currentTime = this.duration;
+        // Internal position change, not an app-issued seek — set _ct direct.
+        this._ct = this.duration;
         this.ended = true; // the property reflects state even when the event is dropped
+        // Chaos event delivery: state above is ALWAYS correct (that's what a
+        // real element does); what iOS mangles is the EVENT — dropped, late,
+        // or delivered again later ("stale") after the element has moved on
+        // to its next use. Stale delivery is the v1.13.2 ghost-words
+        // mechanism, so its delay range deliberately reaches far enough to
+        // land inside a reused element's next word.
+        if (chaos) {
+          if (chaos.dropP && chaos.rng() < chaos.dropP) {
+            stats.chaosLog.push({ t: clock.now, ev: "dropEnded", key: this.key });
+          } else if (chaos.lateP && chaos.rng() < chaos.lateP) {
+            const by = Math.round(60 + chaos.rng() * 1400);
+            stats.chaosLog.push({ t: clock.now, ev: "lateEnded", key: this.key, by });
+            clock.setTimeout(() => this._emit("ended"), by);
+          } else {
+            this._emit("ended");
+          }
+          if (chaos.staleP && chaos.rng() < chaos.staleP) {
+            // A burst, not a single duplicate: iOS can cough up an element's
+            // backlog whenever it likes, and with a pool of 2 the same
+            // element replays the same word on its 1st/3rd/5th occurrences —
+            // often ~3s apart. The spread is what lets a duplicate land
+            // squarely inside a future replay of this very element.
+            const by = Math.round(80 + chaos.rng() * 1400);
+            for (const at of [by, by + 900 + Math.round(chaos.rng() * 800), by + 2300 + Math.round(chaos.rng() * 1200)]) {
+              stats.chaosLog.push({ t: clock.now, ev: "staleEnded", key: this.key, by: at });
+              clock.setTimeout(() => this._emit("ended"), at);
+            }
+          }
+          return;
+        }
         if (!drop) this._emit("ended");
       }, this.duration * 1000);
       return Promise.resolve();
@@ -210,6 +297,12 @@ export async function boot(cfg = {}) {
   const realNow = Date.now;
   saved.dateNow = realNow;
   Date.now = () => clock.now; // app.js uses Date.now() for the stall heartbeat
+  // cfg.rngSeed makes the APP deterministic too (randomCombo, finishLine):
+  // without it a chaos seed replays the same misbehavior against different
+  // combos every run, and failures aren't reproducible. Opt-in, because the
+  // main suite has tests that want real variation across boots.
+  saved.mathRandom = Math.random;
+  if (cfg.rngSeed != null) Math.random = mulberry32(cfg.rngSeed);
 
   // cfg.animate turns on a real requestAnimationFrame (driven by real time, not
   // the virtual clock) plus a vibrate spy, so the count-up/pop/haptic path can
@@ -325,7 +418,7 @@ export async function boot(cfg = {}) {
     // Waits real wall-clock time, needed when a test drives requestAnimationFrame
     // (which runs on real timers) rather than the virtual clock.
     realWait: (ms) => new Promise((r) => saved.setTimeout(r, ms)),
-    restore() { g.setTimeout = saved.setTimeout; g.setInterval = saved.setInterval; g.clearTimeout = saved.clearTimeout; g.clearInterval = saved.clearInterval; Date.now = saved.dateNow; },
+    restore() { g.setTimeout = saved.setTimeout; g.setInterval = saved.setInterval; g.clearTimeout = saved.clearTimeout; g.clearInterval = saved.clearInterval; Date.now = saved.dateNow; Math.random = saved.mathRandom; },
   };
   return api;
 }

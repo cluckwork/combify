@@ -405,6 +405,36 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.14.0** — **The audit system: chaos suite + on-device
+  flight recorder.** Founder asked for an audit that catches what the harness
+  can't. Honest scoping: nothing on this machine can reproduce the real iOS
+  media pipeline, so the gap is closed from both sides instead. (1) CHAOS
+  SUITE (tests/chaos.mjs, npm run test:chaos): the FakeAudio model now does
+  what iOS actually does — currentTime is an async seek with configurable
+  latency; "ended" can arrive late, never, or AGAIN in a stale burst spread
+  ~4.5s; play() can reject — all driven by a seeded PRNG (mulberry32), with
+  cfg.rngSeed also seeding Math.random so combo picks replay (without that,
+  failures weren't reproducible — found the hard way). 40 seeded full
+  sessions per run assert the invariants that define "sounds right": session
+  finishes, ≤1 voice clip audible, no double-speak (<250ms same-key
+  restart), no seek on a playing voice element, no play-during-pending-seek,
+  no word cut outside a phase boundary, voice never starves. Muted priming
+  plays are excluded from "audible" (first sweep flagged all 12 prime
+  pauses as cut words). (2) FLIGHT RECORDER (js/audit.js + wiring): 5 taps
+  on the footer version arms a ring-buffer event log (word plays with
+  element state, ended timing, watchdog/retry/stale events, sfx, phases,
+  visibility, primes) on the real phone; "Copy audit log" exports it.
+  Off = one boolean per call. Generic module, liftable to future projects.
+  (3) THE SUITE'S FIRST CATCH, fixed same day: a stale "ended" delivered
+  mid-word during an element's NEXT use either replayed the word
+  (elapsed<120 phantom-retry) or advanced the chain early so the next word
+  displaced this one — voice.current is null between words, so the overlap
+  guard didn't catch it (chaos saw 2 voice clips at once). Guard: onended
+  only counts if node.paused || node.ended (a real ended flips state before
+  the event; a stale one arrives while the element is audibly playing).
+  Unguarded code fails 10/100 chaos seeds; guarded sweeps 200/200. This is
+  plausibly a driver of the residual real-phone stutter — same real-device
+  verification owed as v1.13.3's fixes. 211 behaviour + 262 layout green.
 - **2026-07-23 — v1.13.3** — **The double-seek race named; blips back on the
   media pipeline; ripple scoped to Act 1.** Founder reports after v1.13.2:
   stutter still present but smaller ("p-pivot", "e-eight"), end bells striking

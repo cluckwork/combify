@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.14.0",
+    date: "2026-07-23",
+    size: "minor",
+    title: "A flight recorder, and a torture chamber for the sound",
+    notes: [
+      "The app can now record its own black-box log on a real phone: tap the version number below five times, run a session, then tap \"Copy audit log\" and send it in. Sound problems become an exact timeline instead of a memory.",
+      "A new torture-test suite hammers the app with the misbehavior real iPhones produce — sound events arriving late, twice, or never — across hundreds of simulated sessions, and proves the words never overlap, repeat, or get cut off mid-round.",
+      "That suite immediately earned its keep: it found (and we fixed) a lurking flaw where a late-arriving sound event could make a word play twice or cut the next one short — very likely a driver of the remaining rare stutter.",
+    ],
+  },
+  {
     v: "1.13.3",
     date: "2026-07-23",
     size: "patch",

@@ -5,7 +5,7 @@
 // version makes old installs throw away whatever they were holding instead of
 // serving a stale app. A service worker can't import ES modules, hence the
 // duplicated literal.
-const CACHE = "combify-v1.13.3";
+const CACHE = "combify-v1.14.0";
 const ASSETS = [
   "./",
   "./index.html",
@@ -13,6 +13,7 @@ const ASSETS = [
   "./css/styles.css",
   "./js/app.js",
   "./js/audio.js",
+  "./js/audit.js",
   "./js/changelog.js",
   "./js/combos.js",
   "./js/stats.js",

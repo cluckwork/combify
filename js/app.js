@@ -9,6 +9,7 @@ import {
   armAudio, unlockAudioForMobile, markNeedsReprime,
   ringBell, playTick, playWarning, playBlip, playLand,
 } from "./audio.js";
+import { audit, auditOn, setAudit, auditDump } from "./audit.js";
 
 // ---------- Segmented control: tap a segment, or swipe across it ----------
 function initSeg(id) {
@@ -201,6 +202,54 @@ function completeWorkRound() {
   if (slot) slot.textContent = `${VERSION} · ${RELEASED}`;
 })();
 
+// ---------- Audit mode (the on-device flight recorder, js/audit.js) ----------
+// The test harness can't see what a real iPhone does to the audio pipeline,
+// so the phone records its own story: five taps on the version number arm
+// the recorder, a session is run normally, and "Copy audit log" puts the
+// timestamped event log on the clipboard to paste back to the developer.
+(function wireAudit() {
+  const verSlot = document.getElementById("appVersion");
+  const foot = document.querySelector(".foot");
+  if (!verSlot || !foot) return;
+  let copyBtn = null;
+  function syncUI() {
+    if (auditOn() && !copyBtn) {
+      copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "foot__link foot__audit";
+      copyBtn.textContent = "Copy audit log";
+      copyBtn.addEventListener("click", async () => {
+        const text = auditDump(`Combify v${VERSION} audit\nUA: ${navigator.userAgent || "?"}`);
+        let ok = false;
+        try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
+        // No clipboard permission (or no clipboard API): a prompt still lets
+        // the text be selected and copied by hand.
+        if (!ok) { try { window.prompt("Copy the log:", text); ok = true; } catch (e) {} }
+        copyBtn.textContent = ok ? "Copied ✓" : "Copy failed";
+        setTimeout(() => { if (copyBtn) copyBtn.textContent = "Copy audit log"; }, 1600);
+      });
+      foot.appendChild(copyBtn);
+    }
+    if (!auditOn() && copyBtn) { copyBtn.remove(); copyBtn = null; }
+  }
+  let taps = 0, tapTimer = null;
+  verSlot.parentElement.addEventListener("click", () => {
+    taps++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { taps = 0; }, 1800);
+    if (taps < 5) return;
+    taps = 0;
+    setAudit(!auditOn());
+    audit("audit", `armed v${VERSION}`);
+    syncUI();
+    // A visible receipt — five taps that change nothing read as a dead spot.
+    const was = verSlot.textContent;
+    verSlot.textContent = auditOn() ? "audit on" : "audit off";
+    setTimeout(() => { verSlot.textContent = was; }, 1200);
+  });
+  syncUI();
+})();
+
 // Read settings through the controls
 const getLevel = () => levelCtl.value;
 const getPace = () => +paceCtl.value;
@@ -255,6 +304,7 @@ configureVoice({
 // which runs tick() first — so by the time we decide whether to restart, the
 // phase has already been caught up to real time.
 document.addEventListener("visibilitychange", () => {
+  audit("visibility", document.visibilityState);
   if (document.visibilityState === "hidden") {
     markNeedsReprime(); // iOS may revoke the media unlock while we're away
     if (state.running && state.phase === "work") stopComboLoop();
@@ -609,6 +659,7 @@ function nextCombo() {
   if (!state.running || state.phase !== "work") return;
   state.lastComboAt = Date.now(); // heartbeat, watched by tick() — see reviveComboLoop
   const combo = randomCombo(getLevel());
+  audit("combo", combo.join("-"));
   session.pendingPunches += combo.filter(isPunch).length;
   if (el.comboName) el.comboName.textContent = comboName(combo) || "";
   showCombo(combo);
@@ -640,6 +691,7 @@ function reviveComboLoop() {
   // Generous: a long advanced combo at Relaxed pace can legitimately run ~12s.
   const stalledFor = Date.now() - (state.lastComboAt || 0);
   if (stalledFor < getPace() + 20000) return;
+  audit("revive", `stalled ${stalledFor}ms`);
   stopComboLoop();
   startComboLoop();
 }
@@ -659,6 +711,7 @@ function beginPhase(seconds) {
 }
 function enterWork() {
   state.phase = "work"; beginPhase(getWork()); state.warned10 = false;
+  audit("phase", `work r${state.currentRound}`);
   // The countdown's "Get ready..." must not survive into the round — the
   // first call is 1.6s away and the leftover text read as a hang. A no-break
   // space keeps the line box so the layout doesn't shift twice.
@@ -666,7 +719,7 @@ function enterWork() {
   if (el.comboName) el.comboName.textContent = "";
   ringBell(1); render(); startComboLoop(FIRST_CALL_DELAY);
 }
-function enterRest() { state.phase = "rest"; beginPhase(getRest()); state.warnedRest = false; stopComboLoop(); ringBell(2); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
+function enterRest() { state.phase = "rest"; beginPhase(getRest()); state.warnedRest = false; audit("phase", "rest"); stopComboLoop(); ringBell(2); el.combo.textContent = "Rest"; if (el.comboName) el.comboName.textContent = ""; window.speechSynthesis && window.speechSynthesis.cancel(); render(); }
 // The headline when a session ends — one of these, never the same twice in a
 // row. Coach's voice: short, earned, no exclamation points. All of them fit on
 // one or two lines at display size (each is shorter than "Press start to
@@ -738,6 +791,7 @@ function clearFinale() {
 
 function finish() {
   state.phase = "done"; state.running = false;
+  audit("phase", "done");
   // Three bell strikes: the traditional end of the fight. A composed victory
   // jingle was tried here (v1.9.1) and rejected by the founder — the boxing
   // bell IS the sound of finishing.
@@ -917,6 +971,7 @@ function clearEntrance() {
 // so wave 1 lands on tick 1.
 function armCountdownStart() {
   state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
+  audit("phase", "countdown");
   el.combo.textContent = "Get ready...";
   if (el.comboName) el.comboName.textContent = "";
   render();
@@ -942,13 +997,13 @@ function start() {
   resetSessionTally();
   beginEntrance();
 }
-function pause() { state.running = false; clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
+function pause() { state.running = false; audit("phase", "paused"); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
 // Resuming is a tap like any other, so it is also the moment to re-arm audio:
 // whatever suspended the context while you were paused (a call, a lock screen,
 // switching apps) is exactly the thing that used to leave the rest of the
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
-function resume() { state.running = true; armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
+function resume() { state.running = true; audit("phase", `resume ${state.phase}`); armAudio(); unlockAudioForMobile(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
 function reset() { clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
 
 // ---------- Wire up the buttons ----------
