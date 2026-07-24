@@ -15,7 +15,24 @@
 //   armAudio(), unlockAudioForMobile(), markNeedsReprime()
 
 import { MOVES, comboToSpeech } from "./combos.js";
-import { audit } from "./audit.js";
+import { audit, auditOn } from "./audit.js";
+
+// Record the moment audio ACTUALLY starts — the element's "playing" event —
+// not just when play() was called. The delta between the two is iOS's start
+// latency, and its VARIANCE is what the founder hears as sounds coming out
+// non-uniform ("without uniformity, the product will be poor"). auditDump
+// turns these ":out" events into a per-sound uniformity report. Costs
+// nothing while audit mode is off; while on, one one-shot listener per play.
+function auditOnset(tag, key, node) {
+  if (!auditOn()) return;
+  const called = Date.now();
+  const onPlaying = () => {
+    node.removeEventListener("playing", onPlaying);
+    audit(tag, `${key} +${Date.now() - called}ms`);
+  };
+  node.addEventListener("playing", onPlaying);
+  setTimeout(() => node.removeEventListener("playing", onPlaying), 2000); // never leak
+}
 
 // ---------- Hooks into app state ----------
 // The voice chain must stop the instant the round does, and refuses to start a
@@ -218,6 +235,7 @@ function playSfx(key, fallback, rate = 1) {
   } catch (e) {}
   const p = node.play();
   if (p && p.catch) p.catch(() => { audit("sfx:reject", key); fallback(); });
+  auditOnset("sfx:out", key, node);
 }
 
 // Ring the bell `times` in a row (1 = round start, 3 = session over).
@@ -384,8 +402,12 @@ const UNLOCK_POOL_SIZE = 2;
 // 650ms apart on a sample that rings for ~2.5s, so three are genuinely sounding
 // at once. With two elements the third strike stole the first one's element and
 // cut its ring dead.
-// blip gets 3: the count-up fires them ~60ms apart while each rings ~70ms.
-const SFX_POOL_SIZE = { bell: 3, tick: 2, warning: 2, blip: 3, land: 1 };
+// blip gets 4: the count-up fires them 50ms+ apart while each rings ~70ms
+// (~100ms at the low 0.7x pitch). Four means a reused element ended ≥150ms
+// ago, which with the per-step park pass in countUp (see parkIdleSfx) makes
+// every blip start from a parked element — no internal rewind latency
+// wobbling the riff.
+const SFX_POOL_SIZE = { bell: 3, tick: 2, warning: 2, blip: 4, land: 1 };
 const clipPool = {};
 const sfxPool = {};
 const poolIndex = {};
@@ -396,7 +418,13 @@ let needsReprime = false;
 export function markNeedsReprime() { needsReprime = true; }
 
 function primeElement(a) {
-  if (!a || a.paused === false) return; // never pause something mid-sound
+  // "Sounding right now" is paused=false AND not ended. Per spec — and per
+  // the first real-phone audit log's "ended PLAYING" entries — an element
+  // that finishes naturally KEEPS paused=false, so the old a.paused===false
+  // test skipped every previously-played element: a reprime after
+  // backgrounding repaired only the never-used ones, and countdown ticks
+  // 3-5 kept playing from end position ("the 5-4-3-2-1 drifts off tempo").
+  if (!a || (a.paused === false && !a.ended)) return; // never pause something mid-sound
   a.muted = true;
   const p = a.play();
   if (p && p.catch) p.catch(() => {});
@@ -462,6 +490,30 @@ function deepPrime() {
   try {
     eachPool((pool) => { for (let i = 1; i < pool.length; i++) primeElement(pool[i]); });
   } catch (e) { deepPrimePending = true; }
+}
+
+// Idle-time maintenance: park every sfx element that has ENDED back at zero,
+// called from the app's own quiet moments (the 1s heartbeat, the top of a
+// countdown, the moment a session finishes). This is NOT v1.13.0's reverted
+// parkOnEnded — that seeked from "ended" EVENT listeners, which iOS delivers
+// stale, so parks landed mid-word on reused elements (ghost words). Here the
+// check is a synchronous property read on our own call stack: an element
+// whose .ended is true is not making sound now, and nothing can start it
+// before this loop returns. The seek lands in idle time, and the next play()
+// starts from a parked element instead of paying iOS's variable-latency
+// internal rewind — the first real-phone audit log showed countdown ticks
+// playing from end position ("ct=0.09 ended"), heard as the 5-4-3-2-1
+// drifting off tempo. Voice pools are deliberately untouched: words flow
+// through the guarded chain and the play()-from-ended path is proven there
+// (zero stutters across 300+ words on that same log).
+export function parkIdleSfx() {
+  SFX_KEYS.forEach((key) => {
+    const pool = sfxPool[key];
+    if (!pool) return;
+    for (const a of pool) {
+      try { if (a.ended) a.currentTime = 0; } catch (e) {}
+    }
+  });
 }
 
 // Round-robin a primed element for `key`, falling back to a plain clone if
@@ -609,6 +661,7 @@ function playClips(keys, onDone) {
     node.onerror = skip;
     const p = node.play();
     if (p && p.catch) p.catch(() => { audit("word:reject", key); skip(); });
+    auditOnset("word:out", key, node);
 
     // Fall forward once the clip's own length has elapsed (plus slack). Falls
     // back to a fixed guess when duration isn't known yet — common on iOS,

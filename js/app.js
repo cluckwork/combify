@@ -7,7 +7,7 @@ import { loadHistory, saveHistory, recordRound, currentStreak, trainedToday, for
 import {
   configureVoice, speakCombo, stopVoice,
   armAudio, unlockAudioForMobile, markNeedsReprime,
-  ringBell, playTick, playWarning, playBlip, playLand,
+  ringBell, playTick, playWarning, playBlip, playLand, parkIdleSfx,
 } from "./audio.js";
 import { audit, auditOn, setAudit, auditDump } from "./audit.js";
 
@@ -373,24 +373,36 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = fal
     return ((lo + hi) / 2) * ms;
   };
   const times = values.map((_, i) => timeFor((i + 1) / values.length));
-  const started = performance.now();
+  // Chained one-shot timers, not requestAnimationFrame. rAF ties every step
+  // to the compositor, and the first real-phone audit log showed exactly
+  // what that costs: dropped frames mid-finale turned the blip scale's
+  // steady 50ms floor into 50-50-110-139ms lurches — founder: "the blips
+  // were 100% glitching at the end". A foreground timer jitters a few ms,
+  // not a frame. The chain keeps the rAF loop's stall behavior: at most one
+  // step pending, each scheduled from real elapsed time, so a slow patch
+  // stretches the count instead of machine-gunning the tail, and 50ms stays
+  // the floor between audible steps.
+  const started = Date.now();
   let next = 0;
-  let lastFire = 0;
   let lastBuzz = 0;
-  const step = (now) => {
-    if (next < values.length && now - started >= times[next] && now - lastFire >= 50) {
-      const value = values[next];
-      const frac = (next + 1) / values.length;
-      next++;
-      lastFire = now;
-      node.textContent = value.toLocaleString();
-      // The halo brightens with the climb. Its own layer, opacity only — the
-      // GPU composites this; nothing about the glyphs repaints.
-      if (glow) glow.style.opacity = String(0.85 * frac);
-      if (haptics && frac > 0.55 && now - lastBuzz > 45) { buzz(7); lastBuzz = now; }
-      if (sound && next < values.length) playBlip(frac); // the landing replaces the final blip
+  const step = () => {
+    const value = values[next];
+    const frac = (next + 1) / values.length;
+    next++;
+    node.textContent = value.toLocaleString();
+    // The halo brightens with the climb. Its own layer, opacity only — the
+    // GPU composites this; nothing about the glyphs repaints.
+    if (glow) glow.style.opacity = String(0.85 * frac);
+    const now = Date.now();
+    if (haptics && frac > 0.55 && now - lastBuzz > 45) { buzz(7); lastBuzz = now; }
+    if (sound && next < values.length) playBlip(frac); // the landing replaces the final blip
+    // Park the blips that just finished, from our own call stack, so every
+    // step ahead starts at zero — see the note above parkIdleSfx.
+    if (sound) parkIdleSfx();
+    if (next < values.length) {
+      setTimeout(step, Math.max(50, times[next] - (Date.now() - started)));
+      return;
     }
-    if (next < values.length) { requestAnimationFrame(step); return; }
     node.textContent = to.toLocaleString();
     if (glow) glow.style.opacity = "1"; // crest exactly at the landing
     if (pop) {
@@ -408,7 +420,7 @@ function countUp(node, to, { ms = 900, pop = false, haptics = false, sound = fal
     if (sound) playLand(); // the satisfying arrival
     if (haptics) buzz([18, 45, 30]); // the landing: two beats, firmer than the ticks
   };
-  requestAnimationFrame(step);
+  setTimeout(step, Math.max(0, times[0]));
 }
 
 // The end-of-session summary: "2 rounds · 32 punches · 6:40 · 3 days in a row",
@@ -657,6 +669,18 @@ function highlightMove(idx) {
 // ---------- Combo calling (only during work) ----------
 function nextCombo() {
   if (!state.running || state.phase !== "work") return;
+  // Never LAUNCH a combo the bell is about to cut. The between-words guard
+  // in playClips (450ms) protects every word after the first — but a whole
+  // fresh combo could still start into the bell: the first real-phone audit
+  // log caught one launching 120ms before the round-2 bell, its first word
+  // chopped mid-syllable. Founder's spec: stop a little earlier, "not too
+  // much time, but enough so no overlapping is possible" — so, room for the
+  // longest first word (~870ms) plus the same bell clearance. Otherwise go
+  // quiet and let the bell land in clean air.
+  if (state.phaseEndsAt - Date.now() < 1300) {
+    audit("combo:held", `bell in ${Math.round(state.phaseEndsAt - Date.now())}ms`);
+    return;
+  }
   state.lastComboAt = Date.now(); // heartbeat, watched by tick() — see reviveComboLoop
   const combo = randomCombo(getLevel());
   audit("combo", combo.join("-"));
@@ -792,6 +816,7 @@ function clearFinale() {
 function finish() {
   state.phase = "done"; state.running = false;
   audit("phase", "done");
+  parkIdleSfx(); // blips and the landing hit start the finale parked at zero
   // Three bell strikes: the traditional end of the fight. A composed victory
   // jingle was tried here (v1.9.1) and rejected by the founder — the boxing
   // bell IS the sound of finishing.
@@ -827,7 +852,7 @@ function tick() {
   const stepped = prev - remaining === 1;
 
   if (state.phase === "countdown") {
-    if (remaining > 0) { if (changed) playTick(); render(); return; }
+    if (remaining > 0) { if (changed) playTick(); parkIdleSfx(); render(); return; }
     state.currentRound = 1;
     enterWork();
     return;
@@ -855,6 +880,7 @@ function tick() {
     if (remaining >= 1 && remaining <= 3) playTick();
   }
   reviveComboLoop();
+  parkIdleSfx(); // once a second, any sfx that finished goes back to zero
   if (remaining <= 0) {
     if (state.phase === "work") {
       completeWorkRound();
@@ -972,6 +998,7 @@ function clearEntrance() {
 function armCountdownStart() {
   state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
   audit("phase", "countdown");
+  parkIdleSfx(); // the settle tick must start from zero, not a leftover end position
   el.combo.textContent = "Get ready...";
   if (el.comboName) el.comboName.textContent = "";
   render();

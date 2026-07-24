@@ -1264,31 +1264,47 @@ async function collectSpokenVsShown(app, ms) {
 {
   section("31. Punch count animates, pops and buzzes");
   clearStore();
-  // Real requestAnimationFrame here, so the actual animation runs.
+  // animate:true supplies requestAnimationFrame so motionOK() picks the
+  // animated path; the count itself runs on (virtual) timers since v1.14.1
+  // — the real-phone audit log showed rAF frame drops lurching the blip
+  // rhythm — so the whole finale is deterministic under the clock.
   const app = await boot({ duration: 0.6, animate: true });
   app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
   app.setSeg("pace", "1500"); app.setSeg("level", "beginner");
   app.click("startBtn");
-  await app.clock.advance(30000);
+  let guard31 = 0;
+  while (app.phase() !== "Done" && guard31++ < 400) await app.clock.advance(100);
+  check("session finished", app.phase() === "Done", app.phase());
   const punchNode = app.doc.querySelector("#stats .finish__hero .stat-num");
   check("a punch counter exists", !!punchNode, "not found");
-  const midway = punchNode ? punchNode.textContent : "";
-  check("starts below the final total (it counts up)", midway !== "" && Number(midway.replace(/,/g, "")) >= 0);
-
-  // Let the real animation finish (1200ms + slack).
-  await app.realWait(1600);
+  // Step through the staged finale, sampling the hero number as it climbs.
+  const seen = new Set();
+  for (let t = 0; t < 6000; t += 100) {
+    await app.clock.advance(100);
+    seen.add(punchNode.textContent);
+  }
   const finalShown = Number(punchNode.textContent.replace(/,/g, ""));
   const stored = JSON.parse(peekStore()["combify.history.v1"] || "{}");
   check("lands exactly on the punches thrown", finalShown === stored.totals.punches,
     `showed ${finalShown}, threw ${stored.totals?.punches}`);
-  check("counted up rather than jumping", midway !== String(finalShown) || finalShown === 0,
-    `was already ${midway} at the start`);
+  check("counted up rather than jumping", seen.size >= 3, `only saw ${[...seen].join(", ")}`);
+  const blipPlays = app.stats.audible.filter((a) => a.key === "blip" && !a.muted);
+  const blips = blipPlays.length;
+  check("the climb is audible and lands with a hit",
+    blips >= 3 && app.stats.audible.some((a) => a.key === "land"), `${blips} blips`);
+  // Uniformity: the riff must respect the 50ms floor and never lurch — the
+  // rAF-driven count-up failed exactly this on a real phone (gaps of 139ms
+  // where the schedule said 50).
+  const blipGaps = blipPlays.slice(1).map((b, i) => b.t - blipPlays[i].t);
+  check("blip rhythm is uniform (all gaps 45-500ms)",
+    blipGaps.length > 0 && blipGaps.every((g) => g >= 45 && g <= 500),
+    `gaps: ${blipGaps.join(",")}`);
   check("haptics fired while settling and on landing", app.vibrations.length >= 2,
     `${app.vibrations.length} vibrations`);
   const last = app.vibrations[app.vibrations.length - 1];
   check("the landing buzz is a pattern, not a tick", Array.isArray(last.pattern),
     JSON.stringify(last.pattern));
-  results.push(`     (${app.vibrations.length} buzzes, landed on ${finalShown} punches)`);
+  results.push(`     (${app.vibrations.length} buzzes, ${blips} blips, landed on ${finalShown} punches)`);
   app.restore();
   clearStore();
 }
@@ -1300,8 +1316,7 @@ async function collectSpokenVsShown(app, ms) {
   const app = await boot({ duration: 0.6, animate: true, noVibrate: true });
   app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
   app.click("startBtn");
-  await app.clock.advance(30000);
-  await app.realWait(1600);
+  await app.clock.advance(34000); // session + staged finale + count, all on the virtual clock
   const punchNode = app.doc.querySelector("#stats .finish__hero .stat-num");
   const stored = JSON.parse(peekStore()["combify.history.v1"] || "{}");
   check("count-up still completes without haptics",
@@ -1409,6 +1424,41 @@ async function collectSpokenVsShown(app, ms) {
   check("motion still opt-out", /prefers-reduced-motion/.test(css));
 }
 
+// ---------------------- 36. a combo never launches into the end-of-round bell
+// The first real-phone audit log caught a combo starting 120ms before the
+// round-2 bell — its first word chopped mid-syllable. nextCombo now goes
+// quiet when the bell is under 1.3s away (room for the longest first word
+// plus the between-words guard's clearance).
+{
+  section("36. No combo launches right before the bell");
+  clearStore();
+  // rngSeed 13 is load-bearing: seed-scanned so that WITHOUT the guard a
+  // combo provably launches inside the bell window (the test was first
+  // written with a seed that never lined one up, and passed on broken code).
+  const app = await boot({ duration: 0.6, rngSeed: 13 });
+  app.set("rounds", 3); app.set("workSec", 20); app.set("restSec", 5);
+  app.setSeg("pace", "500"); app.setSeg("level", "advanced");
+  app.click("startBtn");
+  await app.clock.advance(95000);
+  check("session finished", app.phase() === "Done", app.phase());
+  // A combo START is a voice play after ≥400ms of voice silence (within-combo
+  // gaps are ~45ms at Fast). Work→rest and work→done transitions ring bells;
+  // no combo may begin in the guard window before one.
+  const voice = app.stats.audible.filter((a) => a.voice && !a.muted);
+  const bells = app.stats.audible.filter((a) => !a.voice && a.key === "bell").map((b) => b.t);
+  let launched = 0, intoBell = 0;
+  for (let i = 0; i < voice.length; i++) {
+    const prevEnd = i ? voice[i - 1].t + 600 : -1e9;
+    if (voice[i].t - prevEnd < 400) continue; // mid-combo word, not a launch
+    launched++;
+    if (bells.some((b) => b > voice[i].t && b - voice[i].t < 1250)) intoBell++;
+  }
+  check("combos were launched at all", launched >= 6, `${launched}`);
+  check("none launched within 1.25s of a bell", intoBell === 0, `${intoBell} launched into the bell`);
+  app.restore();
+  clearStore();
+}
+
 // ---------------------------- 35. Audit mode: the on-device flight recorder
 // The founder path, end to end: five taps arm it, a session records, "Copy
 // audit log" exports a log that actually contains the diagnostic events,
@@ -1445,6 +1495,11 @@ async function collectSpokenVsShown(app, ms) {
   // Element state travels with each play — the part that makes a stutter
   // report diagnosable ("was the element parked, ended, or mid-file?").
   check("word events carry element state", log && / word {2}\S+ a\d ct=\d/.test(log));
+  // Real sound ONSETS are recorded (the "playing" event), and the dump ends
+  // with the per-sound uniformity report — the founder's yardstick for
+  // "did the sounds come out uniformly and clearly".
+  check("log records actual sound onsets", log && log.includes("word:out") && log.includes("sfx:out"));
+  check("log ends with a uniformity report", log && log.includes("onset uniformity:") && / {2}word:out \S+: n=\d+ latency \d+-\d+ms/.test(log));
 
   for (let i = 0; i < 5; i++) tap();
   check("five more taps disarm", ver.textContent === "audit off", ver.textContent);

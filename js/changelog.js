@@ -21,6 +21,20 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.14.1",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Smooth blips, steady ticks, no words into the bell",
+    notes: [
+      "The rising blips at the finish no longer glitch: their rhythm ran on the screen's drawing cycle, and a phone dropping frames mid-celebration dragged the sound with it. The riff now keeps its own time, and every blip starts from a freshly rewound sound.",
+      "The 5-4-3-2-1 countdown clicks keep an even tempo — reused click sounds are rewound during quiet moments instead of at the instant they play.",
+      "A combo can no longer start talking right before the bell: if there isn't room for at least its first word, the caller stays quiet and the bell lands clean.",
+      "Sounds repaired after switching apps now include every sound, not just unused ones — found by matching the first real-phone audit log against how iPhones actually report a finished sound.",
+      "The audit log now also records when each sound actually reached the speaker, and ends with a per-sound uniformity report — glitchy rhythm shows up as numbers now.",
+      "Text on the app can no longer be selected/highlighted by long-pressing — it behaves like an app, not a web page. (The What's-new page stays selectable.)",
+    ],
+  },
+  {
     v: "1.14.0",
     date: "2026-07-23",
     size: "minor",

@@ -48,10 +48,40 @@ export function audit(tag, detail) {
 }
 
 // The whole story as text, oldest first, millisecond timestamps relative to
-// when audit mode was armed (or the buffer last cleared).
+// when audit mode was armed (or the buffer last cleared). Ends with a
+// uniformity report built from ":out" events (detail format "key +Nms",
+// where N is the delay between asking for the sound and hearing it): per
+// sound, how many played, how consistent the start latency was, and how
+// even the gaps between successive onsets were. Uneven numbers here ARE the
+// "glitchy blips / off-tempo ticks" complaints, made measurable.
 export function auditDump(header) {
   const lines = buf.map((e) => `${String(Math.round(e.t)).padStart(8)}  ${e.tag}${e.d ? "  " + e.d : ""}`);
   const head = (header ? header + "\n" : "")
     + `events: ${buf.length}${dropped ? ` (ring dropped ${dropped} older)` : ""}\n`;
-  return head + lines.join("\n");
+
+  const series = {};
+  for (const e of buf) {
+    if (!e.tag.endsWith(":out")) continue;
+    const m = /^(\S+) \+(\d+)ms$/.exec(e.d);
+    if (!m) continue;
+    const k = `${e.tag} ${m[1]}`;
+    (series[k] = series[k] || []).push({ t: e.t + Number(m[2]), lat: Number(m[2]) });
+  }
+  const rows = [];
+  for (const [k, s] of Object.entries(series)) {
+    if (s.length < 2) continue;
+    const lats = s.map((x) => x.lat);
+    // Gaps only within a burst (< 2s apart) — a tick during round 1 and one
+    // during round 2 are not a rhythm.
+    const gaps = [];
+    for (let i = 1; i < s.length; i++) {
+      const g = s[i].t - s[i - 1].t;
+      if (g < 2000) gaps.push(Math.round(g));
+    }
+    let row = `  ${k}: n=${s.length} latency ${Math.min(...lats)}-${Math.max(...lats)}ms`;
+    if (gaps.length >= 2) row += ` gaps ${Math.min(...gaps)}-${Math.max(...gaps)}ms`;
+    rows.push(row);
+  }
+  const uniformity = rows.length ? `\n\nonset uniformity:\n${rows.join("\n")}` : "";
+  return head + lines.join("\n") + uniformity;
 }

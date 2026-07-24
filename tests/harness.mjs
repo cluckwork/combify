@@ -68,6 +68,10 @@ export function makeAudioFactory(clock, cfg) {
       this.src = src; this.preload = ""; this.muted = false; this.paused = true;
       this._ct = 0; this._seekTarget = null; this.duration = cfg.duration ?? 0.6;
       this.ended = false;
+      // paused/ended follow the spec (natural end leaves paused=false — the
+      // founder's real-phone log confirmed it with "ended PLAYING" entries),
+      // so "is it emitting sound" needs its own flag for the stats.
+      this._sounding = false;
       this._l = {}; this.onended = null; this.onerror = null;
       this._endTimer = null;
       // Faithful to the real repo: a file that isn't on disk behaves like a
@@ -115,15 +119,16 @@ export function makeAudioFactory(clock, cfg) {
     }
     cloneNode() { const a = new FakeAudio(this.src); return a; }
     pause() {
-      if (!this.paused) {
+      if (this._sounding) {
         // A pause of an audibly playing voice element cuts a word short.
         // Legitimate at phase boundaries (the bell cuts a word, stopVoice on
         // rest/finish); anywhere else it IS the ghost-word artifact — the
         // chaos suite asserts on exactly that distinction. Muted plays are
         // priming, not words: inaudible, so pausing them cuts nothing.
         if (this.isVoice && !this.muted) stats.cutShort.push({ t: clock.now, key: this.key, at: this._ct });
-        this.paused = true; stats.playing--; if (this.isVoice) stats.voicePlaying--;
+        this._sounding = false; stats.playing--; if (this.isVoice) stats.voicePlaying--;
       }
+      this.paused = true;
       if (this._endTimer) { clock.clear(this._endTimer); this._endTimer = null; }
     }
     play() {
@@ -162,8 +167,8 @@ export function makeAudioFactory(clock, cfg) {
         return Promise.resolve();
       }
       stats.audible.push({ t: clock.now, key: this.key, voice: this.isVoice, muted: this.muted });
-      if (this.paused) {
-        this.paused = false; stats.playing++;
+      if (!this._sounding) {
+        this._sounding = true; stats.playing++;
         stats.maxConcurrent = Math.max(stats.maxConcurrent, stats.playing);
         if (this.isVoice) {
           stats.voicePlaying++;
@@ -171,11 +176,19 @@ export function makeAudioFactory(clock, cfg) {
           if (stats.voicePlaying > 1) stats.overlapEvents.push({ t: clock.now, key: this.key, n: stats.voicePlaying });
         }
       }
+      this.paused = false;
+      // "playing" fires ASYNC in real browsers — a listener attached right
+      // after play() returns must still catch it. Zero virtual latency.
+      clock.setTimeout(() => { if (this._sounding) this._emit("playing"); }, 0);
       if (this._endTimer) clock.clear(this._endTimer);
       const drop = typeof cfg.dropEnded === "function" ? cfg.dropEnded(this) : !!cfg.dropEnded;
       this._endTimer = clock.setTimeout(() => {
         this._endTimer = null;
-        if (!this.paused) { this.paused = true; stats.playing--; if (this.isVoice) stats.voicePlaying--; }
+        if (this._sounding) { this._sounding = false; stats.playing--; if (this.isVoice) stats.voicePlaying--; }
+        // Spec: natural end does NOT set paused — only pause() does. The
+        // real phone confirmed it ("ended PLAYING" log entries), and the old
+        // paused=true model here masked a real bug: primeElement's
+        // paused===false check skipped every previously-played element.
         // Faithful to real elements: playback that completes leaves the
         // element sitting at its END position, whether or not the "ended"
         // event is delivered. This is what makes un-parked elements visible

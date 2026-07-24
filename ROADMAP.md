@@ -405,6 +405,38 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.14.1** — **First flight-recorder log actioned: blip
+  rhythm, tick tempo, launch-into-bell, prime skip.** Founder ran v1.14.0 on
+  a real iPhone with audit mode armed; the 381-event log + founder's ears
+  ("blips 100% glitching at the end", countdown off tempo) produced four
+  fixes. (1) countUp moved off requestAnimationFrame onto chained one-shot
+  timers: the log showed step gaps of 50-50-110-139ms — dropped frames
+  mid-finale dragged the blip riff with them; timers keep the same schedule,
+  floor and stall behavior without the compositor coupling. Blip pool 3→4 +
+  a per-step parkIdleSfx pass = every blip starts parked. (2) parkIdleSfx:
+  poll-based idle parking for SFX pools (heartbeat, countdown start,
+  finish) — NOT v1.13.0's event-driven parkOnEnded; a synchronous .ended
+  check on our own call stack can't hit a sounding element. Fixes ticks 3-5
+  playing from end position (ct=0.09 ended in the log) with variable rewind
+  latency = off-tempo 5-4-3-2-1. Voice pools untouched. (3) nextCombo holds
+  when <1300ms remain (longest first word + bell clearance) — the log
+  caught a combo launching 120ms before the round-2 bell, first word
+  chopped; founder spec: "not too much time, but enough so no overlapping".
+  Test 36's rngSeed 13 is seed-scanned to fail without the guard (first
+  seed tried passed on broken code — that check is load-bearing). (4)
+  primeElement treated ended elements as busy: real Safari leaves
+  paused=false after natural end (log's "ended PLAYING" entries), so
+  reprime-after-backgrounding skipped every previously-played element;
+  harness modeled paused=true and MASKED it — FakeAudio now spec-faithful
+  (paused untouched at end, separate _sounding stat, async "playing"
+  event). Audit v2: ":out" onset events record when sound actually reached
+  the pipeline ("playing" event) and auditDump ends with a per-sound
+  uniformity report (latency + gap ranges) — founder's yardstick made
+  measurable. Also: user-select disabled app-wide (changelog page stays
+  selectable). 232 behaviour + 40/40 chaos + 262 layout green. Real-phone
+  verdict owed on: blip smoothness, tick tempo, and whether the "first
+  tick (5) repeats" report persists (unexplained by the log — the settle
+  tick fires 600ms after "5" appears; watch next audit log).
 - **2026-07-23 — v1.14.0** — **The audit system: chaos suite + on-device
   flight recorder.** Founder asked for an audit that catches what the harness
   can't. Honest scoping: nothing on this machine can reproduce the real iOS
