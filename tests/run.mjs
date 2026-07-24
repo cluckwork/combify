@@ -1409,6 +1409,49 @@ async function collectSpokenVsShown(app, ms) {
   check("motion still opt-out", /prefers-reduced-motion/.test(css));
 }
 
+// ---------------------------- 35. Audit mode: the on-device flight recorder
+// The founder path, end to end: five taps arm it, a session records, "Copy
+// audit log" exports a log that actually contains the diagnostic events,
+// five more taps disarm it. This is the tool real-phone stutter reports
+// depend on — it must never quietly rot.
+{
+  section("35. Audit mode records and exports a session");
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 15); app.set("restSec", 5);
+  app.setSeg("pace", "1500"); app.setSeg("level", "beginner");
+  const ver = app.doc.getElementById("appVersion");
+  const tap = () => ver.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  for (let i = 0; i < 5; i++) tap();
+  check("five taps arm audit mode", ver.textContent === "audit on", ver.textContent);
+  const btn = app.doc.querySelector(".foot__audit");
+  check("copy button appears", !!btn && btn.textContent === "Copy audit log");
+
+  app.click("startBtn");
+  await app.clock.advance(45000);
+  check("session still completes with audit on", app.phase() === "Done", app.phase());
+
+  // jsdom has no clipboard; the copy flow falls back to window.prompt.
+  let log = null;
+  app.window.prompt = (msg, text) => { log = text; return null; };
+  btn.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  await app.clock.advance(50);
+  check("copy exports the log", typeof log === "string" && log.length > 0);
+  check("copy button confirms", btn.textContent === "Copied ✓", btn.textContent);
+  check("log names the build", log && log.includes("Combify v"));
+  for (const must of ["phase  work", "combo  ", "word  ", "word:end", "sfx  bell"]) {
+    check(`log contains "${must.trim()}" events`, log && log.includes(must));
+  }
+  // Element state travels with each play — the part that makes a stutter
+  // report diagnosable ("was the element parked, ended, or mid-file?").
+  check("word events carry element state", log && / word {2}\S+ a\d ct=\d/.test(log));
+
+  for (let i = 0; i < 5; i++) tap();
+  check("five more taps disarm", ver.textContent === "audit off", ver.textContent);
+  check("copy button removed when off", !app.doc.querySelector(".foot__audit"));
+  app.restore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);
