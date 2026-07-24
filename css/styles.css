@@ -954,6 +954,18 @@ button.foot__link {
   letter-spacing: 0.1em;
   padding-bottom: 4px;
 }
+.foot { flex-wrap: wrap; }
+/* Line two of the footer: actions (Report a problem, and the developer's
+   copy-log button when audit mode is armed). Its own centred row — tacked
+   onto the meta line as a third item it squished into the corner on
+   phones. */
+.foot__actions {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 2px;
+}
 .foot__dot { opacity: 0.5; }
 .foot__link { color: var(--accent); text-decoration: none; font-weight: 600; }
 .foot__link:hover { text-decoration: underline; }

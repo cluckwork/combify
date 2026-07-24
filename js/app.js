@@ -232,7 +232,11 @@ const REPORT_TO = "jduterme77@gmail.com";
     try { window.prompt(`Send this to ${REPORT_TO}${copied ? " — it's copied for you" : " — copy it from here"}:`, text); } catch (e) {}
     audit("report", "manual");
   });
-  foot.appendChild(btn);
+  // Actions live on their own centred footer line — see .foot__actions.
+  const row = document.createElement("div");
+  row.className = "foot__actions";
+  row.appendChild(btn);
+  foot.appendChild(row);
 })();
 
 // ---------- Audit mode (the on-device flight recorder, js/audit.js) ----------
@@ -261,7 +265,7 @@ const REPORT_TO = "jduterme77@gmail.com";
         copyBtn.textContent = ok ? "Copied ✓" : "Copy failed";
         setTimeout(() => { if (copyBtn) copyBtn.textContent = "Copy audit log"; }, 1600);
       });
-      foot.appendChild(copyBtn);
+      (foot.querySelector(".foot__actions") || foot).appendChild(copyBtn);
     }
     if (!auditOn() && copyBtn) { copyBtn.remove(); copyBtn = null; }
   }
