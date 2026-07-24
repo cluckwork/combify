@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.13.3",
+    date: "2026-07-23",
+    size: "patch",
+    title: "Stutter root cause, blips back, ripple stays centred",
+    notes: [
+      "The word stutter (\"p-pivot\", \"e-eight\") and the end bells striking double: when a sound is replayed, the phone rewinds it to the start by itself — and the app was issuing its own rewind at the same instant. The two raced, and you heard the start twice. The app now leaves the rewind to the phone. (Needs a real-phone session to call it closed.)",
+      "The rising blips are back under the punch count. They had been moved onto a sound path the iPhone's silent switch mutes; they now play the same way as the bell and the voice, which the switch never touches.",
+      "The finish ripple blooms only while the ring is at the centre of the screen — it no longer replays off to the side a moment after the numbers arrive.",
+    ],
+  },
+  {
     v: "1.13.2",
     date: "2026-07-23",
     size: "patch",

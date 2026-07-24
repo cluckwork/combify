@@ -405,6 +405,31 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.13.3** — **The double-seek race named; blips back on the
+  media pipeline; ripple scoped to Act 1.** Founder reports after v1.13.2:
+  stutter still present but smaller ("p-pivot", "e-eight"), end bells striking
+  double (2nd/3rd strike more than the 1st), rising blips GONE, finish ripple
+  replaying off-centre twice. One mechanism explains the first two: play() on
+  an element that ended rewinds to the start BY ITSELF (spec'd behaviour), and
+  the pipeline issued its own currentTime=0 on top — two async seeks racing on
+  iOS, heard as attack-jump-attack. Explains the bell pattern exactly: 2nd/3rd
+  end-strikes round-robin onto elements left at end position by earlier
+  rounds' bells; a primed element (parked at 0, no seek issued) plays clean.
+  Fix is the OPPOSITE of v1.13.0's reverted parking: add nothing, seek less —
+  the play-time rewind now skips any element with .ended set (property
+  reflects state even when iOS drops the event; no listeners, no timers, no
+  stale-event surface). Blips: the v1.12.0 Web Audio buffer path is muted by
+  the iPhone ring/silent switch — the "deliberate trade" turned out to mute
+  the whole count-up on real phones; reverted to the primed-element pipeline
+  like every other sound. Ripple: `2` iterations × 1.8s outlived the 1.7s
+  finale hold, so bloom two played at the dial's resting spot — and Safari
+  restarts pseudo-element animations on ancestor class changes, replaying
+  BOTH blooms there at the reveal; the ::after is now scoped
+  :not(.is-finale-reveal) so the ripple ends with Act 1. Harness now models
+  .ended + play()-from-ended auto-rewind. Per the v1.13.2 rule these are
+  audio-pipeline changes shipped harness-green — the stutter and bell fixes
+  need a real-phone session before being called closed. 211 behaviour + 262
+  layout green.
 - **2026-07-23 — v1.13.2** — **v1.13.0's audio "fix" REVERTED after real-device
   failure; entrance rebuilt as a crossfade.** Founder testing on a real phone:
   frequent "ghost words" — "six"→"s", "slip"→"lip", "pivot"→"puh", worse at

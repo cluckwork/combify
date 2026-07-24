@@ -50,6 +50,7 @@ export function makeAudioFactory(clock, cfg) {
     constructor(src = "") {
       this.src = src; this.preload = ""; this.muted = false; this.paused = true;
       this.currentTime = 0; this.duration = cfg.duration ?? 0.6;
+      this.ended = false;
       this._l = {}; this.onended = null; this.onerror = null;
       this._endTimer = null;
       // Faithful to the real repo: a file that isn't on disk behaves like a
@@ -88,6 +89,11 @@ export function makeAudioFactory(clock, cfg) {
       }
       stats.plays++;
       stats.byKey[this.key] = (stats.byKey[this.key] || 0) + 1;
+      // Faithful to the spec: play() on an element that ended rewinds to the
+      // start itself — the app leans on this instead of seeking manually
+      // (a manual seek on top of this internal one is the double-seek race
+      // heard as "p-pivot" and double bell strikes).
+      if (this.ended) { this.currentTime = 0; this.ended = false; }
       // phantomEnded: the element reports "ended" almost immediately without
       // ever producing audio — a decode that quietly failed. The chain thinks
       // the word was spoken, so the listener hears a gap where a punch should
@@ -120,6 +126,7 @@ export function makeAudioFactory(clock, cfg) {
         // to tests — a reused element at end-position forces a rewind seek
         // at play time, which on iOS races playback (the "t-two" stutter).
         this.currentTime = this.duration;
+        this.ended = true; // the property reflects state even when the event is dropped
         if (!drop) this._emit("ended");
       }, this.duration * 1000);
       return Promise.resolve();

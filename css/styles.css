@@ -635,8 +635,16 @@ label {
    lower half), so the ripple bloomed off-centre from the very circle it is
    supposed to come out of, and drifted further whenever the layout changed
    height. Sized at 90% of the dial, which is exactly the ring's inset, so it
-   starts ON the ring and expands outward at every screen size. */
-.stage[data-phase="done"] .dial::after {
+   starts ON the ring and expands outward at every screen size.
+   :not(.is-finale-reveal): the ripple belongs to Act 1 of the finale, when
+   the dial is at dead centre. Left matching past the reveal, its second
+   bloom played AFTER the glide, at the dial's resting spot — and Safari
+   restarts pseudo-element animations when an ancestor's class changes, so
+   the reveal could replay both blooms up there: "plays off centre twice".
+   Removing the ::after at the reveal ends the ripple with its act. The
+   unstaged path (reduced motion — is-finale never applied) keeps the full
+   animation. */
+.stage[data-phase="done"]:not(.is-finale-reveal) .dial::after {
   content: "";
   position: absolute;
   top: 50%; left: 50%;

@@ -197,7 +197,16 @@ function playSfx(key, fallback, rate = 1) {
   if (!sfx[key]) { fallback(); return; }
   const node = getPooledSfx(key);
   if (!node) { fallback(); return; }
-  try { node.currentTime = 0; } catch (e) {}
+  // Rewind only an element genuinely left mid-file (a missed park site). An
+  // element that ENDED on its own needs no seek from us — play() rewinds to
+  // the start itself, as part of the spec'd play algorithm. Issuing our own
+  // currentTime=0 on top of that was a SECOND async seek racing the internal
+  // one: attack, jump, attack again — the end bells striking double on their
+  // 2nd/3rd ring (those reuse pool elements sitting at end position; a
+  // freshly-primed element plays clean, which is why the first strike mostly
+  // didn't). NOT fixed by parking on "ended" — v1.13.0 tried that and iOS's
+  // stale/late event delivery seeked elements mid-use: ghost words.
+  try { if (!node.ended && node.currentTime > 0.05) node.currentTime = 0; } catch (e) {}
   // playbackRate with preservesPitch off is a pitch bend — one blip file
   // becomes the whole rising scale of the count-up.
   try {
@@ -264,41 +273,17 @@ function synthBlip(rate) {
     osc.start(t); osc.stop(t + 0.06);
   });
 }
-// Blips prefer Web Audio: HTMLAudio scheduling jitters 10-40ms per play,
-// which at the count-up's 68ms cadence is audible as stutter no file format
-// fixes. A decoded buffer starts sample-accurately. Deliberate trade, unlike
-// every other sound: Web Audio is muted by the iPhone silent switch, and for
-// a decorative count embellishment that's fine — the count still steps
-// visually, and the landing hit stays on the media pipeline. Falls back to
-// the media element wherever the buffer isn't ready.
-let blipBuffer = null;
-let blipBufferLoading = false;
-function loadBlipBuffer() {
-  if (blipBuffer || blipBufferLoading) return;
-  const ctx = getAudioCtx();
-  if (!ctx || typeof fetch !== "function" || !ctx.decodeAudioData) return;
-  blipBufferLoading = true;
-  fetch(SFX_DIR + SFX_FILES.blip)
-    .then((r) => r.arrayBuffer())
-    .then((b) => new Promise((res, rej) => ctx.decodeAudioData(b, res, rej)))
-    .then((buf) => { blipBuffer = buf; })
-    .catch(() => {})
-    .finally(() => { blipBufferLoading = false; });
-}
+// Blips ride the same media-element pipeline as every other sound. A Web
+// Audio decoded-buffer path was tried here (v1.12-v1.13) for sample-accurate
+// starts — but Web Audio is muted by the iPhone ring/silent switch while
+// media elements are not, so on most phones the entire count-up went silent:
+// "the rising blips are completely gone". The same lesson the bells already
+// taught (see the note above SFX_DIR), relearned once more. The blip stays a
+// WAV, so the only jitter left is HTMLAudio scheduling (~10-40ms), and at the
+// count-up's 50ms+ step spacing audible-but-loose beats sample-accurate
+// silence.
 export function playBlip(progress) {
   const rate = 0.7 + progress * 1.1; // ~0.7x → 1.8x: a clear low-to-high climb
-  if (blipBuffer && audioCtx && audioCtx.state === "running") {
-    try {
-      const src = audioCtx.createBufferSource();
-      src.buffer = blipBuffer;
-      src.playbackRate.value = rate;
-      const g = audioCtx.createGain();
-      g.gain.value = 0.9;
-      src.connect(g).connect(audioCtx.destination);
-      src.start();
-      return;
-    } catch (e) { /* fall through to the media path */ }
-  }
   playSfx("blip", () => synthBlip(rate), rate);
 }
 function synthLand() {
@@ -463,7 +448,6 @@ export function unlockAudioForMobile() {
     deepPrimePending = true;
     audioUnlocked = true;
     needsReprime = false;
-    setTimeout(loadBlipBuffer, 300); // off the tap; ready long before any finale
   } catch (e) { /* retry on the next tap */ }
 }
 // Top up the spare slots inside a later gesture, spreading the cost away from
@@ -565,7 +549,10 @@ function playClips(keys, onDone) {
     node.onended = null;
     node.onerror = null;
     node.muted = false; // priming mutes elements; never inherit that into playback
-    try { node.currentTime = 0; } catch (e) {}
+    // Same rule as playSfx: never seek an element that ended on its own —
+    // play() performs that rewind internally, and doubling it was the race
+    // heard as "p-pivot" / "e-eight" on a word's 2nd+ use of a pool element.
+    try { if (!node.ended && node.currentTime > 0.05) node.currentTime = 0; } catch (e) {}
     voice.current = node;
 
     const startedAt = Date.now();
