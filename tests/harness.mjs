@@ -341,6 +341,11 @@ export async function boot(cfg = {}) {
   // main suite has tests that want real variation across boots.
   saved.mathRandom = Math.random;
   if (cfg.rngSeed != null) Math.random = mulberry32(cfg.rngSeed);
+  // No network in tests: sfx buffer loads and problem-report submissions
+  // must fail fast instead of touching the real internet (the report relay
+  // would otherwise receive a POST on every suite run).
+  saved.fetch = g.fetch;
+  g.fetch = () => Promise.reject(new Error("network disabled in tests"));
 
   // cfg.animate turns on a real requestAnimationFrame (driven by real time, not
   // the virtual clock) plus a vibrate spy, so the count-up/pop/haptic path can
@@ -456,7 +461,7 @@ export async function boot(cfg = {}) {
     // Waits real wall-clock time, needed when a test drives requestAnimationFrame
     // (which runs on real timers) rather than the virtual clock.
     realWait: (ms) => new Promise((r) => saved.setTimeout(r, ms)),
-    restore() { g.setTimeout = saved.setTimeout; g.setInterval = saved.setInterval; g.clearTimeout = saved.clearTimeout; g.clearInterval = saved.clearInterval; Date.now = saved.dateNow; Math.random = saved.mathRandom; },
+    restore() { g.setTimeout = saved.setTimeout; g.setInterval = saved.setInterval; g.clearTimeout = saved.clearTimeout; g.clearInterval = saved.clearInterval; Date.now = saved.dateNow; Math.random = saved.mathRandom; g.fetch = saved.fetch; },
   };
   return api;
 }

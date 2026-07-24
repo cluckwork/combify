@@ -1502,7 +1502,7 @@ async function collectSpokenVsShown(app, ms) {
 // land in the copyable prompt fallback carrying both the member's words and
 // the session's sound log.
 {
-  section("38. Report a problem ships the description and the log");
+  section("38. Report a problem: silent delivery, thanks, and the offline fallback");
   clearStore();
   const app = await boot({ duration: 0.6 });
   app.set("rounds", 1); app.set("workSec", 15); app.set("restSec", 5);
@@ -1510,18 +1510,38 @@ async function collectSpokenVsShown(app, ms) {
   await app.clock.advance(40000);
   const reportBtn = [...app.doc.querySelectorAll(".foot button")].find((b) => /report/i.test(b.textContent));
   check("footer has a Report a problem button", !!reportBtn);
+  const modal = app.doc.getElementById("reportModal");
+  const textEl = app.doc.getElementById("reportText");
+  const click = (el) => el.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+
+  // Happy path: the relay accepts, the member just gets thanked.
+  const posts = [];
+  const testStub = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => { posts.push({ url, body: opts && opts.body }); return { ok: true }; };
+  click(reportBtn);
+  check("the styled dialog opens", !modal.hidden);
+  textEl.value = "the bell rang twice at the end";
+  click(app.doc.getElementById("reportSend"));
+  await app.clock.advance(50);
+  check("report POSTs to the relay silently", posts.length === 1 && posts[0].url.includes("formsubmit.co"));
+  check("report carries the member's words", posts.length && posts[0].body.includes("the bell rang twice at the end"));
+  check("report carries the session's sound log", posts.length && posts[0].body.includes("PROBLEM REPORT") && /word/.test(posts[0].body));
+  check("member sees the thank-you", !app.doc.getElementById("reportThanks").hidden);
+  await app.clock.advance(2500);
+  check("dialog closes itself after thanking", modal.hidden);
+
+  // Offline path: delivery fails → the report lands in the copyable prompt.
+  globalThis.fetch = () => Promise.reject(new Error("offline"));
   const prompts = [];
-  app.window.prompt = (msg, text) => {
-    prompts.push({ msg, text });
-    return msg.startsWith("What went wrong") ? "the bell rang twice at the end" : null;
-  };
-  reportBtn.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  app.window.prompt = (msg, text) => { prompts.push({ msg, text }); return null; };
+  click(reportBtn);
+  textEl.value = "no wifi in the gym";
+  click(app.doc.getElementById("reportSend"));
   await app.clock.advance(100);
-  const sent = prompts.find((p) => p.text);
-  check("report lands in a copyable prompt (no share sheet here)", !!sent);
-  check("report carries the member's words", !!sent && sent.text.includes("the bell rang twice at the end"));
-  check("report carries the session's sound log", !!sent && sent.text.includes("PROBLEM REPORT") && / word {2}/.test(sent.text));
-  check("report names where to send it", !!sent && sent.msg.includes("jduterme77@gmail.com"));
+  const fallback = prompts.find((p) => p.text);
+  check("offline report falls back to a copyable prompt", !!fallback && fallback.text.includes("no wifi in the gym"));
+  check("fallback names where to send it", !!fallback && fallback.msg.includes("jduterme77@gmail.com"));
+  globalThis.fetch = testStub;
   app.restore();
   clearStore();
 }

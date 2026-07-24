@@ -954,6 +954,57 @@ button.foot__link {
   letter-spacing: 0.1em;
   padding-bottom: 4px;
 }
+/* ---- Report-a-problem dialog ----
+   The native prompt() read as a browser artifact, not part of the app. Same
+   card language as the install nudge: surface, dim accent border, radius —
+   over a scrim so the app visibly waits. */
+.report {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.report[hidden] { display: none; }
+.report__card {
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.report__title { margin: 0; font-size: 14px; font-weight: 700; }
+.report__sub { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.report__text {
+  width: 100%;
+  resize: none;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+  font-size: 14px;
+  /* the body turns selection off app-wide; typing needs it back */
+  user-select: text;
+  -webkit-user-select: text;
+}
+.report__text:focus { outline: none; border-color: var(--accent); }
+.report__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.report__thanks {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+}
+
 .foot { flex-wrap: wrap; }
 /* Line two of the footer: actions (Report a problem, and the developer's
    copy-log button when audit mode is armed). Its own centred row — tacked

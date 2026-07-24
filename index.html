@@ -152,6 +152,21 @@
       </div>
     </details>
 
+    <!-- Report-a-problem dialog: same card language as the install nudge.
+         Opened by the footer link; sends silently, thanks the member. -->
+    <div class="report" id="reportModal" hidden>
+      <div class="report__card" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+        <p class="report__title" id="reportTitle">Report a problem</p>
+        <p class="report__sub" id="reportSub">What went wrong? A sentence or two helps a lot. A technical sound log is included automatically.</p>
+        <textarea class="report__text" id="reportText" rows="3" maxlength="500" placeholder="e.g. the bell sounded twice at the end of round 2"></textarea>
+        <div class="report__actions" id="reportActions">
+          <button class="btn" id="reportCancel" type="button">Cancel</button>
+          <button class="btn btn--primary" id="reportSend" type="button">Send</button>
+        </div>
+        <p class="report__thanks" id="reportThanks" hidden>Thanks for the help — we appreciate it!</p>
+      </div>
+    </div>
+
     <!-- Version + changelog, always visible — one glance, no unfolding About. -->
     <footer class="foot">
       <span>v<span id="appVersion">—</span></span>

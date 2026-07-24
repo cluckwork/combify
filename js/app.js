@@ -212,26 +212,74 @@ function completeWorkRound() {
 const REPORT_TO = "jduterme77@gmail.com";
 (function wireReport() {
   const foot = document.querySelector(".foot");
-  if (!foot) return;
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "foot__link";
-  btn.textContent = "Report a problem";
-  btn.addEventListener("click", async () => {
-    let desc = null;
-    try { desc = window.prompt("What went wrong? A sentence or two helps a lot:"); } catch (e) {}
-    if (!desc) return; // cancelled or empty — no report
-    const text = auditReport(String(desc).slice(0, 500),
+  const modal = document.getElementById("reportModal");
+  if (!foot || !modal) return;
+  const textEl = document.getElementById("reportText");
+  const subEl = document.getElementById("reportSub");
+  const actionsEl = document.getElementById("reportActions");
+  const sendBtn = document.getElementById("reportSend");
+  const thanksEl = document.getElementById("reportThanks");
+  let closeTimer = null;
+
+  function openModal() {
+    clearTimeout(closeTimer);
+    textEl.value = "";
+    textEl.hidden = false; subEl.hidden = false; actionsEl.hidden = false;
+    thanksEl.hidden = true;
+    sendBtn.disabled = false; sendBtn.textContent = "Send";
+    modal.hidden = false;
+    try { textEl.focus(); } catch (e) {}
+  }
+  function closeModal() { clearTimeout(closeTimer); modal.hidden = true; }
+
+  async function send() {
+    const desc = String(textEl.value || "").trim();
+    if (!desc) { try { textEl.focus(); } catch (e) {} return; }
+    sendBtn.disabled = true; sendBtn.textContent = "Sending…";
+    const text = auditReport(desc.slice(0, 500),
       `Combify v${VERSION} — sent to ${REPORT_TO}\nUA: ${navigator.userAgent || "?"}`);
+    // Preferred path: straight to the developer's inbox via formsubmit.co (a
+    // free relay — this app has no server of its own). The member just gets
+    // thanked. NOTE: the relay's FIRST submission triggers a one-time
+    // activation email to REPORT_TO; reports flow only once it's clicked.
+    let delivered = false;
+    try {
+      const res = await fetch("https://formsubmit.co/ajax/" + REPORT_TO, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ _subject: "Combify problem report", message: text }),
+      });
+      delivered = !!(res && res.ok);
+    } catch (e) {}
+    if (delivered) {
+      audit("report", "sent");
+      textEl.hidden = true; subEl.hidden = true; actionsEl.hidden = true;
+      thanksEl.hidden = false;
+      closeTimer = setTimeout(closeModal, 1800);
+      return;
+    }
+    // Delivery failed (offline, relay down): the report must never be lost.
+    // Close the card and fall back to the share sheet, then clipboard.
+    closeModal();
     if (navigator.share) {
       try { await navigator.share({ title: "Combify problem report", text }); audit("report", "shared"); return; }
       catch (e) { /* share cancelled or blocked — fall through to copy */ }
     }
     let copied = false;
     try { await navigator.clipboard.writeText(text); copied = true; } catch (e) {}
-    try { window.prompt(`Send this to ${REPORT_TO}${copied ? " — it's copied for you" : " — copy it from here"}:`, text); } catch (e) {}
+    try { window.prompt(`No connection — send this to ${REPORT_TO}${copied ? " (it's copied for you)" : ""}:`, text); } catch (e) {}
     audit("report", "manual");
-  });
+  }
+
+  sendBtn.addEventListener("click", send);
+  document.getElementById("reportCancel").addEventListener("click", closeModal);
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "foot__link";
+  btn.textContent = "Report a problem";
+  btn.addEventListener("click", openModal);
   // Actions live on their own centred footer line — see .foot__actions.
   const row = document.createElement("div");
   row.className = "foot__actions";

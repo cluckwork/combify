@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.17.0",
+    date: "2026-07-24",
+    size: "minor",
+    title: "One-tap problem reports",
+    notes: [
+      "Reporting a problem is now one clean step: a proper in-app card (matching the rest of the app, not a browser popup) where you describe what went wrong and hit Send — it goes straight through, and you just get a thank-you. No copying, no share sheets.",
+      "If there's no connection, the app falls back to letting you send the report manually, so nothing gets lost at the gym.",
+    ],
+  },
+  {
     v: "1.16.2",
     date: "2026-07-24",
     size: "patch",
