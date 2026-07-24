@@ -405,6 +405,20 @@ Captured so they're not lost; not planned yet.
 
 ## 13. Changelog
 
+- **2026-07-23 — v1.13.1** — **Centre-stage countdown reverted; entrance is a
+  hold, not a move.** Founder feedback on v1.13.0 within hours: the centred
+  dial hid "Get ready..." and the dial's normal position was fine — the ask
+  was only ever a smoother start. So: the FLIP/fixed-centre machinery is gone
+  (armPulse and the pulse-hold survive), the chrome fold slowed from
+  0.18s/0.3s to 0.4s/0.6s with a gentler curve, and the countdown paints
+  "5" + "Get ready..." on the tap's frame and HOLDS for ENTRANCE_SETTLE_MS
+  (750ms, motion only — jsdom/reduced-motion keep 140ms) before the clock
+  re-anchors, the first tick plays, and the pulse releases. The two durations
+  (CSS fold, JS settle) are cross-referenced in comments and must move
+  together. Lesson recorded: when the founder describes a fix ("wait a bit
+  after pressing start OR do an animation"), prefer the smallest option
+  first — the fancy one was built and pulled same-day. 209 behaviour + 262
+  layout green.
 - **2026-07-23 — v1.13.0** — **The start intro (finale's mirror) + the rare
   stutter's likely root cause.** Reported: "5" still occasionally eaten at
   start despite the settle beat, and rare residual word-stutter. Start now

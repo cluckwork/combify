@@ -592,43 +592,44 @@ async function countCombos(app, ms, step = 200) {
   app.restore();
 }
 
-// ---------------------------------------------- 10p. the start intro lifecycle
+// ------------------------------------------ 10p. the entrance holds the clock
 {
-  section("10p. The countdown takes centre stage (start intro)");
-  // animate:true provides requestAnimationFrame, which is what motionOK()
-  // keys on — the intro must run here and must NOT run in the no-motion boots
-  // every other section uses.
+  section("10p. The countdown holds while the entrance settles");
+  // With motion (animate:true provides the requestAnimationFrame that
+  // motionOK() keys on) the fold-away transition is real, so the clock must
+  // hold "5" — visibly painted, "Get ready..." on screen — until the
+  // entrance has finished, and only then tick.
   const app = await boot({ duration: 0.6, animate: true });
   app.set("rounds", 1); app.set("workSec", 10); app.set("restSec", 3);
-  const stage = app.doc.getElementById("stage");
   app.click("startBtn");
-  await app.clock.advance(300); // mid-entrance: drift is 450ms
-  check("dial is centre stage during the countdown", stage.classList.contains("is-intro"), "no is-intro class");
-  check("countdown phase painted immediately", app.phase() === "Get Ready", app.phase());
-  await app.clock.advance(6000); // entrance + full countdown → work
-  check("intro ends when the round begins", !stage.classList.contains("is-intro"), "is-intro still set");
+  // Priming inside the Start tap plays one muted tick element — baseline it
+  // so only REAL (audible, post-tap) ticks are counted below.
+  const tickBase = app.stats.byKey.tick || 0;
+  await app.clock.advance(50);
+  check("countdown painted on the tap's frame", app.phase() === "Get Ready" && app.clockText() === "5",
+    `${app.phase()} / ${app.clockText()}`);
+  check("Get ready stays on screen through the entrance", app.combo() === "Get ready...", app.combo());
+  await app.clock.advance(550); // inside the entrance hold (750ms)
+  check("clock still holding 5 mid-entrance", app.clockText() === "5", app.clockText());
+  check("no tick before the entrance lands", (app.stats.byKey.tick || 0) === tickBase,
+    `${(app.stats.byKey.tick || 0) - tickBase} early ticks`);
+  await app.clock.advance(300); // crosses the 750ms hold
+  check("first tick fires once the entrance settles", (app.stats.byKey.tick || 0) >= tickBase + 1,
+    `${(app.stats.byKey.tick || 0) - tickBase} ticks`);
+  await app.clock.advance(5500); // full countdown from the re-anchored clock
   check("round is underway", app.phase() === "Work", app.phase());
-  // Exit mid-countdown must tear the intro down, not leave a fixed dial
-  // floating over the settings screen.
-  app.click("resetBtn");            // restart → back into a countdown + intro
-  await app.clock.advance(300);
-  check("restart re-enters the intro", stage.classList.contains("is-intro"), "no is-intro on restart");
-  app.click("startBtn");            // pause mid-entrance
-  app.click("exitBtn");
-  await app.clock.advance(200);
-  check("exit clears the intro completely", !stage.classList.contains("is-intro"), "is-intro survived exit");
   app.restore();
 
-  // And without animation support the intro never engages — the old settle
-  // beat carries the start, and the countdown still works.
+  // Without motion the fold doesn't animate, so only the short beat applies.
   const b = await boot({ duration: 0.6 });
   b.set("rounds", 1); b.set("workSec", 10); b.set("restSec", 3);
   b.click("startBtn");
+  const tickBaseB = b.stats.byKey.tick || 0;
   await b.clock.advance(300);
-  check("no intro without motion support", !b.doc.getElementById("stage").classList.contains("is-intro"),
-    "is-intro applied in a no-motion environment");
+  check("no long hold in a no-motion environment", (b.stats.byKey.tick || 0) >= tickBaseB + 1,
+    `${(b.stats.byKey.tick || 0) - tickBaseB} ticks after 300ms`);
   await b.clock.advance(6000);
-  check("countdown still reaches Work without the intro", b.phase() === "Work", b.phase());
+  check("countdown still reaches Work", b.phase() === "Work", b.phase());
   b.restore();
 }
 

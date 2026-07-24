@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.13.1",
+    date: "2026-07-23",
+    size: "patch",
+    title: "A calmer start",
+    notes: [
+      "The start is one smooth motion again: the ring stays where it lives, \"Get ready\" stays on screen, the settings fold away gently, and the countdown begins only once the screen has settled — so the 5 always gets its full second.",
+      "(This replaces the centre-stage countdown from v1.13.0, pulled on feedback the same day.)",
+    ],
+  },
+  {
     v: "1.13.0",
     date: "2026-07-23",
     size: "minor",

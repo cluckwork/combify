@@ -198,7 +198,11 @@ body:has(.app[data-focus="1"]) { padding: 0; }
   border-width: 0;
   overflow: hidden;
   pointer-events: none;
-  transition: opacity 0.18s ease, max-height 0.3s ease;
+  /* The entrance: slower and gentler than the old 0.18s/0.3s fold, which read
+     as a lurch — and whose jank landed on the countdown's first beat. The
+     clock now holds until this finishes (ENTRANCE_SETTLE_MS in app.js keeps
+     margin over the 0.6s here; move them together). */
+  transition: opacity 0.4s ease 0.05s, max-height 0.6s cubic-bezier(0.3, 0.7, 0.2, 1);
 }
 /* ACTUALLY full screen: no column max-width, no page padding, no card chrome —
    the stage IS the screen. The controls float over it as icons (below), so not
@@ -863,34 +867,6 @@ label {
 }
 .install__dismiss:hover { color: var(--text); }
 
-
-/* ==========================================================================
-   The start intro (js: startIntro/endIntro) — the finale's mirror. On Start
-   the dial lifts out of the folding settings chrome and drifts to the DEAD
-   CENTRE of the screen, growing as it goes; the 5-4-3-2-1 counts down there,
-   centre stage, while the chrome fold and the OS fullscreen transition spend
-   their jank behind deliberate choreography instead of eating the first
-   beat. The bell glides it home as round 1 begins. The drift itself is a
-   measured FLIP transform set inline (exact in any orientation); fixed
-   positioning keeps the dial pinned to the true screen centre no matter how
-   the layout churns underneath. Never applied under reduced motion.
-   ========================================================================== */
-.stage.is-intro .stage__meta {
-  position: fixed;
-  inset: 0;
-  z-index: 2;              /* over the stage, under the floating controls (6) */
-  display: grid;
-  place-items: center;
-  pointer-events: none;    /* pause/exit stay tappable straight through it */
-}
-.stage.is-intro .dial {
-  width: min(70vw, 66vh, 320px);   /* centre stage earns a bigger dial */
-  will-change: transform;
-}
-/* Everything else steps aside while the dial holds the centre; the ordinary
-   layout fades back in as the glide brings it home. */
-.stage__main { transition: opacity 0.4s ease; }
-.stage.is-intro .stage__main { opacity: 0; }
 
 /* ==========================================================================
    The finish finale (js: startFinale). Act 1: dial alone at dead centre (a
