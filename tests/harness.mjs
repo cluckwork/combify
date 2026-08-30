@@ -371,7 +371,10 @@ export async function boot(cfg = {}) {
   g.localStorage = storage;
   Object.defineProperty(window, "localStorage", { value: storage, configurable: true });
   const nav = {                                            // no serviceWorker key: app skips SW registration
-    userAgent: "test",
+    // Overridable so the iOS-only paths (no install API, no Vibration) can be
+    // exercised; iPadOS 13+ claims "Macintosh" and is told apart by touch.
+    userAgent: cfg.userAgent || "test",
+    maxTouchPoints: cfg.maxTouchPoints || 0,
     wakeLock,
     vibrate: (pattern) => { vibrations.push({ t: Date.now(), pattern }); return true; },
   };

@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.20.0",
+    date: "2026-08-30",
+    size: "minor",
+    title: "The home-screen tip waits until you've trained",
+    notes: [
+      "Combify no longer asks you to add it to your home screen the second you arrive. It waits until you've finished a session, then mentions it once on the way out — when you've actually seen what it does.",
+      "On iPhone the tip now shows the two steps with Safari's Share icon drawn in, instead of a sentence describing where to look.",
+      "Tapping the x now hides the tip for a week rather than forever, so people who dismissed it early aren't locked out of installing later.",
+    ],
+  },
+  {
     v: "1.19.0",
     date: "2026-07-24",
     size: "minor",

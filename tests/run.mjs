@@ -503,42 +503,103 @@ async function countCombos(app, ms, step = 200) {
 
 // ------------------------------------------------------ 10j. install nudge
 {
-  section("10j. Install nudge shows the right thing to the right browser");
-  // Chrome path: browser says the app is installable -> one-tap Install.
+  section("10j. Install nudge is earned, not thrown at strangers");
+  // A finished session is the price of admission. Asking on arrival was the
+  // old behaviour and it burned the one ask on people who had never trained.
+  const IOS = { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari", noVibrate: true };
+  const offerInstall = (app) => {
+    const ev = new app.window.Event("beforeinstallprompt");
+    ev.prompt = () => {};
+    ev.userChoice = new Promise(() => {});
+    app.window.dispatchEvent(ev);
+    return ev;
+  };
+  // Run one real session to completion, then walk back out to the ready screen.
+  const trainAndExit = async (app) => {
+    app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+    app.click("startBtn");
+    await app.clock.advance(40000);
+    app.click("exitBtn");
+  };
+
+  clearStore();
   const app = await boot({ duration: 0.6 });
   const nudge = () => app.doc.getElementById("installNudge");
-  check("hidden until a browser offers something", nudge().hidden === true, "visible at boot");
-  let prompted = 0;
-  const ev = new app.window.Event("beforeinstallprompt");
-  ev.prompt = () => { prompted++; };
-  ev.userChoice = Promise.resolve({ outcome: "accepted" });
-  app.window.dispatchEvent(ev);
-  check("nudge appears when the browser offers install", nudge().hidden === false, "still hidden");
+  check("hidden at boot", nudge().hidden === true, "visible at boot");
+  offerInstall(app);
+  check("still hidden when the browser offers install but nothing is trained yet",
+    nudge().hidden === true, "asked a stranger");
+  await trainAndExit(app);
+  check("appears once a session has been finished", nudge().hidden === false, "still hidden");
   check("with a real Install button", app.doc.getElementById("installBtn").hidden === false, "button hidden");
-  app.click("installBtn");
-  await app.clock.advance(50);
-  await Promise.resolve(); await Promise.resolve();
-  check("tapping Install calls the browser prompt", prompted === 1, `prompted ${prompted}`);
-  check("accepting hides the nudge", nudge().hidden === true, "still visible");
+  check("iOS steps stay hidden where a real prompt exists",
+    app.doc.getElementById("installSteps").hidden === true, "steps shown");
   app.restore();
 
-  // Dismissal is remembered across visits.
-  const app2 = await boot({ duration: 0.6 });
-  const ev2 = new app2.window.Event("beforeinstallprompt");
-  ev2.prompt = () => {};
-  ev2.userChoice = new Promise(() => {});
-  app2.window.dispatchEvent(ev2);
-  check("nudge shows again on a later visit", app2.doc.getElementById("installNudge").hidden === false, "hidden");
-  app2.click("installDismiss");
-  check("dismiss hides it", app2.doc.getElementById("installNudge").hidden === true, "still visible");
-  app2.restore();
-  const app3 = await boot({ duration: 0.6 });
-  const ev3 = new app3.window.Event("beforeinstallprompt");
-  ev3.prompt = () => {};
-  ev3.userChoice = new Promise(() => {});
-  app3.window.dispatchEvent(ev3);
-  check("dismissal is remembered across visits", app3.doc.getElementById("installNudge").hidden === true, "shown again");
-  app3.restore();
+  // Tapping Install runs the browser's own prompt.
+  clearStore();
+  const appP = await boot({ duration: 0.6 });
+  let prompted = 0;
+  const ev = new appP.window.Event("beforeinstallprompt");
+  ev.prompt = () => { prompted++; };
+  ev.userChoice = Promise.resolve({ outcome: "accepted" });
+  appP.window.dispatchEvent(ev);
+  await trainAndExit(appP);
+  appP.click("installBtn");
+  await appP.clock.advance(50);
+  await Promise.resolve(); await Promise.resolve();
+  check("tapping Install calls the browser prompt", prompted === 1, `prompted ${prompted}`);
+  check("accepting hides the nudge", appP.doc.getElementById("installNudge").hidden === true, "still visible");
+  appP.restore();
+
+  // iOS gets the numbered Share steps instead — Apple exposes no install API.
+  clearStore();
+  const appI = await boot({ duration: 0.6, ...IOS });
+  await trainAndExit(appI);
+  check("iOS shows the nudge after a session", appI.doc.getElementById("installNudge").hidden === false, "hidden");
+  check("iOS shows the Share steps", appI.doc.getElementById("installSteps").hidden === false, "steps hidden");
+  check("iOS hides the Install button it cannot use",
+    appI.doc.getElementById("installBtn").hidden === true, "button shown");
+  appI.restore();
+
+  // Dismissing SNOOZES. The old build made it permanent, so one reflex tap
+  // silenced the ask for a member who went on to train every day.
+  clearStore();
+  const appD = await boot({ duration: 0.6, ...IOS });
+  await trainAndExit(appD);
+  appD.click("installDismiss");
+  check("dismiss hides it", appD.doc.getElementById("installNudge").hidden === true, "still visible");
+  appD.restore();
+  const appD2 = await boot({ duration: 0.6, ...IOS });
+  check("still quiet during the snooze week", appD2.doc.getElementById("installNudge").hidden === true, "came back too soon");
+  appD2.restore();
+  // Same device, eight days later.
+  const LATER = Date.now() + 8 * 86400000;
+  const appD3 = await boot({ duration: 0.6, startTime: LATER, ...IOS });
+  check("asks once more after the snooze expires",
+    appD3.doc.getElementById("installNudge").hidden === false, "stayed silent");
+  appD3.click("installDismiss");
+  appD3.restore();
+  const appD4 = await boot({ duration: 0.6, startTime: LATER + 30 * 86400000, ...IOS });
+  check("two declines means never again", appD4.doc.getElementById("installNudge").hidden === true, "asked a third time");
+  appD4.restore();
+
+  // The old permanent tombstone is honoured as one decline, not a life
+  // sentence: it answered a question asked before the member had trained.
+  clearStore();
+  {
+    const seed = await boot({ duration: 0.6, ...IOS });
+    seed.window.localStorage.setItem("combify.installDismissed", "1");
+    await trainAndExit(seed);
+    check("a legacy dismissal still suppresses the ask now",
+      seed.doc.getElementById("installNudge").hidden === true, "ignored the old choice");
+    seed.restore();
+  }
+  const appL = await boot({ duration: 0.6, startTime: Date.now() + 8 * 86400000, ...IOS });
+  check("but it is asked again a week later", appL.doc.getElementById("installNudge").hidden === false, "silenced forever");
+  check("the legacy key is migrated away",
+    peekStore()["combify.installDismissed"] === undefined, "old key still there");
+  appL.restore();
   clearStore();
 
   // A session must fold the nudge away with the rest of the chrome (CSS is
@@ -546,6 +607,7 @@ async function countCombos(app, ms, step = 200) {
   const app4 = await boot({ duration: 0.6 });
   check("nudge element exists for the layout to manage", !!app4.doc.querySelector(".install"), "missing");
   app4.restore();
+  clearStore();
 }
 
 // ----------------------------------------------- 10m. restarts must be cheap

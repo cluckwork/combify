@@ -150,6 +150,7 @@ const el = {
   installNudge: document.getElementById("installNudge"),
   installBtn: document.getElementById("installBtn"),
   installSub: document.getElementById("installSub"),
+  installSteps: document.getElementById("installSteps"),
   installDismiss: document.getElementById("installDismiss"),
 };
 
@@ -1250,6 +1251,9 @@ el.resetBtn.addEventListener("click", () => {
 // browser fullscreen, which pause/restart deliberately hold on to.
 function leaveFullscreenSession() {
   reset();
+  // The one moment worth asking: they just trained, and this is the screen
+  // they land on. refreshInstallNudge re-checks every condition itself.
+  refreshInstallNudge();
   try {
     const exit = document.exitFullscreen || document.webkitExitFullscreen;
     if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
@@ -1272,40 +1276,97 @@ if ("serviceWorker" in navigator) {
 // Installing is the upgrade path, not the front door: the link keeps working
 // for everyone forever, but installed Combify opens fullscreen with no browser
 // chrome (the ONLY way to lose the bar on iPhone) and is the prerequisite for
-// push later. Most people have never noticed "Add to Home Screen" exists, so
-// the app offers it once — quietly, dismissible, never while installed.
-const INSTALL_DISMISSED_KEY = "combify.installDismissed";
+// push later.
+//
+// TIMING IS THE WHOLE FEATURE. This used to fire the moment the page loaded,
+// which asked a stranger to install an app they had not yet used a single
+// time — and because dismissing wrote a permanent tombstone, one reflex tap on
+// the x silenced it forever, including for the members who went on to train
+// every day. The ask is now EARNED: it waits for a finished session and
+// appears on the ready screen the member comes back to, when they have just
+// trained and the reason is obvious. Dismissing snoozes for a week; only a
+// second dismissal means never.
+const INSTALL_KEY = "combify.install.v2";
+const INSTALL_LEGACY_KEY = "combify.installDismissed";
+const INSTALL_SNOOZE_MS = 7 * 86400000;
+const INSTALL_MAX_DECLINES = 2;
+
 function isStandalone() {
   try {
     return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
       || window.navigator.standalone === true; // old-iOS spelling
   } catch (e) { return false; }
 }
-function installDismissed() {
-  try { return localStorage.getItem(INSTALL_DISMISSED_KEY) === "1"; } catch (e) { return false; }
+function saveInstallState(s) {
+  try { localStorage.setItem(INSTALL_KEY, JSON.stringify(s)); } catch (e) {}
 }
+function loadInstallState() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(INSTALL_KEY));
+    if (raw && typeof raw === "object") {
+      return { declines: raw.declines | 0, snoozeUntil: Number(raw.snoozeUntil) || 0 };
+    }
+  } catch (e) { /* unreadable or storage blocked */ }
+  // Migrate the old permanent tombstone. Those dismissals answered a question
+  // asked at the wrong moment — before the member had trained at all — so they
+  // are honoured as ONE decline plus a snooze rather than a life sentence.
+  try {
+    if (localStorage.getItem(INSTALL_LEGACY_KEY) === "1") {
+      const migrated = { declines: 1, snoozeUntil: Date.now() + INSTALL_SNOOZE_MS };
+      saveInstallState(migrated);
+      localStorage.removeItem(INSTALL_LEGACY_KEY);
+      return migrated;
+    }
+  } catch (e) {}
+  return { declines: 0, snoozeUntil: 0 };
+}
+// Asking is only worth spending on someone who has felt what the app does.
+function installEarned() {
+  return !!(history && history.totals && history.totals.sessions > 0);
+}
+function installSilenced() {
+  const s = loadInstallState();
+  if (s.declines >= INSTALL_MAX_DECLINES) return true;   // asked twice, told no twice
+  return !!(s.snoozeUntil && Date.now() < s.snoozeUntil); // still snoozed
+}
+
 let deferredInstall = null;
-function showInstallNudge(mode) {
-  if (!el.installNudge || isStandalone() || installDismissed()) return;
-  if (mode === "prompt") {
+let installMode = null; // "prompt" = browser offers real install | "hint" = iOS | null = nothing to offer
+
+// The ONE place that decides whether the card is on screen. Safe to call from
+// anywhere: it re-checks every condition rather than trusting a flag set
+// earlier, so a stale caller can never force it open.
+function refreshInstallNudge() {
+  if (!el.installNudge) return;
+  if (!installMode || isStandalone() || installSilenced() || !installEarned()) {
+    hideInstallNudge();
+    return;
+  }
+  if (installMode === "prompt") {
     el.installBtn.hidden = false;
+    if (el.installSteps) el.installSteps.hidden = true;
     el.installSub.textContent = "Opens fullscreen like a real app, works offline.";
   } else {
-    // iOS has no install prompt API; the honest path is telling people where
-    // Apple hid it.
+    // iOS has no install prompt API — Apple exposes nothing to call, so there
+    // is no seamless path here to build. The only honest help is showing
+    // people exactly where it is hidden (see the steps in index.html).
     el.installBtn.hidden = true;
-    el.installSub.textContent = "Tap Share, then “Add to Home Screen”. Opens fullscreen, works offline.";
+    el.installSub.textContent = "Do this once — then it opens fullscreen and works offline.";
+    if (el.installSteps) el.installSteps.hidden = false;
   }
   el.installNudge.hidden = false;
 }
 function hideInstallNudge() { if (el.installNudge) el.installNudge.hidden = true; }
 
 // Chrome/Edge/Android fire this when the app qualifies for install. Stash the
-// event; calling prompt() later must happen inside our button's tap.
+// event; calling prompt() later must happen inside our button's tap. Note it
+// does NOT show the card — the browser's idea of "installable" is not the same
+// as the member having earned the ask.
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredInstall = e;
-  showInstallNudge("prompt");
+  installMode = "prompt";
+  refreshInstallNudge();
 });
 if (el.installBtn) {
   el.installBtn.addEventListener("click", async () => {
@@ -1315,21 +1376,28 @@ if (el.installBtn) {
     try {
       ev.prompt();
       const choice = await ev.userChoice;
-      if (choice && choice.outcome === "accepted") hideInstallNudge();
+      if (choice && choice.outcome === "accepted") { installMode = null; hideInstallNudge(); }
     } catch (e) {}
   });
 }
 if (el.installDismiss) {
   el.installDismiss.addEventListener("click", () => {
-    try { localStorage.setItem(INSTALL_DISMISSED_KEY, "1"); } catch (e) {}
+    const s = loadInstallState();
+    s.declines += 1;
+    s.snoozeUntil = Date.now() + INSTALL_SNOOZE_MS;
+    saveInstallState(s);
     hideInstallNudge();
   });
 }
-window.addEventListener("appinstalled", () => { hideInstallNudge(); });
+window.addEventListener("appinstalled", () => { installMode = null; hideInstallNudge(); });
 // iOS never fires beforeinstallprompt, so detect it directly. iPadOS 13+
 // reports itself as "Macintosh" but has touch — hence the maxTouchPoints test.
 (function iosInstallHint() {
   const ua = navigator.userAgent || "";
   const isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-  if (isIOS) showInstallNudge("hint");
+  if (isIOS) installMode = "hint";
 })();
+// A member who trained yesterday and opens the app today has already earned
+// the ask — they should see it on the ready screen without having to finish
+// another session first.
+refreshInstallNudge();

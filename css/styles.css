@@ -903,6 +903,25 @@ label {
   cursor: pointer;
 }
 .install__dismiss:hover { color: var(--text); }
+/* iOS steps. Numbered because "tap Share, then Add to Home Screen" as one
+   sentence is the form people fail to follow — two lines with the real glyph
+   in them is the form they do. No arrow pointing at Safari's toolbar: iOS 15+
+   lets that bar sit at the top OR the bottom, and an arrow pointing the wrong
+   way is worse than no arrow at all. */
+.install__steps {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.install__steps[hidden] { display: none; }
+.install__steps strong { color: var(--text); font-weight: 700; }
+.install__share {
+  display: inline-flex;
+  vertical-align: -3px;
+  color: var(--accent);
+}
 
 
 /* ==========================================================================

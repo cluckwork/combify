@@ -130,12 +130,21 @@
 
     <!-- Install nudge. Hidden by default; js/app.js reveals ONE of the two
          bodies — the real one-tap install where the browser offers it
-         (beforeinstallprompt), or the Share → Add to Home Screen hint on iOS.
-         Never shown once installed, and stays away once dismissed. -->
+         (beforeinstallprompt), or the numbered Share → Add to Home Screen
+         steps on iOS, where Apple exposes no install API at all.
+         Never shown once installed, never before a session has been finished,
+         and snoozed rather than killed when dismissed. -->
     <section class="install" id="installNudge" hidden>
       <div class="install__body">
         <p class="install__title">Put Combify on your home screen</p>
         <p class="install__sub" id="installSub">Opens fullscreen like a real app, works offline.</p>
+        <!-- iOS only. The Share glyph is drawn rather than named: most people
+             have never consciously looked at that icon, and "tap Share" alone
+             is exactly the instruction they fail to follow. -->
+        <ol class="install__steps" id="installSteps" hidden>
+          <li>Tap <span class="install__share"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1"/></svg></span> <strong>Share</strong> in Safari</li>
+          <li>Scroll down, tap <strong>Add to Home Screen</strong></li>
+        </ol>
       </div>
       <div class="install__actions">
         <button class="btn btn--primary install__btn" id="installBtn" hidden>Install</button>
