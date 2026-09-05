@@ -1612,6 +1612,7 @@ function openInstallDialog(force) {
     sub.textContent = (arrivedForInstall() && guide.arrivedSub) ? guide.arrivedSub : guide.sub;
   }
   if (steps) renderInstallSteps(steps, guide.steps);
+  renderAim(guide);
   if (go) {
     go.hidden = !guide.action;
     if (guide.actionLabel) {
@@ -1626,6 +1627,39 @@ function openInstallDialog(force) {
   audit("install", `dialog ${guide.mode}`);
   return true;
 }
+// The pointer that reaches past our own page.
+//
+// A web page cannot see the browser's furniture, let alone draw on it — the
+// Share button lives in a bar we have no access to and no coordinates for. So
+// this does the one honest thing available: sits against the screen edge
+// NEAREST that button, carries the same icon the step names, and points out of
+// the page toward it. The member's eye finishes the journey.
+//
+// It asserts nothing the sentence beside it doesn't already assert. Both are
+// wrong together if someone has moved their address bar (iOS 15+ allows it,
+// and Chrome on iOS since 2024), which is why the pointer is a nudge at the
+// edge rather than a confident "it is exactly here" callout.
+function renderAim(guide) {
+  const aim = document.getElementById("insAim");
+  if (!aim) return;
+  if (!guide || !guide.aim) { aim.hidden = true; return; }
+  const { edge, side } = guide.aim;
+  // The icon they are hunting for, repeated at the edge — the step list says
+  // the name, this says the shape, and they reinforce each other.
+  const glyph = guide.mode === "ios" ? GLYPHS.share
+    : /\{menulines\}/.test(guide.steps[0] || "") ? GLYPHS.menulines
+    : /\{menudots\}/.test(guide.steps[0] || "") ? GLYPHS.menudots
+    : GLYPHS.menu;
+  const chevron = edge === "top"
+    ? '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V5"/><path d="M5.5 11.5 12 5l6.5 6.5"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v15"/><path d="M5.5 12.5 12 19l6.5-6.5"/></svg>';
+  // Arrow nearest the edge, icon behind it — so the eye is led outward.
+  aim.innerHTML = edge === "top" ? chevron + glyph : glyph + chevron;
+  aim.dataset.edge = edge;
+  aim.dataset.side = side;
+  aim.hidden = false;
+}
+
 function closeInstallDialog() {
   const modal = document.getElementById("insModal");
   if (modal) modal.hidden = true;

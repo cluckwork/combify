@@ -1428,3 +1428,49 @@ button.foot__link {
 }
 .devpanel__check { display: inline-flex; align-items: center; gap: 5px; color: #8d7fc4; }
 .devpanel__note { margin: 0; color: #6f639e; line-height: 1.5; }
+
+
+/* The install pointer (.ins__aim, js/app.js renderAim).
+   Sits against the screen edge nearest the browser's own Share or menu button
+   and points out of the page at it. We cannot draw on browser furniture — the
+   page has no access to it and no coordinates for it — so this leads the eye
+   to the edge and lets the member finish the journey. */
+.ins__aim {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent);
+  pointer-events: none;
+  /* A slow drift toward the edge. Motion is what makes it read as "over
+     there" rather than as another icon sitting on the page. */
+  animation: aimNudge 1.6s ease-in-out infinite;
+}
+.ins__aim[hidden] { display: none; }
+.ins__aim[data-edge="top"]    { top: max(10px, env(safe-area-inset-top)); }
+.ins__aim[data-edge="bottom"] { bottom: max(10px, env(safe-area-inset-bottom)); }
+.ins__aim[data-side="right"]  { right: 14px; }
+.ins__aim[data-side="left"]   { left: 14px; }
+.ins__aim[data-side="center"] { left: 50%; margin-left: -19px; }
+/* The repeated glyph is a reminder, not a second instruction — smaller and
+   quieter than the arrow leading to it. */
+.ins__aim .ins__glyph { color: inherit; opacity: 0.85; }
+.ins__aim .ins__glyph svg { width: 19px; height: 19px; }
+@keyframes aimNudge {
+  0%, 100% { transform: translateY(0); opacity: 0.65; }
+  50%      { opacity: 1; }
+}
+.ins__aim[data-edge="top"]    { animation-name: aimNudgeUp; }
+.ins__aim[data-edge="bottom"] { animation-name: aimNudgeDown; }
+@keyframes aimNudgeUp {
+  0%, 100% { transform: translateY(4px); opacity: 0.6; }
+  50%      { transform: translateY(-2px); opacity: 1; }
+}
+@keyframes aimNudgeDown {
+  0%, 100% { transform: translateY(-4px); opacity: 0.6; }
+  50%      { transform: translateY(2px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ins__aim { animation: none; opacity: 0.9; }
+}

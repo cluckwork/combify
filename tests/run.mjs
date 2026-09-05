@@ -1749,8 +1749,56 @@ async function collectSpokenVsShown(app, ms) {
     [...emitted].filter((t) => !DRAWN.includes(t)).join(", ") || "none missing");
   check("and the iOS add-to-home icon is among them", emitted.has("addhome"), [...emitted].join(","));
 
+  // The on-screen pointer must aim at the edge nearest the real button. A page
+  // cannot see browser furniture, so this is the closest honest thing — and an
+  // arrow pointing the wrong way is worse than no arrow at all.
+  as(IPHONE_SAFARI);
+  check("iPhone Safari's pointer aims DOWN at the toolbar",
+    installGuide(false).aim.edge === "bottom", JSON.stringify(installGuide(false).aim));
+  as(IPAD_OS);
+  check("iPad's aims UP instead — same browser, other end of the screen",
+    installGuide(false).aim.edge === "top", JSON.stringify(installGuide(false).aim));
+  as(IPHONE_CHROME);
+  check("Chrome on iPhone aims up and right, at the address bar",
+    installGuide(false).aim.edge === "top" && installGuide(false).aim.side === "right",
+    JSON.stringify(installGuide(false).aim));
+  as(SAMSUNG);
+  check("Samsung Internet aims down and right, at its bottom bar",
+    installGuide(false).aim.edge === "bottom" && installGuide(false).aim.side === "right",
+    JSON.stringify(installGuide(false).aim));
+  check("and a one-tap install points at nothing — the button is ours",
+    installGuide(true).aim == null, JSON.stringify(installGuide(true).aim));
+  // Where we are only guessing, we point at nothing and say so. Firefox, Edge
+  // and Opera on iOS each hide their menu somewhere different, and a confident
+  // arrow into the wrong corner is worse than none.
+  const FIREFOX_IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 FxiOS/121.0 Mobile/15E148 Safari/605.1.15";
+  as(FIREFOX_IOS);
+  check("Firefox on iOS gets honest vague wording, not a guess",
+    installGuide(false).steps[0].includes("your browser's menu"), installGuide(false).steps[0]);
+  check("and no pointer, rather than one aimed at the wrong corner",
+    installGuide(false).aim === null, JSON.stringify(installGuide(false).aim));
+  check("it still gets the real steps though",
+    /Add to Home Screen/.test(installGuide(false).steps[1]), installGuide(false).steps[1]);
+
+  // Anything that DOES carry a pointer must agree with its own sentence — the
+  // sweep below is what stops a reworded step drifting from its arrow.
+  for (const ua of [IPHONE_SAFARI, IPHONE_CHROME, IPAD_OS, ANDROID, SAMSUNG, EDGE_A, FIREFOX_IOS]) {
+    as(ua);
+    const g = installGuide(false);
+    if (!g.aim) continue;
+    check(`pointer agrees with its wording (${g.aim.edge})`,
+      g.steps[0].includes(g.aim.edge), `aims ${g.aim.edge}, says "${g.steps[0]}"`);
+  }
+
+  // Computers get none of this. There is no home screen to add anything to,
+  // no share sheet to hunt through, and nothing outside the page worth an
+  // arrow — a laptop that offers a real one-tap install does it through the
+  // browser's own button, which is not ours to point at either.
   as(MAC, 0);
   check("a computer is never asked to add a home-screen icon", canInstall() === false, deviceClass());
+  check("and never gets a pointer, prompt or not",
+    installGuide(false).aim == null && installGuide(true).aim == null,
+    `${JSON.stringify(installGuide(false).aim)} / ${JSON.stringify(installGuide(true).aim)}`);
 
   Object.defineProperty(globalThis, "navigator", { value: savedNav, configurable: true, writable: true });
 }

@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.27.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "An arrow pointing at your Share button",
+    notes: [
+      "The home-screen card now shows a gently pulsing arrow at the edge of the screen nearest your browser's Share or menu button, carrying the same icon the steps name — down at the toolbar in Safari on iPhone, up at the address bar in Chrome, down at the bottom bar in Samsung Internet.",
+      "It only appears where we actually know where that button lives. In browsers where the menu moves around, you get the steps without an arrow rather than an arrow pointing at the wrong corner.",
+      "Computers don't get any of it. There's no home screen there and nothing outside the page worth pointing at.",
+    ],
+  },
+  {
     v: "1.26.0",
     date: "2026-09-05",
     size: "minor",

@@ -149,6 +149,7 @@ export function installGuide(hasPrompt) {
   if (hasPrompt) {
     return {
       mode: "prompt",
+      aim: null,   // the button is ours, on our own screen — nothing to point at
       sub: "Opens fullscreen, works offline.",
       steps: [],
       action: "prompt",
@@ -160,13 +161,33 @@ export function installGuide(hasPrompt) {
     // the bottom and iPad at the top; Chrome and the other wrappers keep a
     // share icon in the address bar, top right. Sending someone to the wrong
     // end of their own screen is the single easiest way to lose them.
-    const where = env.browser === "safari"
-      ? (env.tablet ? "(top of Safari)" : "(bottom of Safari)")
+    // Where the Share button is, per browser — and, crucially, whether we
+    // actually know.
+    //
+    // The pointer states the DEFAULT position, and defaults can be overridden:
+    // iOS 15+ lets someone move Safari's bar to the top, and Chrome on iOS has
+    // had a bottom-address-bar option since 2024. No API reports it; a page
+    // cannot see the browser's own furniture. That is an acceptable risk only
+    // because the pointer asserts exactly what the sentence beside it already
+    // asserts — it is wrong in the same cases and adds no new way to mislead.
+    //
+    // It is NOT acceptable for browsers whose layout we are merely guessing
+    // at. Firefox, Edge and Opera on iOS each put their menu somewhere
+    // different, and a confident arrow into the wrong corner is worse than no
+    // arrow at all — so those get honest, vaguer wording and `aim: null`.
+    // Better to say "in your browser's menu" than to point at the wrong one.
+    const spot = env.browser === "safari"
+      ? (env.tablet
+        ? { where: "(top of Safari)", aim: { edge: "top", side: "right" } }
+        : { where: "(bottom of Safari)", aim: { edge: "bottom", side: "center" } })
       : env.browser === "ios-chrome"
-        ? "(top right, beside the address)"
-        : "(in your browser's menu)";
+        ? { where: "(top right, beside the address)", aim: { edge: "top", side: "right" } }
+        : { where: "(in your browser's menu)", aim: null };
+    const where = spot.where;
+    const aim = spot.aim;
     return {
       mode: "ios",
+      aim,
       sub: "One time. Then it opens fullscreen — no address bar — and works offline.",
       // Shown instead when the member followed an install link (?ath=1), e.g.
       // the QR code at the gym: they asked for this, so skip the pitch.
@@ -188,11 +209,14 @@ export function installGuide(hasPrompt) {
   // three stacked lines in the bottom bar. Edge: three horizontal dots,
   // centred along the bottom.
   if (env.os === "android") {
-    const menu = env.browser === "samsung" ? { glyph: "{menulines}", where: "bottom right" }
-      : env.browser === "edge" ? { glyph: "{menudots}", where: "along the bottom" }
-      : { glyph: "{menu}", where: "top right" };
+    const menu = env.browser === "samsung"
+      ? { glyph: "{menulines}", where: "bottom right", aim: { edge: "bottom", side: "right" } }
+      : env.browser === "edge"
+        ? { glyph: "{menudots}", where: "along the bottom", aim: { edge: "bottom", side: "center" } }
+        : { glyph: "{menu}", where: "top right", aim: { edge: "top", side: "right" } };
     return {
       mode: "android-manual",
+      aim: menu.aim,
       sub: "Opens fullscreen, works offline.",
       steps: [
         `Open the ${menu.glyph} menu, ${menu.where}`,
@@ -204,7 +228,9 @@ export function installGuide(hasPrompt) {
   }
   // Desktop. canInstall() is false so this is never shown; returned only so
   // every caller gets a well-formed object instead of null to guard against.
-  return { mode: "none", sub: "", steps: [], action: null, actionLabel: null };
+  // aim is null for the same reason it is null on the one-tap path: there is
+  // nothing outside our own page for an arrow to lead to.
+  return { mode: "none", aim: null, sub: "", steps: [], action: null, actionLabel: null };
 }
 
 // One short token for the usage ping, so the daily digest can say which
