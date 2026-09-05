@@ -1693,13 +1693,19 @@ async function collectSpokenVsShown(app, ms) {
     g.steps[0].includes("{menudots} button") && !g.steps[0].includes("•••"), g.steps[0]);
   check("Share is its own step now", g.steps[1].includes("{share}"), g.steps[1]);
   check("nothing to automate on iOS", g.action === null, String(g.action));
-  check("the share sheet's hidden-list reveal is named, not assumed away",
-    g.steps.some((x) => /\{chevron\}/.test(x) && /More/.test(x)), g.steps.join(" | "));
-  check("and \"scroll down\" is gone — that was a guess about the sheet's layout",
-    !g.steps.some((x) => /Scroll down/i.test(x)), g.steps.join(" | "));
-  check("and it still ends at Add to Home Screen, then Add",
-    /Add to Home Screen/.test(g.steps[g.steps.length - 2]) && /Add/.test(g.steps[g.steps.length - 1]),
-    g.steps.join(" | "));
+  // Reported from a real iPhone: expanding the sheet is a REQUIRED step of
+  // its own, it is called "View more", and Add to Home Screen is still
+  // further down after that. Two earlier builds got this wrong.
+  const viewMore = g.steps.findIndex((x) => /\{chevron\}/.test(x) && /View more/.test(x));
+  const addHome = g.steps.findIndex((x) => /Add to Home Screen/.test(x));
+  check("\"View more\" is a step of its own, not an aside", viewMore >= 0, g.steps.join(" | "));
+  check("and it comes BEFORE Add to Home Screen", viewMore >= 0 && viewMore < addHome,
+    `View more at ${viewMore}, Add to Home Screen at ${addHome}`);
+  check("with the scroll that still follows it", /Scroll down/i.test(g.steps[addHome] || ""),
+    g.steps[addHome]);
+  check("and it ends on Add to Home Screen, then the Add confirm",
+    /Add to Home Screen/.test(g.steps[g.steps.length - 1]) && /then <strong>Add<\/strong>/.test(g.steps[g.steps.length - 1]),
+    g.steps[g.steps.length - 1]);
 
   // Since iOS 16.4 every iOS browser can install from its own Share menu.
   // Combify used to send these people on a detour through Safari for a

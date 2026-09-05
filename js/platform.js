@@ -200,14 +200,16 @@ export function installGuide(hasPrompt) {
       arrivedSub: "A few taps and Combify is on your home screen.",
       steps: [
         ...route.steps,
-        // Destination first, route second — the rule this file keeps. "Scroll
-        // down" was a guess about how the share sheet is laid out; the sheet
-        // now opens on a short list with the rest behind a chevron or a "More"
-        // item, and which of those you get depends on the iOS version. Naming
-        // the target and mentioning the reveal only as a fallback is correct
-        // whichever way that sheet is drawn this year.
-        "Tap {addhome} <strong>Add to Home Screen</strong> — {chevron} <strong>More</strong> if it isn't listed",
-        "Tap <strong>Add</strong>",
+        // Reported from a real iPhone, and it is TWO actions, not one: the
+        // share sheet opens on a short list, you tap "View more" to open the
+        // full one, and Add to Home Screen is still further down that list.
+        // Earlier builds guessed at this twice — first "scroll down" alone
+        // (there is nothing to scroll until the list is expanded), then the
+        // reveal as an optional fallback ("More if it isn't listed"). It is
+        // not optional and it is not called More. Same sheet in every iOS
+        // browser, so this tail is shared.
+        "Tap {chevron} <strong>View more</strong>",
+        "Scroll down, tap {addhome} <strong>Add to Home Screen</strong>, then <strong>Add</strong>",
       ],
       action: null,
       actionLabel: null,

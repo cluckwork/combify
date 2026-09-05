@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.30.1",
+    date: "2026-09-05",
+    size: "patch",
+    title: "\"View more\" is its own step",
+    notes: [
+      "The share sheet opens on a short list, and Add to Home Screen isn't on it. You tap View more to open the full list, and then scroll to find it. That's now two clearly separate steps instead of a vague aside — on both Safari and Chrome.",
+    ],
+  },
+  {
     v: "1.30.0",
     date: "2026-09-05",
     size: "minor",
