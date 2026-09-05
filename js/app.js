@@ -178,6 +178,12 @@ const el = {
 let history = loadHistory();
 const session = { rounds: 0, punches: 0, seconds: 0, pendingPunches: 0, started: false };
 
+// Set when a new build takes over mid-session (see the service worker block).
+// Declared up here rather than beside that code because reset() runs during
+// boot, long before it — a `let` further down would be in its temporal dead
+// zone and the whole app would fail to start.
+let pendingReload = false;
+
 const isPunch = (key) => /^[1-8]$/.test(key); // slips/rolls/blocks/pivots aren't punches
 
 function resetSessionTally() {
@@ -1271,7 +1277,7 @@ function pause() { state.running = false; audit("phase", "paused"); stopAudioSes
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
 function resume() { state.running = true; audit("phase", `resume ${state.phase}`); armAudio(); unlockAudioForMobile(); startAudioSession(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
-function reset() { auditPersist(); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); stopAudioSession(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); }
+function reset() { auditPersist(); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); stopAudioSession(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); applyPendingReload(); }
 
 // ---------- Wire up the buttons ----------
 // "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1
@@ -1332,10 +1338,51 @@ if (el.exitBtn) el.exitBtn.addEventListener("click", leaveFullscreenSession);
 reset();
 
 // Register the service worker so Combify works offline after the first visit.
+//
+// AND KEEP IT CURRENT. Registering once and never checking again is how a
+// phone ends up insisting a version is "not live" hours after it shipped: the
+// fetch handler is network-first, so page ASSETS refresh, but the browser only
+// re-fetches sw.js itself when it feels like it — and an installed home-screen
+// app on iOS can sit on an old worker for a very long time. GitHub Pages
+// serving `cache-control: max-age=600` on top of that means a member can be
+// ten minutes or ten hours behind with no way to tell and nothing to tap.
 if ("serviceWorker" in navigator) {
+  // Was this page already under a worker's control when it loaded? On a FIRST
+  // visit clients.claim() fires controllerchange too, and reloading there
+  // would restart a page the member has only just opened.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      if (!reg) return;
+      const check = () => { try { reg.update(); } catch (e) {} };
+      check();
+      // Returning to the app is the right moment to look: it costs one
+      // conditional request, it is never mid-round, and it is exactly when
+      // someone who has just been told "there's a new version" comes back.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") check();
+      });
+    }).catch(() => {});
   });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloading || !hadController) return;
+    // Never yank the page out from under a running round. The reload waits
+    // for the ready screen instead — a member mid-session losing their round
+    // to a silent update would be a far worse bug than being a build behind.
+    if (state.running) { pendingReload = true; return; }
+    reloading = true;
+    location.reload();
+  });
+}
+
+// Called from reset(), which is where every session ends up.
+function applyPendingReload() {
+  if (!pendingReload || state.running) return;
+  pendingReload = false;
+  location.reload();
 }
 
 // ---------- Install nudge ----------

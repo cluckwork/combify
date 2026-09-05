@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.30.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "New versions arrive on their own",
+    notes: [
+      "Combify now checks for a new build when you open it and each time you come back to it, and quietly refreshes itself when one is there. Until now it only checked whenever the browser felt like it, which meant a phone could insist it had the latest version hours after a new one shipped — with nothing you could tap to fix it.",
+      "It will never do this in the middle of a session. If an update lands while you're training, it waits until the round is over and you're back on the ready screen.",
+    ],
+  },
+  {
     v: "1.29.1",
     date: "2026-09-05",
     size: "patch",
