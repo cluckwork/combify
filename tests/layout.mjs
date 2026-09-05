@@ -446,15 +446,110 @@ async function runRotation() {
   return { lines, pass, fail };
 }
 
+// The install card and its pointer, measured in a real browser.
+//
+// This exists because the exact bug it checks for has already shipped once:
+// the card was anchored high in `vh` units, and on iOS `vh` resolves against
+// the viewport with the toolbars HIDDEN, so it sat underneath Chrome's address
+// bar with its instructions covered. jsdom cannot catch that — it has no
+// layout engine, so every box is zero-sized and every assertion passes.
+async function runInstallCard() {
+  const lines = [];
+  let pass = 0, fail = 0;
+  const check = (name, cond, detail = "") => {
+    if (cond) { pass++; lines.push(`  ✅ ${name}`); }
+    else { fail++; lines.push(`  ❌ ${name}${detail ? `  → ${detail}` : ""}`); }
+  };
+  lines.push("\n── install card + pointer ──");
+
+  const CASES = [
+    { name: "iPhone Chrome", h: 844, edge: "top", inset: 33,
+      ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0.0.0 Mobile/15E148 Safari/604.1" },
+    { name: "iPhone Safari", h: 844, edge: "bottom", inset: null,
+      ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1" },
+    // A small phone is where a card pulled toward one edge runs out of room.
+    { name: "small iPhone Safari", h: 667, edge: "bottom", inset: null,
+      ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1" },
+  ];
+
+  for (const c of CASES) {
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: c.h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: c.ua,
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem("combify.tour.v1", "1");
+        // A finished session is what earns the ask; seeding it beats sitting
+        // through a real one three times over.
+        localStorage.setItem("combify.history.v1", JSON.stringify({
+          days: { "2026-01-01": { sessions: 1, rounds: 3, punches: 40, seconds: 300 } },
+          totals: { sessions: 1, rounds: 3, punches: 40, seconds: 300 },
+        }));
+      } catch (e) {}
+    });
+    await page.goto(base, { waitUntil: "networkidle" });
+    await page.waitForTimeout(600);
+
+    const m = await page.evaluate(() => {
+      const modal = document.getElementById("insModal");
+      if (modal.hidden) return { shown: false };
+      const a = document.getElementById("insAim");
+      const card = document.querySelector(".ins__card").getBoundingClientRect();
+      const aim = a.hidden ? null : a.getBoundingClientRect();
+      return {
+        shown: true, edge: a.dataset.edge, vh: window.innerHeight, vw: window.innerWidth,
+        card: { top: card.top, bottom: card.bottom, left: card.left, right: card.right },
+        aim: aim && { top: aim.top, bottom: aim.bottom, centreFromRight: window.innerWidth - (aim.left + aim.width / 2) },
+      };
+    });
+
+    check(`${c.name}: the card is shown`, m.shown === true, "never opened");
+    if (m.shown) {
+      // The whole card on screen, both ends. This is the shipped bug.
+      check(`${c.name}: card fully on screen`,
+        m.card.top >= 0 && m.card.bottom <= m.vh + 1,
+        `top ${Math.round(m.card.top)}, bottom ${Math.round(m.card.bottom)} of ${m.vh}`);
+      check(`${c.name}: pointer aims ${c.edge}`, m.edge === c.edge, m.edge);
+      check(`${c.name}: card and pointer do not overlap`,
+        m.aim && (m.card.bottom < m.aim.top || m.card.top > m.aim.bottom),
+        m.aim ? `card ${Math.round(m.card.top)}-${Math.round(m.card.bottom)} vs aim ${Math.round(m.aim.top)}-${Math.round(m.aim.bottom)}` : "no pointer");
+      // Close enough to read as one instruction, far enough not to collide.
+      const gap = c.edge === "top" ? m.card.top - m.aim.bottom : m.aim.top - m.card.bottom;
+      check(`${c.name}: card sits beside its pointer (gap ${Math.round(gap)}px)`,
+        gap > 0 && gap < 60, `${Math.round(gap)}px`);
+      // The pointer must be at the end of the screen it claims.
+      check(`${c.name}: pointer is at the ${c.edge} of the screen`,
+        c.edge === "top" ? m.aim.top < m.vh * 0.2 : m.aim.bottom > m.vh * 0.8,
+        `${Math.round(m.aim.top)}-${Math.round(m.aim.bottom)} of ${m.vh}`);
+      if (c.inset != null) {
+        // Under the real button, not merely near its corner — the miss that
+        // put the arrow beside Chrome's share icon rather than below it.
+        check(`${c.name}: pointer lines up with the share button (${c.inset}px in)`,
+          Math.abs(m.aim.centreFromRight - c.inset) <= 3,
+          `${Math.round(m.aim.centreFromRight)}px from the right edge, wanted ${c.inset}`);
+      }
+    }
+    check(`${c.name}: no JavaScript errors`, errors.length === 0, errors.join("; "));
+    if (SHOTS) await page.screenshot({ path: path.join(shotDir, `install-${c.name.replace(/\s+/g, "-")}.png`) });
+    await ctx.close();
+  }
+  return { lines, pass, fail };
+}
+
 // Devices run through the pool; the rotation section owns a separate browser
 // and runs alongside them, so it is never the thing everything else waits on.
 const devices = DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONLY.toLowerCase()));
 const wantRotation = !ONLY || "rotating mid-session".includes(ONLY.toLowerCase());
-const [devResults, rotResult] = await Promise.all([
+const wantInstall = !ONLY || "install card pointer".includes(ONLY.toLowerCase());
+const [devResults, rotResult, insResult] = await Promise.all([
   pool(devices, JOBS, runDevice),
   wantRotation ? runRotation() : null,
+  wantInstall ? runInstallCard() : null,
 ]);
-for (const r of [...devResults, rotResult]) {
+for (const r of [...devResults, rotResult, insResult]) {
   if (!r) continue;
   lines.push(...r.lines); pass += r.pass; fail += r.fail;
 }

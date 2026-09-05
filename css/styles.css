@@ -1130,25 +1130,45 @@ button.foot__link {
   justify-content: center;
   /* dvh, not vh. On iOS `vh` resolves against the viewport with the toolbars
      HIDDEN, so a card positioned in vh sits underneath a toolbar that is
-     actually on screen — the exact overlap being fixed here. */
+     actually on screen. */
   padding: max(4dvh, calc(env(safe-area-inset-top) + 16px)) 20px
            max(4dvh, calc(env(safe-area-inset-bottom) + 16px));
   overflow-y: auto;
-  background: rgba(0, 0, 0, 0.74);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* Darker than .report's scrim. With the card's border gone, separation has
+     to come from the gap in brightness between card and ground — so the ground
+     goes almost black and the card comes up to meet it. */
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+/* The card moves to whichever end of the screen the pointer is aimed at, so
+   the arrow and the instructions read as ONE thing rather than a dialog and an
+   unrelated arrow at the far edge. The 84px clearance is a hard floor, not a
+   preference: it is the room the pointer occupies, and letting the card slide
+   past it is how the card ended up under Chrome's address bar before. */
+.ins[data-aim="top"] {
+  align-items: flex-start;
+  padding-top: max(84px, calc(env(safe-area-inset-top) + 84px));
+}
+.ins[data-aim="bottom"] {
+  align-items: flex-end;
+  padding-bottom: max(84px, calc(env(safe-area-inset-bottom) + 84px));
 }
 .ins[hidden] { display: none; }
 .ins__card {
   width: min(400px, 100%);
-  background: var(--surface);
-  border: 1px solid var(--accent-dim);
+  /* Borderless, and a step lighter than .report's surface. The teal hairline
+     framed this as "a dialog to deal with"; without it, sitting just under its
+     own arrow, it reads as a label ON the thing being pointed at — which is
+     what it actually is. */
+  background: var(--surface-2);
+  border: none;
   border-radius: var(--radius);
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.7);
 }
 /* The app's own label idiom: mono, uppercase, tracked, accent. */
 .ins__eyebrow {
@@ -1450,13 +1470,21 @@ button.foot__link {
 .ins__aim[hidden] { display: none; }
 .ins__aim[data-edge="top"]    { top: max(10px, env(safe-area-inset-top)); }
 .ins__aim[data-edge="bottom"] { bottom: max(10px, env(safe-area-inset-bottom)); }
-.ins__aim[data-side="right"]  { right: 14px; }
-.ins__aim[data-side="left"]   { left: 14px; }
-.ins__aim[data-side="center"] { left: 50%; margin-left: -19px; }
+/* --aim-inset is where the real button's CENTRE sits, measured in from the
+   screen edge; the half-width correction puts the arrow under it rather than
+   beside it. Chrome's share icon lives inside an omnibox that is itself inset,
+   which is why pinning to the edge missed by about 6px. */
+.ins__aim[data-side="right"]  { right: calc(var(--aim-inset, 27px) - 16px); }
+.ins__aim[data-side="left"]   { left: calc(var(--aim-inset, 27px) - 16px); }
+.ins__aim[data-side="center"] { left: 50%; margin-left: -16px; }
+/* The arrow is the loudest thing on the screen: it is the actual instruction,
+   and everything else is explaining it. The glow lifts it off the near-black
+   scrim without needing a plate behind it. */
+.ins__aim > svg { filter: drop-shadow(0 0 10px rgba(73, 149, 146, 0.65)); }
 /* The repeated glyph is a reminder, not a second instruction — smaller and
    quieter than the arrow leading to it. */
-.ins__aim .ins__glyph { color: inherit; opacity: 0.85; }
-.ins__aim .ins__glyph svg { width: 19px; height: 19px; }
+.ins__aim .ins__glyph { color: inherit; opacity: 0.9; }
+.ins__aim .ins__glyph svg { width: 21px; height: 21px; }
 @keyframes aimNudge {
   0%, 100% { transform: translateY(0); opacity: 0.65; }
   50%      { opacity: 1; }
@@ -1464,12 +1492,12 @@ button.foot__link {
 .ins__aim[data-edge="top"]    { animation-name: aimNudgeUp; }
 .ins__aim[data-edge="bottom"] { animation-name: aimNudgeDown; }
 @keyframes aimNudgeUp {
-  0%, 100% { transform: translateY(4px); opacity: 0.6; }
-  50%      { transform: translateY(-2px); opacity: 1; }
+  0%, 100% { transform: translateY(6px); opacity: 0.7; }
+  50%      { transform: translateY(-3px); opacity: 1; }
 }
 @keyframes aimNudgeDown {
-  0%, 100% { transform: translateY(-4px); opacity: 0.6; }
-  50%      { transform: translateY(2px); opacity: 1; }
+  0%, 100% { transform: translateY(-6px); opacity: 0.7; }
+  50%      { transform: translateY(3px); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ins__aim { animation: none; opacity: 0.9; }

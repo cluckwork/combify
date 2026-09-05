@@ -176,12 +176,16 @@ export function installGuide(hasPrompt) {
     // different, and a confident arrow into the wrong corner is worse than no
     // arrow at all — so those get honest, vaguer wording and `aim: null`.
     // Better to say "in your browser's menu" than to point at the wrong one.
+    // `inset` is how far in from the screen edge the real button's CENTRE sits,
+    // in CSS px. It is not decoration: Chrome's share icon lives inside a
+    // rounded omnibox that is itself inset from the edge, so a pointer pinned
+    // to the edge lands beside the button rather than under it.
     const spot = env.browser === "safari"
       ? (env.tablet
-        ? { where: "(top of Safari)", aim: { edge: "top", side: "right" } }
+        ? { where: "(top of Safari)", aim: { edge: "top", side: "right", inset: 40 } }
         : { where: "(bottom of Safari)", aim: { edge: "bottom", side: "center" } })
       : env.browser === "ios-chrome"
-        ? { where: "(top right, beside the address)", aim: { edge: "top", side: "right" } }
+        ? { where: "(top right, beside the address)", aim: { edge: "top", side: "right", inset: 33 } }
         : { where: "(in your browser's menu)", aim: null };
     const where = spot.where;
     const aim = spot.aim;
@@ -210,10 +214,10 @@ export function installGuide(hasPrompt) {
   // centred along the bottom.
   if (env.os === "android") {
     const menu = env.browser === "samsung"
-      ? { glyph: "{menulines}", where: "bottom right", aim: { edge: "bottom", side: "right" } }
+      ? { glyph: "{menulines}", where: "bottom right", aim: { edge: "bottom", side: "right", inset: 26 } }
       : env.browser === "edge"
         ? { glyph: "{menudots}", where: "along the bottom", aim: { edge: "bottom", side: "center" } }
-        : { glyph: "{menu}", where: "top right", aim: { edge: "top", side: "right" } };
+        : { glyph: "{menu}", where: "top right", aim: { edge: "top", side: "right", inset: 26 } };
     return {
       mode: "android-manual",
       aim: menu.aim,

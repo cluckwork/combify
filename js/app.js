@@ -1642,7 +1642,12 @@ function openInstallDialog(force) {
 function renderAim(guide) {
   const aim = document.getElementById("insAim");
   if (!aim) return;
-  if (!guide || !guide.aim) { aim.hidden = true; return; }
+  const modalEl = document.getElementById("insModal");
+  if (!guide || !guide.aim) {
+    aim.hidden = true;
+    if (modalEl) delete modalEl.dataset.aim;   // nothing to point at: stay centred
+    return;
+  }
   const { edge, side } = guide.aim;
   // The icon they are hunting for, repeated at the edge — the step list says
   // the name, this says the shape, and they reinforce each other.
@@ -1651,13 +1656,25 @@ function renderAim(guide) {
     : /\{menudots\}/.test(guide.steps[0] || "") ? GLYPHS.menudots
     : GLYPHS.menu;
   const chevron = edge === "top"
-    ? '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V5"/><path d="M5.5 11.5 12 5l6.5 6.5"/></svg>'
-    : '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v15"/><path d="M5.5 12.5 12 19l6.5-6.5"/></svg>';
+    ? '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V4.5"/><path d="M5 11.5 12 4.5l7 7"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v16.5"/><path d="M5 12.5 12 19.5l7-7"/></svg>';
   // Arrow nearest the edge, icon behind it — so the eye is led outward.
   aim.innerHTML = edge === "top" ? chevron + glyph : glyph + chevron;
   aim.dataset.edge = edge;
   aim.dataset.side = side;
+  // How far in from the edge the real button sits. Pinning the pointer to the
+  // edge itself lands it beside an omnibox icon rather than under it.
+  if (guide.aim.inset) aim.style.setProperty("--aim-inset", `${guide.aim.inset}px`);
+  else aim.style.removeProperty("--aim-inset");
   aim.hidden = false;
+
+  // Pull the card to the same end of the screen as the pointer, so the two
+  // read as one instruction instead of a dialog and an unrelated arrow at the
+  // far edge. The clearance below is a hard floor, not a preference — the card
+  // sliding up under Chrome's address bar is exactly the bug this dialog was
+  // centred to fix in the first place.
+  const modal = document.getElementById("insModal");
+  if (modal) modal.dataset.aim = edge;
 }
 
 function closeInstallDialog() {

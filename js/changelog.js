@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.28.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "The instructions move to the arrow",
+    notes: [
+      "The home-screen card now sits right beside its arrow instead of floating in the middle of the screen, so the arrow and the words read as one instruction rather than two separate things.",
+      "The arrow is bigger and glows, the card has lost its outline, and the background behind it is darker — the arrow is the actual instruction, so it's the loudest thing on screen now.",
+      "The arrow also lines up properly with the button it's pointing at. In Chrome it was landing beside the Share icon rather than under it, because the address bar is inset from the edge of the screen and the arrow wasn't.",
+    ],
+  },
+  {
     v: "1.27.0",
     date: "2026-09-05",
     size: "minor",
