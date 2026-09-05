@@ -1836,6 +1836,9 @@ nextFrame(() => { try { maybeAskToInstall(); } catch (e) {} });
 // Every action below drives the REAL code path rather than a mock — a shortcut
 // that fakes the finish screen would prove nothing about the finish screen.
 initDev({
+  // The id this device puts in every ping. Surfaced on the badge because
+  // nothing else can tie a sheet row back to a physical phone.
+  deviceId: usageId(),
   // The finale is normally three rounds away. Seed a plausible session and run
   // the genuine finish(), bell and all.
   replayFinish() {

@@ -75,7 +75,7 @@ function renderBadge() {
     document.body.appendChild(badge);
   }
   const pin = read(PLATFORM_KEY);
-  badge.textContent = pin ? `DEV · ${pin}` : "DEV";
+  badge.textContent = `DEV · ${deviceId || "?"}${pin ? ` · ${pin}` : ""}`;
 }
 
 // ---------- The panel ----------
@@ -84,6 +84,11 @@ function renderBadge() {
 // way audit.js can.
 let actions = {};
 let panel = null;
+// The anonymous id this device sends with every ping, handed in by app.js.
+// Shown on the badge because it is the ONLY way to tie a row in the sheet back
+// to a physical device: there is no server, no account and no registry, so a
+// device's id is knowable only by reading it off the device itself.
+let deviceId = "";
 
 function row(label) {
   const r = document.createElement("div");
@@ -183,7 +188,7 @@ function buildPanel() {
 
   const note = document.createElement("p");
   note.className = "devpanel__note";
-  note.textContent = "This device's sessions are tagged dev and excluded from the daily numbers.";
+  note.textContent = `This device is ${deviceId || "unknown"}. Its sessions are tagged dev and left out of the daily numbers. Write the id down — it is the only way to match a row in the sheet back to a real device.`;
   p.appendChild(note);
 
   document.body.appendChild(p);
@@ -201,6 +206,7 @@ function togglePanel() {
 // the five-tap gesture has to be listening for the moment it gets turned on.
 export function initDev(a) {
   actions = a || {};
+  deviceId = (actions.deviceId || "").slice(0, 12);
   renderBadge();
 
   const tag = document.querySelector(".brand__tag");

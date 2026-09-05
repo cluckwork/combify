@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.30.3",
+    date: "2026-09-05",
+    size: "patch",
+    title: "The developer badge shows which device it is",
+    notes: [
+      "A device in developer mode now shows its own anonymous id on the badge. Nothing changes for anyone using the app — this just makes it possible to tell which rows in the team's usage sheet came from a developer's own phone.",
+    ],
+  },
+  {
     v: "1.30.2",
     date: "2026-09-05",
     size: "patch",

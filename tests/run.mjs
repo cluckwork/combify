@@ -1988,6 +1988,13 @@ async function collectSpokenVsShown(app, ms) {
   check("?dev=1 raises the badge", !!dev.doc.querySelector(".devbadge"), "no badge");
   check("the badge says so plainly", /DEV/.test(dev.doc.querySelector(".devbadge").textContent),
     dev.doc.querySelector(".devbadge").textContent);
+  // The badge carries this device's ping id. With no server and no registry,
+  // reading it off the device is the only way to know which anonymous rows in
+  // the sheet belong to which physical phone.
+  const uid = peekStore()["combify.uid"];
+  check("and shows the id this device pings with",
+    !!uid && dev.doc.querySelector(".devbadge").textContent.includes(uid),
+    `badge "${dev.doc.querySelector(".devbadge").textContent}" vs uid "${uid}"`);
   dev.restore();
 
   // The five-tap gesture is the ONLY route once Combify is installed: a

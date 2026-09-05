@@ -325,6 +325,18 @@ Directly serves the business goal.
     attempted, so a regression in that guard breaks a test instead of surfacing
     in a digest days later. **Treat all data from before 2026-09-05 as
     contaminated by development traffic.**
+  - 🔒 **The dev-device set is CLOSED (decided 2026-09-05).** Exactly two
+    devices carry the dev flag: the founder's phone and his computer. No more
+    are to be flagged — every additional one silently removes a real-looking
+    device from the daily numbers, and at 1-10 members a day that is a large
+    fraction of the signal. Note the flag is per-device localStorage with no
+    server behind it, so nothing centrally records WHICH devices these are;
+    from v1.30.3 the DEV badge shows that device's own ping id (`combify.uid`)
+    so the two can be written down and matched against `u` in the sheet. If a
+    device is ever wiped it mints a NEW id, so re-flagging it also means
+    re-recording the id. Remember an installed iOS home-screen app has its own
+    localStorage separate from the browser it was installed from — so the
+    founder's phone legitimately accounts for two ids, not one.
   - ⏳ **The sink is the weak point.** Pings and problem reports share one
     Google Form column, posted `no-cors` so delivery can never be confirmed.
     Fine for a handful of testers, not for a gym-wide rollout. When it outgrows
