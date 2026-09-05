@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.30.4",
+    date: "2026-09-05",
+    size: "patch",
+    title: "Developer badge tells the installed app apart from the browser",
+    notes: [
+      "Adding Combify to your home screen creates a copy with its own separate storage, so developer mode doesn't carry across — it starts off in there, with its own id. The badge now says which of the two you're looking at, and the panel spells out that the installed copy needs turning on separately.",
+      "Usage tracking is unaffected either way: the installed app has always been counted, and reports itself distinctly so home-screen training can be told from browser training.",
+    ],
+  },
+  {
     v: "1.30.3",
     date: "2026-09-05",
     size: "patch",

@@ -31,7 +31,7 @@
 // flag is already set, and the flag is only set by the URL or a five-tap
 // gesture on a word nobody taps once.
 
-import { OVERRIDE_NAMES } from "./platform.js";
+import { OVERRIDE_NAMES, isStandalone } from "./platform.js";
 
 const KEY = "combify.dev";
 const PLATFORM_KEY = "combify.dev.platform";
@@ -75,7 +75,13 @@ function renderBadge() {
     document.body.appendChild(badge);
   }
   const pin = read(PLATFORM_KEY);
-  badge.textContent = `DEV · ${deviceId || "?"}${pin ? ` · ${pin}` : ""}`;
+  // "app" vs nothing distinguishes the installed home-screen copy from the
+  // browser tab it was installed from. They are two separate storage areas
+  // and therefore two different ping ids, on one physical phone — so the
+  // badge has to say which one you are looking at, or the two ids cannot be
+  // told apart when they are written down.
+  const ctx = isStandalone() ? " · app" : "";
+  badge.textContent = `DEV · ${deviceId || "?"}${ctx}${pin ? ` · ${pin}` : ""}`;
 }
 
 // ---------- The panel ----------
@@ -188,8 +194,21 @@ function buildPanel() {
 
   const note = document.createElement("p");
   note.className = "devpanel__note";
-  note.textContent = `This device is ${deviceId || "unknown"}. Its sessions are tagged dev and left out of the daily numbers. Write the id down — it is the only way to match a row in the sheet back to a real device.`;
+  note.textContent = `This device is ${deviceId || "unknown"}${isStandalone() ? " (installed app)" : " (browser)"}. Its sessions are tagged dev and left out of the daily numbers. Write the id down — it is the only way to match a row in the sheet back to a real device.`;
   p.appendChild(note);
+
+  // The trap that keeps catching people, said out loud rather than buried in
+  // a source comment: installing does NOT carry the flag across, because iOS
+  // gives a home-screen app its own storage. Nothing is broken when that
+  // happens — the installed app still pings, and still reports itself as
+  // "-app" — it just is not marked as yours, so your own training lands in the
+  // member numbers.
+  if (!isStandalone()) {
+    const warn = document.createElement("p");
+    warn.className = "devpanel__note";
+    warn.textContent = "Installed it to the home screen? That copy has its own separate storage, so it starts with dev OFF. Open it and tap \"by Boxing With Bakr\" five times there too — it will have a different id.";
+    p.appendChild(warn);
+  }
 
   document.body.appendChild(p);
   return p;

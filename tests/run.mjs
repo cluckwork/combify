@@ -1992,6 +1992,13 @@ async function collectSpokenVsShown(app, ms) {
   // reading it off the device is the only way to know which anonymous rows in
   // the sheet belong to which physical phone.
   const uid = peekStore()["combify.uid"];
+  // Installing does not carry the flag across, so the panel has to say so —
+  // this is the trap that files the founder's own training as a member's.
+  // The badge is class-only, so click the element rather than an id.
+  dev.doc.querySelector(".devbadge").dispatchEvent(new dev.window.MouseEvent("click", { bubbles: true }));
+  const panelText = dev.doc.querySelector(".devpanel").textContent;
+  check("the panel warns that the installed copy starts with dev off",
+    /separate storage/i.test(panelText) && /five times/i.test(panelText), panelText.slice(0, 160));
   check("and shows the id this device pings with",
     !!uid && dev.doc.querySelector(".devbadge").textContent.includes(uid),
     `badge "${dev.doc.querySelector(".devbadge").textContent}" vs uid "${uid}"`);
