@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.22.2",
+    date: "2026-09-05",
+    size: "patch",
+    title: "Home-screen steps, said in fewer words",
+    notes: [
+      "The add-to-home-screen card was explaining itself twice — once in a paragraph and again in the steps. The paragraph is now one line and the steps carry the instructions, so the whole card is shorter and faster to follow.",
+    ],
+  },
+  {
     v: "1.22.1",
     date: "2026-09-05",
     size: "patch",

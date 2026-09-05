@@ -129,13 +129,13 @@ export function isStandalone() {
 //   null     — nothing to automate, the steps are the whole answer
 export function installGuide(hasPrompt) {
   const env = read();
-  const WHERE = env.tablet ? "at the top of Safari" : "at the bottom of Safari";
+  const WHERE = env.tablet ? "(top of Safari)" : "(bottom of Safari)";
   // Android and desktop Chromium hand us a real prompt when the app qualifies.
   // One tap beats any instruction we could write, so it always wins.
   if (hasPrompt) {
     return {
       mode: "prompt",
-      sub: "One tap. It opens fullscreen like a real app and works offline.",
+      sub: "Opens fullscreen, works offline.",
       steps: [],
       action: "prompt",
       actionLabel: "Add to home screen",
@@ -144,11 +144,11 @@ export function installGuide(hasPrompt) {
   if (env.os === "ios" && env.browser === "safari") {
     return {
       mode: "ios-safari",
-      sub: "Takes about fifteen seconds, once. Then Combify opens fullscreen — no address bar — and works with no signal.",
+      sub: "One time. Then it opens fullscreen — no address bar — and works offline.",
       steps: [
         `Tap {share} <strong>Share</strong> ${WHERE}`,
-        "Scroll down and tap <strong>Add to Home Screen</strong>",
-        "Tap <strong>Add</strong> — done",
+        "Scroll down, tap <strong>Add to Home Screen</strong>",
+        "Tap <strong>Add</strong>",
       ],
       action: null,
       actionLabel: null,
@@ -163,11 +163,11 @@ export function installGuide(hasPrompt) {
   if (env.os === "ios") {
     return {
       mode: "ios-wrong-browser",
-      sub: "You're not in Safari, and on iPhone only Safari can put an app on your home screen. Move over now and Combify opens fullscreen, with no address bar, and works with no signal.",
+      sub: "Only Safari can add apps to an iPhone home screen. Takes three taps once you're there.",
       steps: [
-        "Tap <strong>Open in Safari</strong> below — the link gets copied too, in case it doesn't jump across on its own",
-        `In Safari, tap {share} <strong>Share</strong> ${WHERE}`,
-        "Scroll down and tap <strong>Add to Home Screen</strong>",
+        "Tap <strong>Open in Safari</strong> below",
+        `Tap {share} <strong>Share</strong> ${WHERE}`,
+        "Scroll down, tap <strong>Add to Home Screen</strong>",
       ],
       action: "copy",
       actionLabel: "Open in Safari",
@@ -179,7 +179,7 @@ export function installGuide(hasPrompt) {
   if (env.os === "android") {
     return {
       mode: "android-manual",
-      sub: "Two taps in your browser menu. Then it opens fullscreen and works offline.",
+      sub: "Opens fullscreen, works offline.",
       steps: [
         "Open the browser menu (<strong>⋮</strong>, top right)",
         "Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>",

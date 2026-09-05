@@ -1401,15 +1401,15 @@ function refreshInstallNudge() {
   if (guide.action === "prompt") {
     el.installBtn.hidden = false;
     if (el.installSteps) { el.installSteps.hidden = true; el.installSteps.innerHTML = ""; }
-    el.installSub.textContent = "Opens fullscreen like a real app, works offline.";
+    el.installSub.textContent = "Opens fullscreen, works offline.";
   } else {
     // No install API to call here — on iOS Apple exposes none at all. The only
     // honest help is showing people exactly where the option is hidden, and in
     // a browser where it genuinely isn't, saying so instead of pretending.
     el.installBtn.hidden = true;
     el.installSub.textContent = guide.mode === "ios-wrong-browser"
-      ? "Only Safari can do this on iPhone — here's the way across."
-      : "Do this once — then it opens fullscreen and works offline.";
+      ? "Only Safari can do this on iPhone."
+      : "One time. Then it opens fullscreen and works offline.";
     if (el.installSteps) {
       renderInstallSteps(el.installSteps, guide.steps);
       el.installSteps.hidden = guide.steps.length === 0;

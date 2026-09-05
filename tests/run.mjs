@@ -1682,7 +1682,7 @@ async function collectSpokenVsShown(app, ms) {
   as(IPHONE_SAFARI);
   let g = installGuide(false);
   check("iPhone Safari gets the Share steps", g.mode === "ios-safari", g.mode);
-  check("and is told where the Share button is", g.steps[0].includes("at the bottom of Safari"), g.steps[0]);
+  check("and is told where the Share button is", g.steps[0].includes("(bottom of Safari)"), g.steps[0]);
   check("with the glyph drawn, not named", g.steps[0].includes("{share}"), g.steps[0]);
   check("nothing to automate on iOS Safari", g.action === null, String(g.action));
 
@@ -1696,7 +1696,7 @@ async function collectSpokenVsShown(app, ms) {
   check("iPadOS is not mistaken for a Mac", deviceClass() === "tablet" && deviceOS() === "ios",
     `${deviceOS()}/${deviceClass()}`);
   g = installGuide(false);
-  check("iPad is pointed at the TOP of Safari", g.steps[0].includes("at the top of Safari"), g.steps[0]);
+  check("iPad is pointed at the TOP of Safari", g.steps[0].includes("(top of Safari)"), g.steps[0]);
 
   as(ANDROID);
   check("Android is a phone we can install on", canInstall() && deviceOS() === "android", deviceOS());
@@ -1853,10 +1853,10 @@ async function collectSpokenVsShown(app, ms) {
   const pinned = await boot({ duration: 0.6, search: "?dev=1" });
   pinned.window.localStorage.setItem("combify.dev.platform", "ipad");
   check("dev mode can pin the install card to another device",
-    installGuide(false).steps[0].includes("at the top of Safari"), installGuide(false).steps[0]);
+    installGuide(false).steps[0].includes("(top of Safari)"), installGuide(false).steps[0]);
   pinned.window.localStorage.removeItem("combify.dev");
   check("without dev mode the override is ignored",
-    installGuide(false).mode !== "ios-safari" || !installGuide(false).steps[0].includes("at the top"),
+    installGuide(false).mode !== "ios-safari" || !installGuide(false).steps[0].includes("(top of Safari)"),
     installGuide(false).mode);
   pinned.restore();
   clearStore();
