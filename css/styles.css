@@ -1199,10 +1199,30 @@ button.foot__link {
   font-weight: 700;
 }
 .ins__steps strong { color: var(--text); font-weight: 700; }
-/* The Share glyph is drawn, never named: most people have never consciously
-   looked at that icon, so "tap Share" alone is the instruction that fails. */
+/* Platform glyphs inside the steps (js/app.js GLYPHS). Drawn, never named:
+   most people have never consciously looked at the Share icon, so "tap Share"
+   alone is the instruction that fails — and in a long share sheet the picture
+   beside "Add to Home Screen" is what the eye finds before the words. Accent
+   coloured so they read as "look for this shape". */
+.ins__glyph {
+  display: inline-flex;
+  vertical-align: -3px;
+  color: var(--accent);
+  margin: 0 1px;
+}
+/* The old name, kept for the inline strip's hand-written markup in index.html. */
 .ins__share { display: inline-flex; vertical-align: -3px; color: var(--accent); }
-.ins__go { width: 100%; margin-top: 2px; }
+.ins__go {
+  width: 100%;
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+/* On the solid accent button the glyph must take the button's ink colour, not
+   the accent it uses everywhere else — accent on accent is invisible. */
+.ins__go .ins__glyph { color: inherit; margin: 0; }
 .ins__go[hidden] { display: none; }
 /* Inconspicuous on purpose — present and reachable, never competing. */
 .ins__skip {

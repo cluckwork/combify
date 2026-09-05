@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.26.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "The home-screen steps show you the buttons",
+    notes: [
+      "The install steps now draw the actual icons you're looking for instead of only naming them — the Share arrow, the square-with-a-plus that sits beside \"Add to Home Screen\" in the share sheet, your browser's menu button, and Android's install icon.",
+      "And the menu button is the right one for your browser: three vertical dots at the top in Chrome and Firefox, three stacked lines at the bottom in Samsung Internet, three horizontal dots along the bottom in Edge. Being sent to the wrong corner of your own screen is the fastest way to give up.",
+    ],
+  },
+  {
     v: "1.25.0",
     date: "2026-09-05",
     size: "minor",

@@ -1713,6 +1713,42 @@ async function collectSpokenVsShown(app, ms) {
   check("a real prompt always wins over written steps",
     installGuide(true).action === "prompt", installGuide(true).action);
 
+  // Every browser hides "install" behind a different button in a different
+  // corner, and naming the wrong one is the whole failure.
+  const SAMSUNG = "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 SamsungBrowser/23.0 Chrome/115.0 Mobile Safari/537.36";
+  const EDGE_A = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36 EdgA/120.0";
+  as(ANDROID);
+  check("Chrome on Android is sent to the three dots, top right",
+    /\{menu\}/.test(installGuide(false).steps[0]) && /top right/.test(installGuide(false).steps[0]),
+    installGuide(false).steps[0]);
+  as(SAMSUNG);
+  check("Samsung Internet is sent to the stacked lines in its BOTTOM bar",
+    /\{menulines\}/.test(installGuide(false).steps[0]) && /bottom right/.test(installGuide(false).steps[0]),
+    installGuide(false).steps[0]);
+  as(EDGE_A);
+  check("Edge on Android is sent to the horizontal dots along the bottom",
+    /\{menudots\}/.test(installGuide(false).steps[0]) && /bottom/.test(installGuide(false).steps[0]),
+    installGuide(false).steps[0]);
+  check("and the install item carries its own icon",
+    /\{install\}/.test(installGuide(false).steps[1]), installGuide(false).steps[1]);
+
+  // Every {token} a guide can emit must be a glyph app.js actually draws, or
+  // it renders as an empty gap where a picture should be.
+  const DRAWN = ["share", "addhome", "menu", "menulines", "menudots", "install"];
+  const emitted = new Set();
+  for (const ua of [IPHONE_SAFARI, IPHONE_CHROME, IPAD_OS, ANDROID, SAMSUNG, EDGE_A]) {
+    as(ua);
+    for (const hasPrompt of [false, true]) {
+      for (const step of installGuide(hasPrompt).steps) {
+        for (const m of step.matchAll(/\{(\w+)\}/g)) emitted.add(m[1]);
+      }
+    }
+  }
+  check("every glyph token used has a drawing behind it",
+    [...emitted].every((t) => DRAWN.includes(t)),
+    [...emitted].filter((t) => !DRAWN.includes(t)).join(", ") || "none missing");
+  check("and the iOS add-to-home icon is among them", emitted.has("addhome"), [...emitted].join(","));
+
   as(MAC, 0);
   check("a computer is never asked to add a home-screen icon", canInstall() === false, deviceClass());
 

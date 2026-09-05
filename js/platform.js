@@ -93,7 +93,10 @@ function read() {
       : /OPiOS|OPT\//.test(ua) ? "ios-opera"
       : "safari")
     : android
-      ? (/SamsungBrowser/.test(ua) ? "samsung" : /Firefox/.test(ua) ? "firefox" : "chromium")
+      ? (/SamsungBrowser/.test(ua) ? "samsung"
+        : /EdgA/.test(ua) ? "edge"
+        : /Firefox/.test(ua) ? "firefox"
+        : "chromium")
       : "desktop";
 
   return {
@@ -170,23 +173,30 @@ export function installGuide(hasPrompt) {
       arrivedSub: "Three taps and Combify is on your home screen.",
       steps: [
         `Tap {share} <strong>Share</strong> ${where}`,
-        "Scroll down, tap <strong>Add to Home Screen</strong>",
+        "Scroll down, tap {addhome} <strong>Add to Home Screen</strong>",
         "Tap <strong>Add</strong>",
       ],
       action: null,
       actionLabel: null,
     };
   }
-  // Android without a prompt event: Firefox, or Chrome that hasn't decided the
-  // app qualifies yet. The menu is where it lives in all of them; the wording
-  // on the item differs by browser, hence both names.
+  // Android without a prompt event: Firefox, Samsung Internet, or Chrome that
+  // hasn't decided the app qualifies yet. Every one of them hides it in "the
+  // menu" — but the menu is a different button in a different corner in each,
+  // and that is exactly the detail that decides whether someone finds it.
+  // Chrome and Firefox: three vertical dots, top right. Samsung Internet:
+  // three stacked lines in the bottom bar. Edge: three horizontal dots,
+  // centred along the bottom.
   if (env.os === "android") {
+    const menu = env.browser === "samsung" ? { glyph: "{menulines}", where: "bottom right" }
+      : env.browser === "edge" ? { glyph: "{menudots}", where: "along the bottom" }
+      : { glyph: "{menu}", where: "top right" };
     return {
       mode: "android-manual",
       sub: "Opens fullscreen, works offline.",
       steps: [
-        "Open the browser menu (<strong>⋮</strong>, top right)",
-        "Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>",
+        `Open the ${menu.glyph} menu, ${menu.where}`,
+        "Tap {install} <strong>Install app</strong> or <strong>Add to Home screen</strong>",
       ],
       action: null,
       actionLabel: null,

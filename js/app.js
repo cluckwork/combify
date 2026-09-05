@@ -1419,11 +1419,36 @@ function refreshInstallNudge() {
   el.installNudge.hidden = false;
 }
 
-// The Share glyph, drawn rather than named — see the note in index.html.
-const SHARE_GLYPH = '<span class="ins__share"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1"/></svg></span>';
+// The icons a member is actually hunting for, drawn rather than named.
+//
+// Naming an icon is the instruction people fail to follow: almost nobody has
+// consciously looked at the Share glyph, and "Add to Home Screen" is a line of
+// text in a long scrolling sheet where the picture beside it is what the eye
+// finds first. Every glyph here is a real one from the platform — the iOS
+// share arrow, the rounded square with a plus that iOS puts next to Add to
+// Home Screen, and Android's three-dot overflow — so they match what is on
+// screen rather than being decoration.
+const GLYPH = (body, fill) =>
+  `<span class="ins__glyph"><svg viewBox="0 0 24 24" width="15" height="15" fill="${fill || "none"}" stroke="${fill ? "none" : "currentColor"}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg></span>`;
+
+const GLYPHS = {
+  // iOS share: a box with an arrow leaving the top of it.
+  share: GLYPH('<path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1"/>'),
+  // The icon iOS shows beside "Add to Home Screen" in the share sheet: a
+  // rounded square with a plus in it.
+  addhome: GLYPH('<rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8.5v7"/><path d="M8.5 12h7"/>'),
+  // Android's overflow menu.
+  menu: GLYPH('<circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>', "currentColor"),
+  // Samsung Internet: three stacked lines, in its bottom bar.
+  menulines: GLYPH('<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>'),
+  // Edge on Android: three horizontal dots, centred along the bottom.
+  menudots: GLYPH('<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>', "currentColor"),
+  // Chrome for Android's "Install app" item: a handset taking something in.
+  install: GLYPH('<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 8v5.5"/><path d="M9.7 11.2 12 13.5l2.3-2.3"/>'),
+};
 
 // Steps come from js/platform.js as trusted, hard-coded strings — no user
-// input reaches this — so the {share} token can be swapped for real markup.
+// input reaches this — so {token} placeholders can be swapped for real markup.
 function renderInstallSteps(ol, steps) {
   ol.innerHTML = "";
   for (const s of steps) {
@@ -1433,7 +1458,7 @@ function renderInstallSteps(ol, steps) {
     // node and every <strong> — would each be laid out as a separate grid
     // item, which shattered "Tap Copy link below" across three rows.
     const span = document.createElement("span");
-    span.innerHTML = s.replace("{share}", SHARE_GLYPH);
+    span.innerHTML = s.replace(/\{(\w+)\}/g, (m, k) => GLYPHS[k] || "");
     li.appendChild(span);
     ol.appendChild(li);
   }
@@ -1589,7 +1614,12 @@ function openInstallDialog(force) {
   if (steps) renderInstallSteps(steps, guide.steps);
   if (go) {
     go.hidden = !guide.action;
-    if (guide.actionLabel) go.textContent = guide.actionLabel;
+    if (guide.actionLabel) {
+      // innerHTML, not textContent: the label carries the same add-to-home
+      // glyph the step lists use, so the one-tap path is not the only one
+      // without a picture. Both halves are our own constants.
+      go.innerHTML = `${GLYPHS.addhome}<span>${guide.actionLabel}</span>`;
+    }
   }
   if (!force) noteInsOpened();
   modal.hidden = false;
