@@ -1681,16 +1681,24 @@ async function collectSpokenVsShown(app, ms) {
 
   as(IPHONE_SAFARI);
   let g = installGuide(false);
-  check("iPhone Safari gets the Share steps", g.mode === "ios-safari", g.mode);
+  check("iPhone Safari gets the Share steps", g.mode === "ios", g.mode);
   check("and is told where the Share button is", g.steps[0].includes("(bottom of Safari)"), g.steps[0]);
   check("with the glyph drawn, not named", g.steps[0].includes("{share}"), g.steps[0]);
-  check("nothing to automate on iOS Safari", g.action === null, String(g.action));
+  check("nothing to automate on iOS", g.action === null, String(g.action));
+  check("three steps, ending at Add", /Add to Home Screen/.test(g.steps[1]) && /Add/.test(g.steps[2]),
+    g.steps.join(" | "));
 
+  // Since iOS 16.4 every iOS browser can install from its own Share menu.
+  // Combify used to send these people on a detour through Safari for a
+  // limitation Apple had already removed.
   as(IPHONE_CHROME);
   g = installGuide(false);
-  check("iPhone Chrome is NOT given impossible Safari steps", g.mode === "ios-wrong-browser", g.mode);
-  check("it is told Safari is the only way", /only Safari/i.test(g.sub), g.sub);
-  check("and offered the link on its clipboard", g.action === "copy", String(g.action));
+  check("iPhone Chrome gets the same install steps, not a detour", g.mode === "ios", g.mode);
+  check("no Safari-switching anywhere in the copy",
+    !/only Safari|Open in Safari/i.test(g.sub + g.steps.join(" ")), g.sub);
+  check("but it IS pointed at Chrome's own Share button",
+    g.steps[0].includes("(top right, beside the address)"), g.steps[0]);
+  check("and nothing to automate there either", g.action === null, String(g.action));
 
   as(IPAD_OS);
   check("iPadOS is not mistaken for a Mac", deviceClass() === "tablet" && deviceOS() === "ios",
@@ -1862,117 +1870,73 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
-// ------------- 43. A browser that CANNOT install is told straight away
+// ---------------- 43. Every iOS browser is treated the same, and correctly
 {
-  section("43. Chrome on iPhone is told on arrival, not after a session");
-  // v1.20.0 made the install ask earned, and that rule stands — for browsers
-  // that can actually install. Chrome on an iPhone never can: the address bar
-  // stays forever and offline never works. Waiting for a finished session
-  // there just means the session happened in the wrong browser.
+  section("43. iOS: same steps everywhere, and an install link that skips the wait");
+  // A correction, and the test that pins it. Combify shipped a build that told
+  // Chrome-on-iPhone users only Safari could install web apps and walked them
+  // through switching browsers. True until iOS 16.4, false ever since — Chrome,
+  // Edge and Firefox on iOS all install from their own Share menu, and the
+  // result launches standalone and takes push like any other.
   const CHROME_IOS = { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) CriOS/120.0 Mobile Safari/604.1", maxTouchPoints: 5, noVibrate: true };
   const SAFARI_IOS = { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Version/17.0 Mobile Safari/604.1", maxTouchPoints: 5, noVibrate: true };
+  const trainAndExit = async (app) => {
+    app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+    app.click("startBtn");
+    await app.clock.advance(40000);
+    app.click("exitBtn");
+    await app.clock.advance(60);
+  };
 
   clearStore();
-  const wrong = await boot({ duration: 0.6, ...CHROME_IOS });
-  await wrong.clock.advance(50);
-  check("a brand new Chrome-on-iPhone visitor is told immediately",
-    wrong.doc.getElementById("insModal").hidden === false, "stayed quiet");
-  check("and the headline names the actual problem",
-    /Safari/.test(wrong.doc.getElementById("insTitle").textContent),
-    wrong.doc.getElementById("insTitle").textContent);
-  check("the button offers to take them there",
-    /Safari/i.test(wrong.doc.getElementById("insGo").textContent),
-    wrong.doc.getElementById("insGo").textContent);
-  // ONE ask. The home-screen steps cannot be followed in this browser, so
-  // printing them here just makes a list most people abandon halfway.
-  check("and it asks for one thing only — no home-screen steps yet",
-    wrong.doc.getElementById("insSteps").children.length === 0,
-    `${wrong.doc.getElementById("insSteps").children.length} steps`);
-  check("and the strip is lifted above the settings, not buried under them",
-    wrong.doc.getElementById("installNudge").style.order === "-1",
-    wrong.doc.getElementById("installNudge").style.order || "(no order)");
-
-  // Closing the tab is NOT an answer. Tapping "Open in Safari" sends you away
-  // and the tab often never comes back; the old build counted that as a
-  // decision, so reopening the link only ever showed the quiet strip and the
-  // instructions were effectively gone.
-  wrong.restore();
-  const again = await boot({ duration: 0.6, ...CHROME_IOS });
-  await again.clock.advance(50);
-  check("closing the tab without answering asks again",
-    again.doc.getElementById("insModal").hidden === false, "went silent after a closed tab");
-  again.click("insSkip");
-  check("skipping leaves the quiet strip behind",
-    again.doc.getElementById("installNudge").hidden === false, "strip gone");
-  again.restore();
-
-  const answered = await boot({ duration: 0.6, ...CHROME_IOS });
-  await answered.clock.advance(50);
-  check("but an actual answer is remembered",
-    answered.doc.getElementById("insModal").hidden === true, "asked again after being told no");
-  check("and the footer still offers a way back",
-    [...answered.doc.querySelectorAll(".foot button")].some((b) => /home screen/i.test(b.textContent)),
-    "no route back");
-  answered.restore();
-
-  // Never forever, though: three unanswered appearances and it stops.
-  clearStore();
-  for (let i = 0; i < 3; i++) {
-    const nag = await boot({ duration: 0.6, ...CHROME_IOS });
-    await nag.clock.advance(50);
-    check(`ask ${i + 1} of 3 still appears`, nag.doc.getElementById("insModal").hidden === false, "stopped early");
-    nag.restore();
-  }
-  const capped = await boot({ duration: 0.6, ...CHROME_IOS });
-  await capped.clock.advance(50);
-  check("a fourth time would be nagging, so it stops",
-    capped.doc.getElementById("insModal").hidden === true, "asked a fourth time");
-  capped.restore();
-
-  // The earned rule is untouched everywhere it still applies.
-  clearStore();
-  const right = await boot({ duration: 0.6, ...SAFARI_IOS });
-  await right.clock.advance(50);
-  check("Safari on iPhone still waits for a finished session",
-    right.doc.getElementById("insModal").hidden === true, "asked a stranger");
-  check("and its strip stays down too",
-    right.doc.getElementById("installNudge").hidden === true, "strip jumped the gun");
-  right.restore();
+  const chrome = await boot({ duration: 0.6, ...CHROME_IOS });
+  await chrome.clock.advance(50);
+  check("Chrome on iPhone is no longer ambushed on arrival",
+    chrome.doc.getElementById("insModal").hidden === true, "asked a stranger again");
+  await trainAndExit(chrome);
+  check("it earns the ask like every other browser",
+    chrome.doc.getElementById("insModal").hidden === false, "never asked");
+  check("and is given real steps it can actually follow",
+    /Add to Home Screen/.test(chrome.doc.getElementById("insSteps").textContent),
+    chrome.doc.getElementById("insSteps").textContent);
+  check("no mention of switching to Safari",
+    !/Safari/i.test(chrome.doc.getElementById("insSteps").textContent + chrome.doc.getElementById("insSub").textContent),
+    chrome.doc.getElementById("insSub").textContent);
+  check("the strip stays a quiet aside, not lifted to the top",
+    chrome.doc.getElementById("installNudge").style.order === "",
+    chrome.doc.getElementById("installNudge").style.order);
+  chrome.restore();
 
   clearStore();
-  const laptop = await boot({ duration: 0.6 });
-  await laptop.clock.advance(50);
-  check("a computer is still never asked at all",
-    laptop.doc.getElementById("insModal").hidden === true, "asked a laptop");
-  laptop.restore();
-  clearStore();
+  const safari = await boot({ duration: 0.6, ...SAFARI_IOS });
+  await safari.clock.advance(50);
+  check("Safari is unchanged: still earned",
+    safari.doc.getElementById("insModal").hidden === true, "asked a stranger");
+  safari.restore();
 
-  // ---- Stage two: landing in Safari because Chrome sent them ----
-  // Chrome and Safari share nothing on iOS, not even localStorage, so the
-  // handoff URL carries ?ath=1. Without it someone who just agreed to switch
-  // browsers arrives in Safari and is shown nothing, because Safari's ask
-  // waits for a finished session they haven't done.
-  const arrived = await boot({ duration: 0.6, search: "?ath=1", ...SAFARI_IOS });
-  await arrived.clock.advance(50);
-  check("arriving in Safari from the handoff shows the steps at once",
-    arrived.doc.getElementById("insModal").hidden === false, "showed nothing");
-  check("and picks up the thread rather than re-arguing it",
-    /You're in Safari now/.test(arrived.doc.getElementById("insSub").textContent),
-    arrived.doc.getElementById("insSub").textContent);
-  check("now the home-screen steps appear",
-    /Add to Home Screen/.test(arrived.doc.getElementById("insSteps").textContent),
-    arrived.doc.getElementById("insSteps").textContent);
+  // An install LINK (?ath=1) is the one thing that still skips the wait — it
+  // is what the gym's QR code points at, and someone who followed it has
+  // already asked.
+  clearStore();
+  const link = await boot({ duration: 0.6, search: "?ath=1", ...CHROME_IOS });
+  await link.clock.advance(50);
+  check("an install link shows the steps at once", link.doc.getElementById("insModal").hidden === false, "ignored the link");
+  check("and skips the pitch, since they already asked",
+    /Three taps/.test(link.doc.getElementById("insSub").textContent),
+    link.doc.getElementById("insSub").textContent);
   check("the breadcrumb is taken back out of the address bar",
-    !/ath=1/.test(arrived.window.location.search), arrived.window.location.search);
-  arrived.click("insSkip");
-  arrived.restore();
+    !/ath=1/.test(link.window.location.search), link.window.location.search);
+  link.click("insSkip");
+  link.restore();
 
-  // Answering clears it, so it does not reappear on every later visit.
-  const settled = await boot({ duration: 0.6, ...SAFARI_IOS });
-  await settled.clock.advance(50);
-  check("once answered, Safari goes back to the earned rule",
-    settled.doc.getElementById("insModal").hidden === true, "kept asking");
-  settled.restore();
+  const after = await boot({ duration: 0.6, ...CHROME_IOS });
+  await after.clock.advance(50);
+  check("once answered, it goes back to the earned rule",
+    after.doc.getElementById("insModal").hidden === true, "kept asking");
+  check("with the footer still offering a way back",
+    [...after.doc.querySelectorAll(".foot button")].some((b) => /home screen/i.test(b.textContent)),
+    "no route back");
+  after.restore();
   clearStore();
 }
 

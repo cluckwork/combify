@@ -275,7 +275,10 @@ Directly serves the business goal.
   missing half, and the shape of it is now decided: **Web Push**. It is free
   (the $99 is Apple's App Store programme, which a PWA never touches) and has
   worked on iOS since 16.4 — but ONLY for an app added to the home screen,
-  which is why the install work in v1.21.0 came first. Likely via OneSignal's
+  which is why the install work came first. NOTE (corrected v1.25.0): the
+  home screen is the requirement, NOT Safari. Since iOS 16.4 Chrome, Edge and
+  Firefox on iOS install PWAs from their own Share menus and the result takes
+  push identically. Likely via OneSignal's
   free tier rather than a self-hosted VAPID worker; at this scale owning a push
   server buys nothing. Rules to keep: never notify someone who already trained
   today (`trainedToday()` answers this), ask for permission after the SECOND
@@ -332,17 +335,24 @@ Directly serves the business goal.
   + package.json) so installed phones pick it up.
 - **Remaining:**
   - [ ] Verify PWA install + offline work from the live URL on a real phone.
-  - ✅ **Install is now platform-honest** (v1.21.0, `js/platform.js`). The old
-    build gave every iOS visitor the same "tap Share → Add to Home Screen",
-    which is impossible to follow in Chrome on an iPhone — Apple gives that path
-    to Safari alone — so anyone arriving from Google, Instagram or a text link
-    was being told to do something their browser cannot do. Detection now
-    separates iPhone Safari, iPhone-in-another-browser (told the truth, and
-    handed the link on their clipboard), iPad (share button is at the TOP), and
-    Android (real one-tap prompt where offered, menu steps otherwise).
-    Computers are never asked at all — there is no home screen there. The ask is
-    a proper dialog, still earned by a finished session; the old quiet strip
-    remains for anyone who says "not now", plus a footer link back in.
+  - ✅ **Install is platform-aware** (v1.21.0, `js/platform.js`). Detection
+    separates iPhone Safari (Share is at the BOTTOM), iPad Safari (TOP), Chrome
+    and friends on iOS (top right, beside the address), Android (real one-tap
+    prompt where offered, menu steps otherwise), and computers (never asked —
+    no home screen there). The ask is a dialog, earned by a finished session;
+    a quiet strip remains for anyone who says "not now", plus a footer link.
+  - ⚠️ **A wrong turn worth remembering** (v1.21.0–1.24.0, reverted 1.25.0).
+    Those builds told Chrome-on-iPhone users that only Safari could install a
+    web app and walked them through switching browsers, with a `?ath=1` handoff
+    to carry state across. That was true until **iOS 16.4 (March 2023)** and
+    false ever since: Chrome, Edge, Firefox and Orion on iOS all install PWAs
+    from their own Share menu, launching standalone and taking push identically.
+    Four versions of increasingly polished UI were spent solving a problem Apple
+    had already fixed. **Lesson: check whether a platform limitation is still
+    real before designing around it** — "iOS can't do X" ages faster than almost
+    any other kind of fact. The `?ath=1` mechanism survived the revert, now
+    meaning "this link is an install link" — which is what the gym's QR code
+    should point at.
   - [ ] Put the rest of Bakr's real combos in before wide sharing (the "10
         combo" is in; the other levels are still placeholders).
 

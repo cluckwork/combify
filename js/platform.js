@@ -2,16 +2,24 @@
 // actually mean here?
 //
 // WHY THIS EXISTS. Adding Combify to the home screen is the only way to lose
-// the browser's address bar on a phone, and the app used to give everyone on
-// iOS the same instruction: "tap Share, then Add to Home Screen". That
-// instruction is impossible to follow in Chrome on iPhone — Apple only gives
-// the real install path to Safari — so anyone who opened the link from
-// Google, Instagram or a text message was being told to do something their
-// browser cannot do. They aren't confused; they're stuck.
+// the browser's address bar on a phone, and where that option lives differs by
+// browser. Naming the wrong place is the whole failure: "tap Share" sends
+// someone hunting the bottom of the screen when their Share button is in the
+// top-right corner.
 //
-// So detection has to answer three separate questions, not one:
+// A CORRECTION WORTH RECORDING. Combify shipped a version (v1.21–1.24) that
+// told anyone in Chrome on an iPhone that only Safari could install web apps,
+// and walked them through switching browsers. That was TRUE until iOS 16.4
+// (March 2023) and has been false ever since: Chrome, Edge, Firefox and Orion
+// on iOS can all install a PWA from their own Share menu, and the result
+// launches standalone and can receive push exactly like a Safari-installed
+// one. The browser-switching detour was solving a problem Apple had already
+// fixed. Every iOS browser now gets the same three steps; only the sentence
+// saying WHERE the Share button is changes.
+//
+// So detection answers three questions:
 //   1. Is installing even worth asking about?  (no, on a computer)
-//   2. Which steps are the TRUE steps here?    (Safari vs Chrome vs Android)
+//   2. Where is the Share button on THIS browser?
 //   3. Can we skip the steps entirely?         (Android fires a real prompt)
 //
 // Deliberately UA-based. Feature detection is the better habit in general, but
@@ -79,7 +87,11 @@ function read() {
   // Chrome, FxiOS Firefox, EdgiOS Edge, OPiOS/OPT Opera. If none are present
   // it really is Safari.
   const browser = ios
-    ? (/CriOS|FxiOS|EdgiOS|OPiOS|OPT\//.test(ua) ? "ios-other" : "safari")
+    ? (/CriOS/.test(ua) ? "ios-chrome"
+      : /EdgiOS/.test(ua) ? "ios-edge"
+      : /FxiOS/.test(ua) ? "ios-firefox"
+      : /OPiOS|OPT\//.test(ua) ? "ios-opera"
+      : "safari")
     : android
       ? (/SamsungBrowser/.test(ua) ? "samsung" : /Firefox/.test(ua) ? "firefox" : "chromium")
       : "desktop";
@@ -129,7 +141,6 @@ export function isStandalone() {
 //   null     — nothing to automate, the steps are the whole answer
 export function installGuide(hasPrompt) {
   const env = read();
-  const WHERE = env.tablet ? "(top of Safari)" : "(bottom of Safari)";
   // Android and desktop Chromium hand us a real prompt when the app qualifies.
   // One tap beats any instruction we could write, so it always wins.
   if (hasPrompt) {
@@ -141,40 +152,29 @@ export function installGuide(hasPrompt) {
       actionLabel: "Add to home screen",
     };
   }
-  if (env.os === "ios" && env.browser === "safari") {
+  if (env.os === "ios") {
+    // Where the Share button actually is. Safari on iPhone puts its toolbar at
+    // the bottom and iPad at the top; Chrome and the other wrappers keep a
+    // share icon in the address bar, top right. Sending someone to the wrong
+    // end of their own screen is the single easiest way to lose them.
+    const where = env.browser === "safari"
+      ? (env.tablet ? "(top of Safari)" : "(bottom of Safari)")
+      : env.browser === "ios-chrome"
+        ? "(top right, beside the address)"
+        : "(in your browser's menu)";
     return {
-      mode: "ios-safari",
-      // `arrived` is set when this Safari tab was opened by the Chrome card's
-      // handoff: they already agreed to this, so the card picks up the thread
-      // instead of re-arguing the case.
-      arrivedSub: "You're in Safari now — three taps and it's on your home screen.",
+      mode: "ios",
       sub: "One time. Then it opens fullscreen — no address bar — and works offline.",
+      // Shown instead when the member followed an install link (?ath=1), e.g.
+      // the QR code at the gym: they asked for this, so skip the pitch.
+      arrivedSub: "Three taps and Combify is on your home screen.",
       steps: [
-        `Tap {share} <strong>Share</strong> ${WHERE}`,
+        `Tap {share} <strong>Share</strong> ${where}`,
         "Scroll down, tap <strong>Add to Home Screen</strong>",
         "Tap <strong>Add</strong>",
       ],
       action: null,
       actionLabel: null,
-    };
-  }
-  // THE CASE THAT WAS BROKEN. Chrome/Firefox/Edge on iPhone cannot install
-  // anything: Apple exposes the home-screen path to Safari alone. Telling
-  // these members to "tap Share" sends them hunting for a menu item that does
-  // not exist in their browser. The only honest instruction is to move them to
-  // Safari first, and the least annoying way to do that is to hand them the
-  // link on their clipboard so there is nothing to type.
-  if (env.os === "ios") {
-    return {
-      mode: "ios-wrong-browser",
-      sub: "Only Safari can add apps to an iPhone home screen. One tap and you're there — Combify will pick up where it left off.",
-      // Deliberately EMPTY. This card asks for one thing: change browser. The
-      // home-screen steps belong on the other side, once they are in Safari
-      // and can actually follow them — a list spanning two browsers is a list
-      // most people abandon halfway.
-      steps: [],
-      action: "copy",
-      actionLabel: "Open in Safari",
     };
   }
   // Android without a prompt event: Firefox, or Chrome that hasn't decided the

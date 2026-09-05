@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.25.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "You can add Combify from any browser — we were wrong",
+    notes: [
+      "Combify has been telling people in Chrome on an iPhone that only Safari can add apps to a home screen, and walking them through switching browsers. That hasn't been true since 2023: Chrome, Edge and Firefox on iPhone can all do it from their own Share menu, and the result works exactly the same.",
+      "So the detour is gone. Every browser now gets the same three steps, and each one is told where its own Share button is — the bottom of the screen in Safari on iPhone, the top in Safari on iPad, top right beside the address in Chrome.",
+      "Sorry to anyone who switched browsers on our say-so. You didn't need to.",
+    ],
+  },
+  {
     v: "1.24.0",
     date: "2026-09-05",
     size: "minor",

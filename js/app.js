@@ -1373,12 +1373,11 @@ function installEarned() {
 // history live per-browser. Telling them on arrival is the helpful moment;
 // telling them after three sessions means those sessions are in the wrong
 // place. Every other platform keeps the earned rule from v1.20.0.
+// The one thing that still overrides "you must finish a session first": the
+// member followed a link that exists to install the app — the QR code at the
+// gym, say. They asked; making them train first would be obtuse.
 function installBlocked() {
-  // Either the browser cannot install at all, or this tab exists BECAUSE the
-  // member already said yes in another one. Both skip the "finished a session
-  // first" rule: the first because waiting helps nobody, the second because
-  // they have already agreed and are mid-flow.
-  return installGuide(false).mode === "ios-wrong-browser" || arrivedForInstall();
+  return arrivedForInstall();
 }
 
 function installSilenced() {
@@ -1411,20 +1410,12 @@ function refreshInstallNudge() {
     // honest help is showing people exactly where the option is hidden, and in
     // a browser where it genuinely isn't, saying so instead of pretending.
     el.installBtn.hidden = true;
-    el.installSub.textContent = guide.mode === "ios-wrong-browser"
-      ? "Only Safari can do this on iPhone."
-      : "One time. Then it opens fullscreen and works offline.";
+    el.installSub.textContent = "One time. Then it opens fullscreen and works offline.";
     if (el.installSteps) {
       renderInstallSteps(el.installSteps, guide.steps);
       el.installSteps.hidden = guide.steps.length === 0;
     }
   }
-  // A member in Chrome on an iPhone will never scroll past the settings to
-  // find this. When the browser is the problem, the strip goes to the top of
-  // the column instead of the bottom (.app is a flex column, so this reorders
-  // without touching the DOM). Everywhere else it stays the quiet aside it was
-  // designed to be.
-  el.installNudge.style.order = guide.mode === "ios-wrong-browser" ? "-1" : "";
   el.installNudge.hidden = false;
 }
 
@@ -1587,19 +1578,10 @@ function openInstallDialog(force) {
   const go = document.getElementById("insGo");
   const title = document.getElementById("insTitle");
 
-  // Naming the journey's length is the cheapest reassurance available. Someone
-  // being asked to change browser has no idea whether they are one tap from
-  // done or ten, and "step 1 of 2" answers that before they have to decide.
-  const eyebrow = modal.querySelector(".ins__eyebrow");
-  if (eyebrow) {
-    eyebrow.textContent = guide.mode === "ios-wrong-browser" ? "Step 1 of 2"
-      : (arrivedForInstall() && guide.mode === "ios-safari") ? "Step 2 of 2"
-      : "Add to home screen";
-  }
   if (title) {
-    title.textContent = guide.mode === "ios-wrong-browser"
-      ? "Open Combify in Safari"          // the honest headline: this is a browser problem
-      : deviceClass() === "tablet" ? "Keep Combify on your iPad" : "Keep Combify on your phone";
+    title.textContent = deviceClass() === "tablet"
+      ? "Keep Combify on your iPad"
+      : "Keep Combify on your phone";
   }
   if (sub) {
     sub.textContent = (arrivedForInstall() && guide.arrivedSub) ? guide.arrivedSub : guide.sub;
@@ -1642,39 +1624,6 @@ function closeInstallDialog() {
           if (choice && choice.outcome === "accepted") { installMode = null; hideInstallNudge(); }
         } catch (e) {}
         closeInstallDialog();
-        return;
-      }
-      if (guide.action === "copy") {
-        // Wrong browser on iOS. Two attempts, in order of how little the
-        // member has to do:
-        //
-        // 1. The clipboard FIRST, always, and awaited — it is the only step
-        //    guaranteed to work, and it must happen while we still hold the
-        //    tap that authorised it. If step 2 navigates away mid-write, the
-        //    fallback is gone.
-        // 2. x-safari-https:, an undocumented iOS scheme that hands a URL
-        //    straight to Safari. It works from Chrome on iPhone today, but
-        //    Apple has never promised it and it fails silently when it
-        //    doesn't — hence the ordering, and hence the button text below
-        //    telling them what to do if nothing happened.
-        const handoff = (() => {
-          try {
-            const u = new URL(location.href);
-            u.searchParams.set(ATH_PARAM, "1");
-            return u.toString();
-          } catch (e) { return location.href; }
-        })();
-        let copied = false;
-        try { await navigator.clipboard.writeText(handoff); copied = true; } catch (e) {}
-        if (!copied && navigator.share) {
-          try { await navigator.share({ title: "Combify", url: handoff }); copied = true; } catch (e) {}
-        }
-        go.textContent = copied
-          ? "Link copied — paste it in Safari"
-          : "Copy this page's address";
-        noteInsAnswered();
-        audit("install", copied ? "link copied" : "copy failed");
-        try { location.href = handoff.replace(/^https?:/, "x-safari-https:"); } catch (e) {}
         return;
       }
       closeInstallDialog();
