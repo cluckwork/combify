@@ -1671,12 +1671,13 @@ function renderAim(guide) {
     return;
   }
   const { edge, side } = guide.aim;
-  // The icon they are hunting for, repeated at the edge — the step list says
-  // the name, this says the shape, and they reinforce each other.
-  const glyph = guide.mode === "ios" ? GLYPHS.share
-    : /\{menulines\}/.test(guide.steps[0] || "") ? GLYPHS.menulines
-    : /\{menudots\}/.test(guide.steps[0] || "") ? GLYPHS.menudots
-    : GLYPHS.menu;
+  // The icon at the arrow is whatever STEP ONE tells you to tap — read out of
+  // the step itself rather than picked separately, so the two can never drift
+  // apart. They drifted once: Safari's first step became "tap the bar, then
+  // •••" while the arrow still showed the Share icon, pointing at a button
+  // that is not the one you press first.
+  const firstToken = /\{(\w+)\}/.exec(guide.steps[0] || "");
+  const glyph = (firstToken && GLYPHS[firstToken[1]]) || GLYPHS.share;
   const chevron = edge === "top"
     ? '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V4.5"/><path d="M5 11.5 12 4.5l7 7"/></svg>'
     : '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v16.5"/><path d="M5 12.5 12 19.5l7-7"/></svg>';

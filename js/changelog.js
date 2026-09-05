@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.29.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "The Safari steps had a tap missing",
+    notes: [
+      "On iPhone, Share isn't sitting on Safari's toolbar any more — you tap the bar at the bottom, then the ••• button that appears, and Share is in there. The steps skipped that middle tap entirely, so they sent people hunting for a button that wasn't on screen. Fixed, with the arrow now pointing at the bar rather than at Share.",
+      "Every browser's steps now name what you're looking for — Share, then Add to Home Screen — and only describe where to find it when we actually know. Firefox, Edge and Opera on iPhone are told what to look for rather than being sent to a corner we'd be guessing at.",
+      "Android gained the final confirm tap, which was missing.",
+    ],
+  },
+  {
     v: "1.28.1",
     date: "2026-09-05",
     size: "patch",

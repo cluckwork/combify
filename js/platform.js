@@ -157,47 +157,49 @@ export function installGuide(hasPrompt) {
     };
   }
   if (env.os === "ios") {
-    // Where the Share button actually is. Safari on iPhone puts its toolbar at
-    // the bottom and iPad at the top; Chrome and the other wrappers keep a
-    // share icon in the address bar, top right. Sending someone to the wrong
-    // end of their own screen is the single easiest way to lose them.
-    // Where the Share button is, per browser — and, crucially, whether we
-    // actually know.
+    // NAME THE DESTINATION CONFIDENTLY, HEDGE THE ROUTE.
     //
-    // The pointer states the DEFAULT position, and defaults can be overridden:
-    // iOS 15+ lets someone move Safari's bar to the top, and Chrome on iOS has
-    // had a bottom-address-bar option since 2024. No API reports it; a page
-    // cannot see the browser's own furniture. That is an acceptable risk only
-    // because the pointer asserts exactly what the sentence beside it already
-    // asserts — it is wrong in the same cases and adds no new way to mislead.
+    // This is the second time these steps have been wrong, and both times for
+    // the same reason: asserting a route that Apple had already changed. The
+    // destination has been stable for a decade — Share, then Add to Home
+    // Screen, then Add — while the path to the Share button has moved
+    // repeatedly, and on iPhone it now takes an intermediate tap the old copy
+    // did not mention: tap the bar at the bottom, THEN the ••• that appears,
+    // and Share is in there. Reported from a real phone; older iOS put Share
+    // straight in the toolbar, hence "if you see one" rather than a flat
+    // instruction that is wrong on half the devices in the gym.
     //
-    // It is NOT acceptable for browsers whose layout we are merely guessing
-    // at. Firefox, Edge and Opera on iOS each put their menu somewhere
-    // different, and a confident arrow into the wrong corner is worse than no
-    // arrow at all — so those get honest, vaguer wording and `aim: null`.
-    // Better to say "in your browser's menu" than to point at the wrong one.
-    // `inset` is how far in from the screen edge the real button's CENTRE sits,
-    // in CSS px. It is not decoration: Chrome's share icon lives inside a
-    // rounded omnibox that is itself inset from the edge, so a pointer pinned
-    // to the edge lands beside the button rather than under it.
-    const spot = env.browser === "safari"
+    // So each browser's FIRST step names only what we can see or have been
+    // told, and every later step names the thing itself, which does not move.
+    const route = env.browser === "safari"
       ? (env.tablet
-        ? { where: "(top of Safari)", aim: { edge: "top", side: "right", inset: 40 } }
-        : { where: "(bottom of Safari)", aim: { edge: "bottom", side: "center" } })
+        ? { steps: ["Tap {share} <strong>Share</strong> in the toolbar at the top"],
+            aim: { edge: "top", side: "right", inset: 40 } }
+        : { steps: [
+              // The glyph IS the name here: printing "•••" beside a drawing of
+              // ••• says the same thing twice and reads as clutter.
+              "Tap the bar at the bottom, then the {menudots} button",
+              "Tap {share} <strong>Share</strong>",
+            ],
+            aim: { edge: "bottom", side: "center" } })
       : env.browser === "ios-chrome"
-        ? { where: "(top right, beside the address)", aim: { edge: "top", side: "right", inset: 33 } }
-        : { where: "(in your browser's menu)", aim: null };
-    const where = spot.where;
-    const aim = spot.aim;
+        ? { steps: ["Tap {share} <strong>Share</strong> — top right, beside the address"],
+            aim: { edge: "top", side: "right", inset: 33 } }
+        // Firefox, Edge, Opera: each hides Share somewhere different and we are
+        // guessing at all of them, so we describe what to look FOR rather than
+        // where to look, and point at nothing.
+        : { steps: ["Find {share} <strong>Share</strong> — often behind the {menudots} or {menulines} menu"],
+            aim: null };
+
     return {
       mode: "ios",
-      aim,
+      aim: route.aim,
       sub: "One time. Then it opens fullscreen — no address bar — and works offline.",
       // Shown instead when the member followed an install link (?ath=1), e.g.
       // the QR code at the gym: they asked for this, so skip the pitch.
-      arrivedSub: "Three taps and Combify is on your home screen.",
+      arrivedSub: "A few taps and Combify is on your home screen.",
       steps: [
-        `Tap {share} <strong>Share</strong> ${where}`,
+        ...route.steps,
         "Scroll down, tap {addhome} <strong>Add to Home Screen</strong>",
         "Tap <strong>Add</strong>",
       ],
@@ -225,6 +227,7 @@ export function installGuide(hasPrompt) {
       steps: [
         `Open the ${menu.glyph} menu, ${menu.where}`,
         "Tap {install} <strong>Install app</strong> or <strong>Add to Home screen</strong>",
+        "Confirm with <strong>Install</strong> or <strong>Add</strong>",
       ],
       action: null,
       actionLabel: null,

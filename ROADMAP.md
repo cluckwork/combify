@@ -369,6 +369,17 @@ Directly serves the business goal.
     any other kind of fact. The `?ath=1` mechanism survived the revert, now
     meaning "this link is an install link" — which is what the gym's QR code
     should point at.
+  - 📐 **The rule those mistakes produced (v1.29.0): name the destination
+    confidently, hedge the route.** The install steps have now shipped wrong
+    twice, both times by asserting a path Apple had already changed — first
+    "only Safari can install", then a Share button that iPhone had moved behind
+    an extra tap on the bottom bar. What never moved is the destination: Share
+    → Add to Home Screen → Add, stable for a decade. So step one names only
+    what we can see or have been told from a real device, later steps name the
+    things themselves, and where we would be guessing (Firefox, Edge, Opera on
+    iOS) the copy says what to LOOK FOR rather than where to look, and no arrow
+    is drawn at all. A test asserts every iOS route still ends at the same
+    place, whatever the route becomes.
   - [ ] Put the rest of Bakr's real combos in before wide sharing (the "10
         combo" is in; the other levels are still placeholders).
 

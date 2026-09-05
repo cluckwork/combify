@@ -1682,10 +1682,19 @@ async function collectSpokenVsShown(app, ms) {
   as(IPHONE_SAFARI);
   let g = installGuide(false);
   check("iPhone Safari gets the Share steps", g.mode === "ios", g.mode);
-  check("and is told where the Share button is", g.steps[0].includes("(bottom of Safari)"), g.steps[0]);
-  check("with the glyph drawn, not named", g.steps[0].includes("{share}"), g.steps[0]);
+  // The route on iPhone now needs an intermediate tap Apple added: the bar at
+  // the bottom, THEN the ••• that appears, and Share is in there. Reported
+  // from a real phone after the old copy sent someone hunting for a Share
+  // button that is no longer on the toolbar.
+  check("iPhone Safari is sent to the bar at the bottom first",
+    g.steps[0].includes("bar at the bottom"), g.steps[0]);
+  check("and then to the ••• that appears there", g.steps[0].includes("{menudots}"), g.steps[0]);
+  check("named by its icon, not by repeating the dots in text",
+    g.steps[0].includes("{menudots} button") && !g.steps[0].includes("•••"), g.steps[0]);
+  check("Share is its own step now", g.steps[1].includes("{share}"), g.steps[1]);
   check("nothing to automate on iOS", g.action === null, String(g.action));
-  check("three steps, ending at Add", /Add to Home Screen/.test(g.steps[1]) && /Add/.test(g.steps[2]),
+  check("and it still ends at Add to Home Screen, then Add",
+    /Add to Home Screen/.test(g.steps[g.steps.length - 2]) && /Add/.test(g.steps[g.steps.length - 1]),
     g.steps.join(" | "));
 
   // Since iOS 16.4 every iOS browser can install from its own Share menu.
@@ -1697,14 +1706,16 @@ async function collectSpokenVsShown(app, ms) {
   check("no Safari-switching anywhere in the copy",
     !/only Safari|Open in Safari/i.test(g.sub + g.steps.join(" ")), g.sub);
   check("but it IS pointed at Chrome's own Share button",
-    g.steps[0].includes("(top right, beside the address)"), g.steps[0]);
+    g.steps[0].includes("top right, beside the address"), g.steps[0]);
+  check("and Chrome needs no intermediate tap — Share is right there",
+    g.steps[0].includes("{share}"), g.steps[0]);
   check("and nothing to automate there either", g.action === null, String(g.action));
 
   as(IPAD_OS);
   check("iPadOS is not mistaken for a Mac", deviceClass() === "tablet" && deviceOS() === "ios",
     `${deviceOS()}/${deviceClass()}`);
   g = installGuide(false);
-  check("iPad is pointed at the TOP of Safari", g.steps[0].includes("(top of Safari)"), g.steps[0]);
+  check("iPad is pointed at the toolbar at the TOP", g.steps[0].includes("toolbar at the top"), g.steps[0]);
 
   as(ANDROID);
   check("Android is a phone we can install on", canInstall() && deviceOS() === "android", deviceOS());
@@ -1773,12 +1784,23 @@ async function collectSpokenVsShown(app, ms) {
   // arrow into the wrong corner is worse than none.
   const FIREFOX_IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 FxiOS/121.0 Mobile/15E148 Safari/605.1.15";
   as(FIREFOX_IOS);
-  check("Firefox on iOS gets honest vague wording, not a guess",
-    installGuide(false).steps[0].includes("your browser's menu"), installGuide(false).steps[0]);
+  check("Firefox on iOS is told what to look FOR, not where to look",
+    /often behind/.test(installGuide(false).steps[0]), installGuide(false).steps[0]);
   check("and no pointer, rather than one aimed at the wrong corner",
     installGuide(false).aim === null, JSON.stringify(installGuide(false).aim));
-  check("it still gets the real steps though",
-    /Add to Home Screen/.test(installGuide(false).steps[1]), installGuide(false).steps[1]);
+  check("it still gets the real destination though",
+    installGuide(false).steps.some((x) => /Add to Home Screen/.test(x)),
+    installGuide(false).steps.join(" | "));
+
+  // THE INVARIANT THAT MATTERS. Routes to the Share button keep changing —
+  // twice now they have shipped wrong. The destination has not moved in a
+  // decade. Every iOS browser must name it, whatever the route.
+  for (const ua of [IPHONE_SAFARI, IPHONE_CHROME, IPAD_OS, FIREFOX_IOS]) {
+    as(ua);
+    const steps = installGuide(false).steps.join(" | ");
+    check(`every route still ends at the same place (${/CriOS/.test(ua) ? "Chrome" : /FxiOS/.test(ua) ? "Firefox" : /iPhone/.test(ua) ? "Safari" : "iPad"})`,
+      /\{share\}/.test(steps) && /Add to Home Screen/.test(steps), steps);
+  }
 
   // Anything that DOES carry a pointer must agree with its own sentence — the
   // sweep below is what stops a reworded step drifting from its arrow.
@@ -1794,6 +1816,18 @@ async function collectSpokenVsShown(app, ms) {
   // no share sheet to hunt through, and nothing outside the page worth an
   // arrow — a laptop that offers a real one-tap install does it through the
   // browser's own button, which is not ours to point at either.
+  // The arrow shows whatever step one says to tap. These drifted apart once:
+  // Safari's first step became "tap the bar, then •••" while the arrow still
+  // showed Share — pointing at a button that is not the one you press first.
+  for (const [ua, want] of [[IPHONE_SAFARI, "menudots"], [IPHONE_CHROME, "share"], [IPAD_OS, "share"], [ANDROID, "menu"], [SAMSUNG, "menulines"]]) {
+    as(ua);
+    const g = installGuide(false);
+    if (!g.aim) continue;
+    check(`the arrow's icon is step one's icon (${want})`,
+      (/\{(\w+)\}/.exec(g.steps[0]) || [])[1] === want,
+      `${(/\{(\w+)\}/.exec(g.steps[0]) || [])[1]} in "${g.steps[0]}"`);
+  }
+
   as(MAC, 0);
   check("a computer is never asked to add a home-screen icon", canInstall() === false, deviceClass());
   check("and never gets a pointer, prompt or not",
@@ -1974,7 +2008,7 @@ async function collectSpokenVsShown(app, ms) {
   const pinned = await boot({ duration: 0.6, search: "?dev=1" });
   pinned.window.localStorage.setItem("combify.dev.platform", "ipad");
   check("dev mode can pin the install card to another device",
-    installGuide(false).steps[0].includes("(top of Safari)"), installGuide(false).steps[0]);
+    installGuide(false).steps[0].includes("toolbar at the top"), installGuide(false).steps[0]);
   pinned.window.localStorage.removeItem("combify.dev");
   check("without dev mode the override is ignored",
     installGuide(false).mode !== "ios-safari" || !installGuide(false).steps[0].includes("(top of Safari)"),
@@ -2035,7 +2069,7 @@ async function collectSpokenVsShown(app, ms) {
   await link.clock.advance(50);
   check("an install link shows the steps at once", link.doc.getElementById("insModal").hidden === false, "ignored the link");
   check("and skips the pitch, since they already asked",
-    /Three taps/.test(link.doc.getElementById("insSub").textContent),
+    /A few taps/.test(link.doc.getElementById("insSub").textContent),
     link.doc.getElementById("insSub").textContent);
   check("the breadcrumb is taken back out of the address bar",
     !/ath=1/.test(link.window.location.search), link.window.location.search);
