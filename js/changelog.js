@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.30.2",
+    date: "2026-09-05",
+    size: "patch",
+    title: "The walkthrough points out More options, and talks less",
+    notes: [
+      "The first-time walkthrough now has a step for More options, so people find out they can change the number of rounds and the work and rest times. It's collapsed by default, and most people were never opening it.",
+      "Every step is shorter. It's read standing in a gym over a dimmed screen, so each one is now a single line.",
+    ],
+  },
+  {
     v: "1.30.1",
     date: "2026-09-05",
     size: "patch",

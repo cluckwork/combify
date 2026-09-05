@@ -27,26 +27,39 @@
 
 const KEY = "combify.tour.v1";
 
-// Each stop names a target by selector and what to say about it. Copy is
-// deliberately about what the member GETS, not what the control is called:
-// "Combos get called out loud" is useful, "this is the combo display" is not.
+// Each stop names a target by selector and what to say about it.
+//
+// TWO COPY RULES. Say what the member GETS, not what the control is called —
+// "combos get called out loud" is useful, "this is the combo display" is not.
+// And keep every line to one breath: this is read standing in a gym, over a
+// dimmed screen, by someone who has not decided yet whether to bother. Each
+// stop earns roughly a dozen words, and the spotlight is already showing them
+// WHICH thing is being described, so the words never have to locate it too.
 const STOPS = [
   {
     sel: ".dial",
-    text: "Your round timer. It counts the round down, rings the bell, and gives you rest between rounds.",
+    text: "Your round timer — counts down, rings the bell, times your rest.",
   },
   {
     sel: ".stage__main",
-    text: "Combos appear here — and get called out loud, so you can keep your eyes up and just box.",
+    text: "Combos appear here, and get called out loud.",
   },
   {
     sel: "#level",
-    text: "Set your level here. Combo pace below it controls how fast they come at you.",
+    text: "Pick your level, and how fast the combos come.",
     also: "#pace",
   },
   {
+    // Collapsed by default, so most people never discover that round length is
+    // adjustable at all — they assume the 2-minute default is the whole app.
+    // Naming what is inside is the entire point: "More options" alone tells
+    // you nothing about whether it is worth opening.
+    sel: ".more",
+    text: "Rounds and work/rest times are in here.",
+  },
+  {
     sel: "#startBtn",
-    text: "That's everything. Hit start and shadowbox.",
+    text: "That's it — hit start.",
   },
 ];
 

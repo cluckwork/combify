@@ -563,17 +563,85 @@ async function runInstallCard() {
   return { lines, pass, fail };
 }
 
+// The first-run walkthrough, which had no coverage at all until its spotlight
+// was found sliding off the page on scroll. jsdom cannot test it — every stop
+// is measured with getBoundingClientRect, and without a layout engine they all
+// come back zero-sized and the tour declines to run.
+async function runTour() {
+  const lines = [];
+  let pass = 0, fail = 0;
+  const check = (name, cond, detail = "") => {
+    if (cond) { pass++; lines.push(`  ✅ ${name}`); }
+    else { fail++; lines.push(`  ❌ ${name}${detail ? `  → ${detail}` : ""}`); }
+  };
+  lines.push("\n── first-run walkthrough ──");
+
+  // A small phone: the stops below the fold are where this gets interesting.
+  const ctx = await browser.newContext({ viewport: { width: 375, height: 667 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const escaped = await sealContext(ctx);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(base, { waitUntil: "networkidle" });
+  await page.waitForTimeout(600);
+
+  check("it runs on a first visit", await page.isVisible("#tour"), "never appeared");
+
+  const seen = [];
+  for (let i = 0; i < 8; i++) {
+    if (!(await page.isVisible("#tour"))) break;
+    const stop = await page.evaluate(() => {
+      const spot = document.getElementById("tourSpot").getBoundingClientRect();
+      return {
+        text: document.getElementById("tourText").textContent,
+        count: document.getElementById("tourCount").textContent,
+        spotOnScreen: spot.top > -40 && spot.bottom < window.innerHeight + 40,
+        spotHasSize: spot.width > 8 && spot.height > 8,
+      };
+    });
+    seen.push(stop);
+    check(`stop ${i + 1}: spotlight has a real target`, stop.spotHasSize, JSON.stringify(stop));
+    check(`stop ${i + 1}: spotlight is on screen`, stop.spotOnScreen, JSON.stringify(stop));
+    await page.mouse.click(180, 620);
+    await page.waitForTimeout(600);
+  }
+
+  check("it walks every stop and then closes", await page.isHidden("#tour"), "still open after 8 taps");
+  check("there are five stops", seen.length === 5, `${seen.length}: ${seen.map((s) => s.count).join(", ")}`);
+  // The one people never find on their own, because it is collapsed.
+  check("one of them explains what More options contains",
+    seen.some((s) => /rounds/i.test(s.text) && /work/i.test(s.text)),
+    seen.map((s) => s.text.slice(0, 40)).join(" | "));
+  // Read standing in a gym over a dimmed screen: every stop stays one breath.
+  const longest = seen.reduce((a, s) => Math.max(a, s.text.split(/\s+/).length), 0);
+  check(`every stop stays short (longest ${longest} words)`, longest <= 14, `${longest} words`);
+  // It must end on the button it is trying to get pressed.
+  check("and it ends on the Start button",
+    /Hit start/i.test(seen[seen.length - 1].text), seen[seen.length - 1].text);
+  check("no JavaScript errors", errors.length === 0, errors.join("; "));
+  check("no telemetry escaped", escaped.length === 0, escaped.join(", "));
+
+  // Once, ever — an abandoned or completed tour must not ambush anyone again.
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(500);
+  check("it never runs a second time", await page.isHidden("#tour"), "came back");
+  await ctx.close();
+  return { lines, pass, fail };
+}
+
 // Devices run through the pool; the rotation section owns a separate browser
 // and runs alongside them, so it is never the thing everything else waits on.
 const devices = DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONLY.toLowerCase()));
 const wantRotation = !ONLY || "rotating mid-session".includes(ONLY.toLowerCase());
 const wantInstall = !ONLY || "install card pointer".includes(ONLY.toLowerCase());
-const [devResults, rotResult, insResult] = await Promise.all([
+const wantTour = !ONLY || "first-run walkthrough tour".includes(ONLY.toLowerCase());
+const [devResults, rotResult, insResult, tourResult] = await Promise.all([
   pool(devices, JOBS, runDevice),
   wantRotation ? runRotation() : null,
   wantInstall ? runInstallCard() : null,
+  wantTour ? runTour() : null,
 ]);
-for (const r of [...devResults, rotResult, insResult]) {
+for (const r of [...devResults, rotResult, insResult, tourResult]) {
   if (!r) continue;
   lines.push(...r.lines); pass += r.pass; fail += r.fail;
 }
