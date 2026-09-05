@@ -266,16 +266,39 @@ Directly serves the business goal.
   Partial rounds deliberately don't count.
 - ✅ **Save favorite settings** — done. Level/pace/rounds/work/rest/voice
   persist per device.
+- ✅ **First-run walkthrough** — done (v1.21.0). A stranger arriving from a text
+  message used to land on a dark screen of unlabelled controls; four spotlit
+  stops now name the timer, the combo display, the level settings and Start.
+  Once per device, skippable, `js/tour.js`.
 - 💡 **Next for this loop:** nothing prompts a member to come back — the streak
-  is only visible if they already opened the app. A reason to return (or, much
-  later, a notification) is the missing half.
+  is only visible if they already opened the app. A reason to return is the
+  missing half, and the shape of it is now decided: **Web Push**. It is free
+  (the $99 is Apple's App Store programme, which a PWA never touches) and has
+  worked on iOS since 16.4 — but ONLY for an app added to the home screen,
+  which is why the install work in v1.21.0 came first. Likely via OneSignal's
+  free tier rather than a self-hosted VAPID worker; at this scale owning a push
+  server buys nothing. Rules to keep: never notify someone who already trained
+  today (`trainedToday()` answers this), ask for permission after the SECOND
+  finished session, and cap at ~2 a week. A gym app that pings daily gets its
+  notifications switched off in week one, and that channel never comes back.
 - ⏳ **Retention measurement (decided 2026-07-23, build BEFORE wide sharing):**
   anonymous device ID + a session-complete ping to a free Cloudflare Worker,
   with an offline queue. The per-device data already exists in localStorage
   (streaks/sessions) — this just makes it visible. Measures the roadmap's own
-  success metric (devices that train a 2nd time). Deliberately NOT built yet:
-  at 3–5 testers, asking beats dashboards. Page-view analytics can't measure
-  retention; don't substitute it. Effort **M**.
+  success metric (devices that train a 2nd time). Page-view analytics can't
+  measure retention; don't substitute it. Effort **M**.
+  - ✅ **Shipped as pings, not a Worker** (v1.19.0, enriched v1.21.0). Every
+    ping now carries lifetime context — `s` sessions ever, `days` distinct days
+    trained, `st` current streak, `f` first-seen date, `p` device shape — so the
+    daily digest can classify each device as **new / returning / retained**
+    without keeping any history of its own. A `dev: 1` flag (set once per device
+    by visiting `?dev=1`) marks the founder's own phones so his testing can be
+    subtracted; at five testers, two of your own sessions is a third of the day
+    and every number was a lie without it. Still no user-agent is ever sent.
+  - ⏳ **The sink is the weak point.** Pings and problem reports share one
+    Google Form column, posted `no-cors` so delivery can never be confirmed.
+    Fine for a handful of testers, not for a gym-wide rollout. When it outgrows
+    that: PostHog's free tier, which gives retention cohorts for nothing.
 - **Signature combos** — named combos from Bakr ("Bakr's Special") as their own
   selectable set; makes the app feel personally his. Effort **S–M**.
 - **Shareable gym link** — one link Bakr texts every member; maybe a lightweight
@@ -298,6 +321,17 @@ Directly serves the business goal.
   + package.json) so installed phones pick it up.
 - **Remaining:**
   - [ ] Verify PWA install + offline work from the live URL on a real phone.
+  - ✅ **Install is now platform-honest** (v1.21.0, `js/platform.js`). The old
+    build gave every iOS visitor the same "tap Share → Add to Home Screen",
+    which is impossible to follow in Chrome on an iPhone — Apple gives that path
+    to Safari alone — so anyone arriving from Google, Instagram or a text link
+    was being told to do something their browser cannot do. Detection now
+    separates iPhone Safari, iPhone-in-another-browser (told the truth, and
+    handed the link on their clipboard), iPad (share button is at the TOP), and
+    Android (real one-tap prompt where offered, menu steps otherwise).
+    Computers are never asked at all — there is no home screen there. The ask is
+    a proper dialog, still earned by a finished session; the old quiet strip
+    remains for anyone who says "not now", plus a footer link back in.
   - [ ] Put the rest of Bakr's real combos in before wide sharing (the "10
         combo" is in; the other levels are still placeholders).
 

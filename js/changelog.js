@@ -21,6 +21,19 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.21.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "A proper welcome, and home-screen steps that actually work",
+    notes: [
+      "First time you open Combify, a quick four-step walkthrough points out the timer, the combo display, the level settings and the start button. Tap to move through it, or skip it — either way you only ever see it once.",
+      "The \"add to home screen\" tip is now a proper card with the real steps for your phone, and it knows which phone you're on: iPhone, iPad and Android all get different instructions instead of one set that only worked for some people.",
+      "Fixed the big one: if you opened Combify in Chrome on an iPhone, the old steps were impossible to follow — only Safari can add apps to an iPhone home screen. Combify now says so and copies the link for you so you can open it there.",
+      "Computers don't get asked at all any more. There's no home screen to add anything to.",
+      "If you skipped it, \"Add to home screen\" now sits in the footer next to \"Report a problem\", so you can do it whenever you like.",
+    ],
+  },
+  {
     v: "1.20.0",
     date: "2026-08-30",
     size: "minor",

@@ -1659,6 +1659,156 @@ async function collectSpokenVsShown(app, ms) {
   app.restore();
 }
 
+// ------------------------------------- 39. Install steps match the platform
+{
+  section("39. Install steps tell the truth about THIS device");
+  // The bug this locks down: every iOS visitor used to get "tap Share, then
+  // Add to Home Screen". In Chrome on an iPhone that menu item does not
+  // exist — Apple gives the install path to Safari alone — so the app was
+  // confidently instructing people to do something impossible.
+  const { installGuide, canInstall, deviceClass, deviceOS } = await import("../js/platform.js");
+  const as = (userAgent, maxTouchPoints = 5) => {
+    Object.defineProperty(globalThis, "navigator",
+      { value: { userAgent, maxTouchPoints }, configurable: true, writable: true });
+  };
+  const savedNav = globalThis.navigator;
+
+  const IPHONE_SAFARI = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1";
+  const IPHONE_CHROME = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/120.0 Mobile/15E148 Safari/604.1";
+  const IPAD_OS = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15";
+  const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36";
+  const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0 Safari/537.36";
+
+  as(IPHONE_SAFARI);
+  let g = installGuide(false);
+  check("iPhone Safari gets the Share steps", g.mode === "ios-safari", g.mode);
+  check("and is told where the Share button is", g.steps[0].includes("at the bottom of Safari"), g.steps[0]);
+  check("with the glyph drawn, not named", g.steps[0].includes("{share}"), g.steps[0]);
+  check("nothing to automate on iOS Safari", g.action === null, String(g.action));
+
+  as(IPHONE_CHROME);
+  g = installGuide(false);
+  check("iPhone Chrome is NOT given impossible Safari steps", g.mode === "ios-wrong-browser", g.mode);
+  check("it is told Safari is the only way", /only Safari/i.test(g.sub), g.sub);
+  check("and offered the link on its clipboard", g.action === "copy", String(g.action));
+
+  as(IPAD_OS);
+  check("iPadOS is not mistaken for a Mac", deviceClass() === "tablet" && deviceOS() === "ios",
+    `${deviceOS()}/${deviceClass()}`);
+  g = installGuide(false);
+  check("iPad is pointed at the TOP of Safari", g.steps[0].includes("at the top of Safari"), g.steps[0]);
+
+  as(ANDROID);
+  check("Android is a phone we can install on", canInstall() && deviceOS() === "android", deviceOS());
+  check("Android without a prompt event gets its menu steps",
+    installGuide(false).mode === "android-manual", installGuide(false).mode);
+  check("a real prompt always wins over written steps",
+    installGuide(true).action === "prompt", installGuide(true).action);
+
+  as(MAC, 0);
+  check("a computer is never asked to add a home-screen icon", canInstall() === false, deviceClass());
+
+  Object.defineProperty(globalThis, "navigator", { value: savedNav, configurable: true, writable: true });
+}
+
+// -------------------------------- 40. The dialog, and who is allowed to see it
+{
+  section("40. The add-to-home-screen dialog is earned, and skips computers");
+  const IOS = { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Version/17.0 Mobile Safari/604.1", maxTouchPoints: 5, noVibrate: true };
+  const trainAndExit = async (app) => {
+    app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+    app.click("startBtn");
+    await app.clock.advance(40000);
+    app.click("exitBtn");
+    await app.clock.advance(60);
+  };
+
+  clearStore();
+  const app = await boot({ duration: 0.6, ...IOS });
+  const dlg = () => app.doc.getElementById("insModal");
+  check("closed at boot", dlg().hidden === true, "open on arrival");
+  await trainAndExit(app);
+  check("opens once a session has been finished", dlg().hidden === false, "never opened");
+  check("carrying the real iPhone steps",
+    app.doc.getElementById("insSteps").textContent.includes("Add to Home Screen"),
+    app.doc.getElementById("insSteps").textContent);
+  check("with an escape hatch", !!app.doc.getElementById("insSkip"), "no skip");
+  app.click("insSkip");
+  check("skip closes it", dlg().hidden === true, "still open");
+  check("the quiet strip is what remains", app.doc.getElementById("installNudge").hidden === false, "strip gone too");
+  app.restore();
+
+  // Asked once, not every session — the strip carries it from here.
+  const app2 = await boot({ duration: 0.6, ...IOS });
+  await trainAndExit(app2);
+  check("never asked a second time", app2.doc.getElementById("insModal").hidden === true, "asked again");
+  check("but the footer keeps a way back in",
+    [...app2.doc.querySelectorAll(".foot button")].some((b) => /home screen/i.test(b.textContent)),
+    "no footer route");
+  app2.restore();
+
+  // A computer has no home screen; the ask is pure noise there.
+  clearStore();
+  const appD = await boot({ duration: 0.6 });
+  await trainAndExit(appD);
+  check("a computer is never interrupted by it", appD.doc.getElementById("insModal").hidden === true, "asked a laptop");
+  check("and gets no footer link either",
+    ![...appD.doc.querySelectorAll(".foot button")].some((b) => /home screen/i.test(b.textContent)),
+    "footer link on desktop");
+  appD.restore();
+  clearStore();
+}
+
+// ------------------------- 41. Usage pings can tell members and days apart
+{
+  section("41. Usage pings carry enough to tell new from returning");
+  clearStore();
+  const posts = [];
+  // boot() installs its own network-disabled fetch, so the recorder has to go
+  // in AFTER the app is up — same order as the report test above.
+  const app = await boot({ duration: 0.6 });
+  const testStub = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => { posts.push({ url, body: String((opts && opts.body) || "") }); return { ok: true }; };
+  app.set("rounds", 1); app.set("workSec", 15); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(40000);
+  await app.clock.advance(50);
+
+  const pings = posts.filter((p) => p.body.includes("SESSION_PING"))
+    .map((p) => JSON.parse(decodeURIComponent(/entry\.227585221=([^&]*)/.exec(p.body)[1].replace(/\+/g, " "))));
+  check("a session start and finish are both pinged", pings.length >= 2, `${pings.length} pings`);
+  const fin = pings[pings.length - 1];
+  check("the ping is still anonymous (no user-agent)",
+    !JSON.stringify(fin).includes("Mozilla") && !("ua" in fin), JSON.stringify(fin));
+  check("it carries the device shape instead", typeof fin.p === "string" && fin.p.length > 0, fin.p);
+  check("it says when this device first appeared", /^\d{4}-\d{2}-\d{2}$/.test(fin.f), fin.f);
+  check("it says how many sessions this device has ever done", fin.s >= 1, String(fin.s));
+  check("it says how many distinct days it has trained", fin.days >= 1, String(fin.days));
+  check("it carries the streak", typeof fin.st === "number", String(fin.st));
+  check("and is not flagged as the developer's own device", fin.dev === undefined, String(fin.dev));
+  app.restore();
+
+  // ?dev=1 marks this device so the founder's own testing can be subtracted
+  // from the daily digest instead of being counted as a member.
+  posts.length = 0;
+  const appDev = await boot({ duration: 0.6, search: "?dev=1" });
+  globalThis.fetch = async (url, opts) => { posts.push({ url, body: String((opts && opts.body) || "") }); return { ok: true }; };
+  appDev.set("rounds", 1); appDev.set("workSec", 15); appDev.set("restSec", 5);
+  appDev.click("startBtn");
+  await appDev.clock.advance(40000);
+  await appDev.clock.advance(50);
+  const devPings = posts.filter((p) => p.body.includes("SESSION_PING"))
+    .map((p) => JSON.parse(decodeURIComponent(/entry\.227585221=([^&]*)/.exec(p.body)[1].replace(/\+/g, " "))));
+  check("?dev=1 flags every ping from that device", devPings.length > 0 && devPings.every((x) => x.dev === 1),
+    JSON.stringify(devPings[0]));
+  check("the same device is still counted as returning", devPings[devPings.length - 1].s >= 2,
+    String(devPings[devPings.length - 1].s));
+  appDev.restore();
+
+  globalThis.fetch = testStub;
+  clearStore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);

@@ -280,7 +280,9 @@ function makeStorage(mode) {
 // ---------- Boot the app ----------
 export async function boot(cfg = {}) {
   const html = fs.readFileSync(path.join(REPO, "index.html"), "utf8");
-  const dom = new JSDOM(html, { url: "http://localhost/", pretendToBeVisual: false });
+  // `search` lets a test boot the app at a URL with a query string — the app
+  // reads ?dev=1 from it to mark a device as the developer's own.
+  const dom = new JSDOM(html, { url: `http://localhost/${cfg.search || ""}`, pretendToBeVisual: false });
   const { window } = dom;
   const clock = new Clock();
   // Lets a test boot "the next day" so streak logic can be exercised across
@@ -367,6 +369,7 @@ export async function boot(cfg = {}) {
 
   g.window = window;
   g.document = window.document;
+  g.location = window.location;   // app.js reads location.search for the ?dev flag
   const storage = makeStorage(cfg.storage);
   g.localStorage = storage;
   Object.defineProperty(window, "localStorage", { value: storage, configurable: true });

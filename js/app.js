@@ -3,7 +3,7 @@
 
 import { randomCombo, comboName, MOVES } from "./combos.js";
 import { VERSION, RELEASED } from "./version.js";
-import { loadHistory, saveHistory, recordRound, currentStreak, trainedToday, formatDuration } from "./stats.js";
+import { loadHistory, saveHistory, recordRound, currentStreak, trainedToday, formatDuration, dayKey } from "./stats.js";
 import {
   configureVoice, speakCombo, stopVoice,
   armAudio, unlockAudioForMobile, markNeedsReprime,
@@ -11,6 +11,8 @@ import {
   startAudioSession, stopAudioSession, scheduleBlipRiff, stopBlipRiff,
 } from "./audio.js";
 import { audit, auditOn, setAudit, auditDump, auditPersist, auditReport } from "./audit.js";
+import { deviceOS, deviceClass, canInstall, isStandalone, installGuide, platformTag } from "./platform.js";
+import { startTour, tourSeen } from "./tour.js";
 
 // ---------- Segmented control: tap a segment, or swipe across it ----------
 function initSeg(id) {
@@ -221,7 +223,9 @@ const REPORT_SHEET_FIELDS = { description: "entry.1825277287", log: "entry.22758
 // One tiny row into the same sheet when a session starts and finishes, so
 // the daily email can say "3 members trained today, 9 sessions, 412
 // punches". Anonymous by construction: a random per-device id, the app
-// version, and the session's own numbers — no names, no personal data.
+// version, and the session's own numbers — no names, no personal data, and
+// never the user-agent string (close enough to a fingerprint to be worth not
+// collecting; `p` carries the shape of the device instead).
 // Fire-and-forget; an offline session just goes uncounted.
 function usageId() {
   try {
@@ -230,11 +234,56 @@ function usageId() {
     return id;
   } catch (e) { return "anon"; }
 }
+
+// The developer flag. Without it the founder's own testing is indistinguishable
+// from a member's training, and every early number in the daily digest is a
+// lie — at five testers, two of your own sessions is a third of the day. Set by
+// visiting the app once with ?dev=1 (and cleared with ?dev=0); it sticks per
+// device from then on, so it costs one tap on the phones used for testing.
+const DEV_KEY = "combify.dev";
+(function readDevFlag() {
+  try {
+    const q = new URLSearchParams(location.search).get("dev");
+    if (q === "1") localStorage.setItem(DEV_KEY, "1");
+    else if (q === "0") localStorage.removeItem(DEV_KEY);
+  } catch (e) {}
+})();
+function isDevDevice() {
+  try { return localStorage.getItem(DEV_KEY) === "1"; } catch (e) { return false; }
+}
+
+// The day this device first ran Combify. With it, the digest can tell a brand
+// new member from one who came back — which is the roadmap's own success
+// metric and was previously impossible to compute from the ping alone.
+function firstSeenDay() {
+  try {
+    let d = localStorage.getItem("combify.firstSeen");
+    if (!d) { d = dayKey(); localStorage.setItem("combify.firstSeen", d); }
+    return d;
+  } catch (e) { return ""; }
+}
+
 function pingUsage(kind, extra) {
   try {
     const row = new URLSearchParams();
     row.set(REPORT_SHEET_FIELDS.description, "SESSION_PING");
-    row.set(REPORT_SHEET_FIELDS.log, JSON.stringify(Object.assign({ u: usageId(), v: VERSION, k: kind }, extra || {})));
+    // Lifetime context travels with every ping so the digest can classify the
+    // device without keeping its own history: `s` (sessions ever) separates
+    // new from returning, `days` (distinct days trained) separates a curious
+    // second try from genuine retention, and `st` (streak) says whether the
+    // retention loop is actually holding anyone.
+    const base = {
+      u: usageId(),
+      v: VERSION,
+      k: kind,
+      p: platformTag(),                       // e.g. "ios-phone-app", "android-phone"
+      f: firstSeenDay(),
+      s: (history && history.totals && history.totals.sessions) | 0,
+      days: history && history.days ? Object.keys(history.days).length : 0,
+      st: currentStreak(history),
+    };
+    if (isDevDevice()) base.dev = 1;          // omitted entirely on real members' devices
+    row.set(REPORT_SHEET_FIELDS.log, JSON.stringify(Object.assign(base, extra || {})));
     fetch(REPORT_SHEET_FORM, {
       method: "POST",
       mode: "no-cors",
@@ -1252,8 +1301,9 @@ el.resetBtn.addEventListener("click", () => {
 function leaveFullscreenSession() {
   reset();
   // The one moment worth asking: they just trained, and this is the screen
-  // they land on. refreshInstallNudge re-checks every condition itself.
+  // they land on. Both calls re-check every condition themselves.
   refreshInstallNudge();
+  maybeAskToInstall();
   try {
     const exit = document.exitFullscreen || document.webkitExitFullscreen;
     if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
@@ -1290,13 +1340,10 @@ const INSTALL_KEY = "combify.install.v2";
 const INSTALL_LEGACY_KEY = "combify.installDismissed";
 const INSTALL_SNOOZE_MS = 7 * 86400000;
 const INSTALL_MAX_DECLINES = 2;
+// isStandalone now lives in js/platform.js alongside the rest of the
+// device questions, so the modal, the strip and the usage ping all read one
+// answer instead of three copies drifting apart.
 
-function isStandalone() {
-  try {
-    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
-      || window.navigator.standalone === true; // old-iOS spelling
-  } catch (e) { return false; }
-}
 function saveInstallState(s) {
   try { localStorage.setItem(INSTALL_KEY, JSON.stringify(s)); } catch (e) {}
 }
@@ -1342,19 +1389,47 @@ function refreshInstallNudge() {
     hideInstallNudge();
     return;
   }
-  if (installMode === "prompt") {
+  // Both the strip and the dialog render from the same guide, so the steps a
+  // member is given can never disagree between the two places we show them.
+  const guide = installGuide(installMode === "prompt");
+  if (guide.action === "prompt") {
     el.installBtn.hidden = false;
-    if (el.installSteps) el.installSteps.hidden = true;
+    if (el.installSteps) { el.installSteps.hidden = true; el.installSteps.innerHTML = ""; }
     el.installSub.textContent = "Opens fullscreen like a real app, works offline.";
   } else {
-    // iOS has no install prompt API — Apple exposes nothing to call, so there
-    // is no seamless path here to build. The only honest help is showing
-    // people exactly where it is hidden (see the steps in index.html).
+    // No install API to call here — on iOS Apple exposes none at all. The only
+    // honest help is showing people exactly where the option is hidden, and in
+    // a browser where it genuinely isn't, saying so instead of pretending.
     el.installBtn.hidden = true;
-    el.installSub.textContent = "Do this once — then it opens fullscreen and works offline.";
-    if (el.installSteps) el.installSteps.hidden = false;
+    el.installSub.textContent = guide.mode === "ios-wrong-browser"
+      ? "Only Safari can do this on iPhone — here's the way across."
+      : "Do this once — then it opens fullscreen and works offline.";
+    if (el.installSteps) {
+      renderInstallSteps(el.installSteps, guide.steps);
+      el.installSteps.hidden = guide.steps.length === 0;
+    }
   }
   el.installNudge.hidden = false;
+}
+
+// The Share glyph, drawn rather than named — see the note in index.html.
+const SHARE_GLYPH = '<span class="ins__share"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1"/></svg></span>';
+
+// Steps come from js/platform.js as trusted, hard-coded strings — no user
+// input reaches this — so the {share} token can be swapped for real markup.
+function renderInstallSteps(ol, steps) {
+  ol.innerHTML = "";
+  for (const s of steps) {
+    const li = document.createElement("li");
+    // The text goes in its own span, never straight into the li. In the dialog
+    // the li is a grid (number | text) and bare inline children — every text
+    // node and every <strong> — would each be laid out as a separate grid
+    // item, which shattered "Tap Copy link below" across three rows.
+    const span = document.createElement("span");
+    span.innerHTML = s.replace("{share}", SHARE_GLYPH);
+    li.appendChild(span);
+    ol.appendChild(li);
+  }
 }
 function hideInstallNudge() { if (el.installNudge) el.installNudge.hidden = true; }
 
@@ -1390,14 +1465,159 @@ if (el.installDismiss) {
   });
 }
 window.addEventListener("appinstalled", () => { installMode = null; hideInstallNudge(); });
-// iOS never fires beforeinstallprompt, so detect it directly. iPadOS 13+
-// reports itself as "Macintosh" but has touch — hence the maxTouchPoints test.
-(function iosInstallHint() {
-  const ua = navigator.userAgent || "";
-  const isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-  if (isIOS) installMode = "hint";
-})();
+// iOS never fires beforeinstallprompt, so there is nothing to wait for: if
+// we're on iOS at all, the manual route is the only route. (js/platform.js
+// already untangles iPadOS pretending to be a Mac, and Chrome-on-iPhone
+// pretending to be Safari.)
+if (deviceOS() === "ios") installMode = "hint";
+// Android browsers that never fire the event — Firefox, and Chrome before it
+// decides the app qualifies — still have the menu item, so they get steps too
+// rather than nothing at all.
+if (deviceOS() === "android" && !installMode) installMode = "hint";
 // A member who trained yesterday and opens the app today has already earned
 // the ask — they should see it on the ready screen without having to finish
 // another session first.
 refreshInstallNudge();
+
+// ---------- The add-to-home-screen dialog ----------
+// The strip above is quiet by design, which is also its weakness: on a phone
+// it is a small line of text below the fold that people skim past. This is the
+// ask that actually gets seen — shown ONCE per snooze cycle, on the ready
+// screen, right after a session the member chose to finish.
+//
+// It is never shown on a computer. There is no home screen to add anything to
+// there, the browser tab is already a fine way to use Combify, and interrupting
+// a laptop user with phone instructions is how an app teaches people that its
+// dialogs are worth dismissing unread.
+const INS_SEEN_KEY = "combify.install.asked.v1";
+
+function insSeen() {
+  try { return localStorage.getItem(INS_SEEN_KEY) === "1"; } catch (e) { return false; }
+}
+function markInsSeen() {
+  try { localStorage.setItem(INS_SEEN_KEY, "1"); } catch (e) {}
+}
+
+function openInstallDialog() {
+  const modal = document.getElementById("insModal");
+  if (!modal || !canInstall() || isStandalone()) return false;
+  const guide = installGuide(installMode === "prompt" && !!deferredInstall);
+  if (guide.mode === "none") return false;
+
+  const sub = document.getElementById("insSub");
+  const steps = document.getElementById("insSteps");
+  const go = document.getElementById("insGo");
+  const title = document.getElementById("insTitle");
+
+  if (title) title.textContent = deviceClass() === "tablet" ? "Keep Combify on your iPad" : "Keep Combify on your phone";
+  if (sub) sub.textContent = guide.sub;
+  if (steps) renderInstallSteps(steps, guide.steps);
+  if (go) {
+    go.hidden = !guide.action;
+    if (guide.actionLabel) go.textContent = guide.actionLabel;
+  }
+  markInsSeen();
+  modal.hidden = false;
+  audit("install", `dialog ${guide.mode}`);
+  return true;
+}
+function closeInstallDialog() {
+  const modal = document.getElementById("insModal");
+  if (modal) modal.hidden = true;
+  // Whatever the member does next, the quiet strip is what remains — so the
+  // route back in is always there without this dialog ever reopening itself.
+  refreshInstallNudge();
+}
+
+(function wireInstallDialog() {
+  const modal = document.getElementById("insModal");
+  if (!modal) return;
+  const go = document.getElementById("insGo");
+  const skip = document.getElementById("insSkip");
+
+  if (go) {
+    go.addEventListener("click", async () => {
+      const guide = installGuide(installMode === "prompt" && !!deferredInstall);
+      if (guide.action === "prompt" && deferredInstall) {
+        const ev = deferredInstall;
+        deferredInstall = null;
+        try {
+          ev.prompt();
+          const choice = await ev.userChoice;
+          if (choice && choice.outcome === "accepted") { installMode = null; hideInstallNudge(); }
+        } catch (e) {}
+        closeInstallDialog();
+        return;
+      }
+      if (guide.action === "copy") {
+        // Wrong browser on iOS. Putting the URL on the clipboard removes the
+        // one genuinely annoying part of "go and open this in Safari" — there
+        // is now nothing to remember and nothing to type.
+        let ok = false;
+        try { await navigator.clipboard.writeText(location.href); ok = true; } catch (e) {}
+        if (!ok && navigator.share) {
+          try { await navigator.share({ title: "Combify", url: location.href }); ok = true; } catch (e) {}
+        }
+        go.textContent = ok ? "Link copied — open Safari" : "Copy this page's address";
+        go.disabled = ok;
+        audit("install", ok ? "link copied" : "copy failed");
+        return;
+      }
+      closeInstallDialog();
+    });
+  }
+  if (skip) skip.addEventListener("click", closeInstallDialog);
+  // Tapping the scrim is the other way everyone expects to close a dialog.
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeInstallDialog(); });
+
+  // A way back in for anyone who said "not now" — the same footer idiom as
+  // "Report a problem". Hidden on computers and once installed, where it would
+  // only ever be a dead end.
+  if (canInstall() && !isStandalone()) {
+    const foot = document.querySelector(".foot__actions") || document.querySelector(".foot");
+    if (foot) {
+      const link = document.createElement("button");
+      link.type = "button";
+      link.className = "foot__link";
+      link.textContent = "Add to home screen";
+      link.addEventListener("click", () => {
+        const modalEl = document.getElementById("insModal");
+        if (modalEl && !openInstallDialog()) modalEl.hidden = true;
+      });
+      foot.appendChild(link);
+    }
+  }
+})();
+
+// The one automatic showing: earned exactly like the strip is (a finished
+// session), never while snoozed or declined, and only the first time.
+function maybeAskToInstall() {
+  if (!canInstall() || isStandalone()) return;
+  if (insSeen() || installSilenced() || !installEarned()) return;
+  openInstallDialog();
+}
+// Both of the deferred boot steps below run at module top level, where
+// requestAnimationFrame is not guaranteed to exist — a headless DOM without a
+// layout engine has no frames to wait for. Fall back to a timeout so the app
+// still finishes booting rather than dying on the missing global.
+const nextFrame = (fn) => {
+  try {
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(fn);
+    else setTimeout(fn, 0);
+  } catch (e) {}
+};
+
+// Someone who trained yesterday and is opening the app again today has already
+// earned the ask — they shouldn't have to finish another session to see it.
+// Deferred a frame so the dialog's own buttons are wired first.
+nextFrame(() => { try { maybeAskToInstall(); } catch (e) {} });
+
+// ---------- First run ----------
+// Runs before anything else can get in the way, and only for someone who has
+// never opened Combify before. tourSeen() is written the moment it opens, so
+// this can never fire twice even if the member walks away mid-tour.
+if (!tourSeen() && !(history && history.totals && history.totals.sessions > 0)) {
+  // One frame's delay so the layout has settled and the spotlight measures the
+  // real positions rather than the pre-paint ones.
+  nextFrame(() => { try { startTour(); } catch (e) {} });
+}

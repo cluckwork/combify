@@ -1101,3 +1101,208 @@ button.foot__link {
   transition: opacity 0.18s linear; /* smooths the per-step ramp */
   pointer-events: none;
 }
+
+
+/* ==========================================================================
+   Add-to-home-screen dialog (.ins)
+   Same card language as .report — surface, dim-accent hairline, app radius,
+   over a blurred scrim — so it reads as part of Combify rather than a banner
+   bolted on. Anchored high like .report for the same reason: on a short phone
+   in landscape a vertically centred card gets clipped at both ends.
+   ========================================================================== */
+.ins {
+  position: fixed;
+  inset: 0;
+  z-index: 60; /* above .report's 50 — never both open, but order must be defined */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: max(7vh, calc(env(safe-area-inset-top) + 24px)) 20px
+           max(20px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.74);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.ins[hidden] { display: none; }
+.ins__card {
+  width: min(400px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+/* The app's own label idiom: mono, uppercase, tracked, accent. */
+.ins__eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.ins__title { margin: -4px 0 0; font-size: 19px; font-weight: 800; line-height: 1.25; }
+.ins__sub { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+/* Numbered, and each step on its own line. "Tap Share then Add to Home
+   Screen" written as one sentence is precisely the form people fail to
+   follow; three short numbered lines is the form they complete. */
+.ins__steps {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: ins-step;
+  display: grid;
+  gap: 10px;
+}
+.ins__steps:empty { display: none; }
+.ins__steps li {
+  counter-increment: ins-step;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: start;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.ins__steps li::before {
+  content: counter(ins-step);
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+.ins__steps strong { color: var(--text); font-weight: 700; }
+/* The Share glyph is drawn, never named: most people have never consciously
+   looked at that icon, so "tap Share" alone is the instruction that fails. */
+.ins__share { display: inline-flex; vertical-align: -3px; color: var(--accent); }
+.ins__go { width: 100%; margin-top: 2px; }
+.ins__go[hidden] { display: none; }
+/* Inconspicuous on purpose — present and reachable, never competing. */
+.ins__skip {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px;
+  cursor: pointer;
+  align-self: center;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.75;
+}
+.ins__skip:hover { color: var(--text); opacity: 1; }
+@keyframes insIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+.ins__card { animation: insIn 0.2s ease-out; }
+
+
+/* ==========================================================================
+   First-run walkthrough (.tour, js/tour.js)
+   One spotlight box + one caption bubble. The darkness is the spotlight's own
+   box-shadow spread across the viewport, so there is no second overlay layer
+   to keep in sync and the whole thing animates by moving one element.
+   ========================================================================== */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 70; /* above every other layer: it runs before anything else can */
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.tour[hidden] { display: none; }
+.tour__spot {
+  position: absolute;
+  border-radius: 14px;
+  /* The spread IS the scrim. Slightly lighter than .report's so the spotlit
+     control still reads as the app's own colour, not a cutout. */
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.78);
+  border: 1px solid var(--accent);
+  transition: top 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+.tour__bubble {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: grid;
+  gap: 6px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+/* The arrow: a rotated square tucked under the bubble's edge, its horizontal
+   position driven by --arrow-x so it keeps pointing at the target even when
+   the bubble has been shoved sideways to stay on screen. */
+.tour__bubble::after {
+  content: "";
+  position: absolute;
+  left: var(--arrow-x, 50%);
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--surface);
+  border: 1px solid var(--accent-dim);
+  transform: rotate(45deg);
+}
+.tour__bubble[data-side="below"]::after {
+  top: -7px;
+  border-right: none;
+  border-bottom: none;
+}
+.tour__bubble[data-side="above"]::after {
+  bottom: -7px;
+  border-left: none;
+  border-top: none;
+}
+.tour__count {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+.tour__text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text); }
+.tour__hint { margin: 2px 0 0; font-size: 11.5px; color: var(--muted); }
+/* Bottom corner, quiet, and out of the thumb's way for "continue". */
+.tour__skip {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.7;
+}
+.tour__skip:hover { color: var(--text); opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .ins__card { animation: none; }
+  .tour__spot { transition: none; }
+}

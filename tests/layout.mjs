@@ -191,6 +191,11 @@ async function runDevice(dev) {
   // Log every unmuted sfx play with a timestamp, so the finale can prove the
   // count-up stays silent until its numbers are actually on screen.
   await page.addInitScript(() => {
+    // The first-run walkthrough (js/tour.js) covers the whole screen with a
+    // spotlight overlay, which would sit in front of every measurement and
+    // every screenshot below. A fresh browser context is a first run by
+    // definition, so mark it seen before the app boots.
+    try { localStorage.setItem("combify.tour.v1", "1"); } catch (e) {}
     window.__sfxLog = [];
     const orig = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function () {
@@ -370,6 +375,7 @@ async function runRotation() {
   // data-focus and media queries and is identical either way; the fullscreen
   // lifecycle itself is covered in run.mjs section 10b.
   await page.addInitScript(() => {
+    try { localStorage.setItem("combify.tour.v1", "1"); } catch (e) {}
     const no = () => Promise.reject(new Error("fullscreen disabled for rotation tests"));
     Element.prototype.requestFullscreen = no;
     Element.prototype.webkitRequestFullscreen = no;
