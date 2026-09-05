@@ -200,7 +200,13 @@ export function installGuide(hasPrompt) {
       arrivedSub: "A few taps and Combify is on your home screen.",
       steps: [
         ...route.steps,
-        "Scroll down, tap {addhome} <strong>Add to Home Screen</strong>",
+        // Destination first, route second — the rule this file keeps. "Scroll
+        // down" was a guess about how the share sheet is laid out; the sheet
+        // now opens on a short list with the rest behind a chevron or a "More"
+        // item, and which of those you get depends on the iOS version. Naming
+        // the target and mentioning the reveal only as a fallback is correct
+        // whichever way that sheet is drawn this year.
+        "Tap {addhome} <strong>Add to Home Screen</strong> — {chevron} <strong>More</strong> if it isn't listed",
         "Tap <strong>Add</strong>",
       ],
       action: null,

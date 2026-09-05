@@ -1693,6 +1693,10 @@ async function collectSpokenVsShown(app, ms) {
     g.steps[0].includes("{menudots} button") && !g.steps[0].includes("•••"), g.steps[0]);
   check("Share is its own step now", g.steps[1].includes("{share}"), g.steps[1]);
   check("nothing to automate on iOS", g.action === null, String(g.action));
+  check("the share sheet's hidden-list reveal is named, not assumed away",
+    g.steps.some((x) => /\{chevron\}/.test(x) && /More/.test(x)), g.steps.join(" | "));
+  check("and \"scroll down\" is gone — that was a guess about the sheet's layout",
+    !g.steps.some((x) => /Scroll down/i.test(x)), g.steps.join(" | "));
   check("and it still ends at Add to Home Screen, then Add",
     /Add to Home Screen/.test(g.steps[g.steps.length - 2]) && /Add/.test(g.steps[g.steps.length - 1]),
     g.steps.join(" | "));
@@ -1745,7 +1749,7 @@ async function collectSpokenVsShown(app, ms) {
 
   // Every {token} a guide can emit must be a glyph app.js actually draws, or
   // it renders as an empty gap where a picture should be.
-  const DRAWN = ["share", "addhome", "menu", "menulines", "menudots", "install"];
+  const DRAWN = ["share", "addhome", "menu", "menulines", "menudots", "install", "chevron"];
   const emitted = new Set();
   for (const ua of [IPHONE_SAFARI, IPHONE_CHROME, IPAD_OS, ANDROID, SAMSUNG, EDGE_A]) {
     as(ua);

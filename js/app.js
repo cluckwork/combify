@@ -1461,6 +1461,9 @@ const GLYPHS = {
   addhome: GLYPH('<rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8.5v7"/><path d="M8.5 12h7"/>'),
   // Android's overflow menu.
   menu: GLYPH('<circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>', "currentColor"),
+  // The chevron that expands a collapsed list — iOS's share sheet shows a
+  // short list first and hides the rest behind it (or behind "More").
+  chevron: GLYPH('<path d="M6 9.5 12 15.5l6-6"/>'),
   // Samsung Internet: three stacked lines, in its bottom bar.
   menulines: GLYPH('<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>'),
   // Edge on Android: three horizontal dots, centred along the bottom.

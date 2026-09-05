@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.29.1",
+    date: "2026-09-05",
+    size: "patch",
+    title: "\"Scroll down\" was a guess too",
+    notes: [
+      "The share sheet opens on a short list with the rest tucked behind a ⌄ or a More item, so \"scroll down to find Add to Home Screen\" wasn't how you actually get there. The step now names Add to Home Screen first and mentions the reveal only as a fallback — which is right whichever way that sheet happens to be drawn.",
+    ],
+  },
+  {
     v: "1.29.0",
     date: "2026-09-05",
     size: "minor",
