@@ -1306,3 +1306,87 @@ button.foot__link {
   .ins__card { animation: none; }
   .tour__spot { transition: none; }
 }
+
+
+/* ==========================================================================
+   Developer badge + panel (.devbadge / .devpanel, js/dev.js)
+   Deliberately NOT in the app's design language. This is the one surface that
+   must never be mistaken for something a member is meant to see, so it is
+   flat, dense, monospaced and slightly ugly on purpose. If it ever starts
+   looking like Combify, someone will ship it to a member and wonder why the
+   numbers are wrong.
+   ========================================================================== */
+.devbadge {
+  position: fixed;
+  left: max(8px, env(safe-area-inset-left));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 80;
+  border: 1px solid #7a5cff;
+  background: #17122b;
+  color: #b9a8ff;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.devbadge:hover { opacity: 1; }
+.devpanel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 81;
+  background: #12102a;
+  border-top: 1px solid #7a5cff;
+  padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #d6ccff;
+  max-height: 62vh;
+  overflow-y: auto;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.7);
+}
+.devpanel[hidden] { display: none; }
+.devpanel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #b9a8ff;
+  font-weight: 700;
+}
+.devpanel__row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.devpanel__label {
+  flex: 0 0 88px;
+  color: #8d7fc4;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 10px;
+}
+.devpanel__btn {
+  border: 1px solid #3d3268;
+  background: #1c1840;
+  color: #d6ccff;
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.devpanel__btn:hover { background: #2a2358; }
+.devpanel__sel {
+  border: 1px solid #3d3268;
+  background: #1c1840;
+  color: #d6ccff;
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.devpanel__check { display: inline-flex; align-items: center; gap: 5px; color: #8d7fc4; }
+.devpanel__note { margin: 0; color: #6f639e; line-height: 1.5; }

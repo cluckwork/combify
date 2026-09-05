@@ -11,8 +11,9 @@ import {
   startAudioSession, stopAudioSession, scheduleBlipRiff, stopBlipRiff,
 } from "./audio.js";
 import { audit, auditOn, setAudit, auditDump, auditPersist, auditReport } from "./audit.js";
-import { deviceOS, deviceClass, canInstall, isStandalone, installGuide, platformTag } from "./platform.js";
-import { startTour, tourSeen } from "./tour.js";
+import { deviceOS, deviceClass, canInstall, isStandalone, installGuide, platformTag, devForcesPrompt } from "./platform.js";
+import { startTour, tourSeen, resetTour } from "./tour.js";
+import { initDev, devOn, readDevFromUrl } from "./dev.js";
 
 // ---------- Segmented control: tap a segment, or swipe across it ----------
 function initSeg(id) {
@@ -240,17 +241,10 @@ function usageId() {
 // lie — at five testers, two of your own sessions is a third of the day. Set by
 // visiting the app once with ?dev=1 (and cleared with ?dev=0); it sticks per
 // device from then on, so it costs one tap on the phones used for testing.
-const DEV_KEY = "combify.dev";
-(function readDevFlag() {
-  try {
-    const q = new URLSearchParams(location.search).get("dev");
-    if (q === "1") localStorage.setItem(DEV_KEY, "1");
-    else if (q === "0") localStorage.removeItem(DEV_KEY);
-  } catch (e) {}
-})();
-function isDevDevice() {
-  try { return localStorage.getItem(DEV_KEY) === "1"; } catch (e) { return false; }
-}
+// The flag itself, the five-tap gesture that sets it on a device with no
+// address bar, and the panel it unlocks all live in js/dev.js.
+readDevFromUrl();
+const isDevDevice = devOn;
 
 // The day this device first ran Combify. With it, the digest can tell a brand
 // new member from one who came back — which is the roadmap's own success
@@ -1498,10 +1492,12 @@ function markInsSeen() {
   try { localStorage.setItem(INS_SEEN_KEY, "1"); } catch (e) {}
 }
 
-function openInstallDialog() {
+function openInstallDialog(force) {
   const modal = document.getElementById("insModal");
-  if (!modal || !canInstall() || isStandalone()) return false;
-  const guide = installGuide(installMode === "prompt" && !!deferredInstall);
+  // `force` is the dev panel bypassing the "is this device even installable"
+  // gate, so a computer can review the iPhone card. Nothing else passes it.
+  if (!modal || (!force && (!canInstall() || isStandalone()))) return false;
+  const guide = installGuide((installMode === "prompt" && !!deferredInstall) || devForcesPrompt());
   if (guide.mode === "none") return false;
 
   const sub = document.getElementById("insSub");
@@ -1537,7 +1533,7 @@ function closeInstallDialog() {
 
   if (go) {
     go.addEventListener("click", async () => {
-      const guide = installGuide(installMode === "prompt" && !!deferredInstall);
+      const guide = installGuide((installMode === "prompt" && !!deferredInstall) || devForcesPrompt());
       if (guide.action === "prompt" && deferredInstall) {
         const ev = deferredInstall;
         deferredInstall = null;
@@ -1611,6 +1607,51 @@ const nextFrame = (fn) => {
 // earned the ask — they shouldn't have to finish another session to see it.
 // Deferred a frame so the dialog's own buttons are wired first.
 nextFrame(() => { try { maybeAskToInstall(); } catch (e) {} });
+
+// ---------- The developer's workbench (js/dev.js) ----------
+// Wired unconditionally: the five-tap gesture has to be listening before dev
+// mode is on, or there would be no way to turn it on inside an installed app.
+// Every action below drives the REAL code path rather than a mock — a shortcut
+// that fakes the finish screen would prove nothing about the finish screen.
+initDev({
+  // The finale is normally three rounds away. Seed a plausible session and run
+  // the genuine finish(), bell and all.
+  replayFinish() {
+    reset();
+    session.rounds = 3; session.punches = 84; session.seconds = 360;
+    session.pendingPunches = 0; session.started = true;
+    finish();
+  },
+  // Two ten-second rounds: the whole arc — countdown, work, rest, finish — in
+  // about half a minute, using the ordinary settings and the ordinary start.
+  quickSession() {
+    roundsCtl.set(2); workCtl.set(10); restCtl.set(5);
+    el.startBtn.click();
+  },
+  showInstall() { openInstallDialog(true); },
+  replayTour() { resetTour(); startTour(); },
+  // Writes N consecutive days ending today, so the streak flame and the ready
+  // screen's summary can be seen at any length without waiting N days.
+  setStreak(n) {
+    const days = {};
+    let sessions = 0, rounds = 0, punches = 0, seconds = 0;
+    for (let i = 0; i < n; i++) {
+      const ts = Date.now() - i * 86400000;
+      days[dayKey(ts)] = { sessions: 1, rounds: 3, punches: 84, seconds: 360 };
+      sessions += 1; rounds += 3; punches += 84; seconds += 360;
+    }
+    history = { days, totals: { sessions, rounds, punches, seconds }, lastTrainedAt: Date.now() };
+    saveHistory(history);
+    render();
+    refreshInstallNudge();
+  },
+  // Back to being a stranger: no history, no settings, no snoozes, no dev
+  // flag. The only honest way to check what a first-time member actually sees.
+  wipe() {
+    try { localStorage.clear(); } catch (e) {}
+    location.reload();
+  },
+});
 
 // ---------- First run ----------
 // Runs before anything else can get in the way, and only for someone who has

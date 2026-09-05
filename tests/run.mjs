@@ -1809,6 +1809,59 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
+// ---------------------------- 42. Dev mode is invisible until it is invited
+{
+  section("42. Dev mode: hidden from members, reachable without an address bar");
+  clearStore();
+  const plain = await boot({ duration: 0.6 });
+  check("a member sees no dev badge", !plain.doc.querySelector(".devbadge"), "badge on a member's phone");
+  check("and no dev panel", !plain.doc.querySelector(".devpanel"), "panel on a member's phone");
+  plain.restore();
+
+  clearStore();
+  const dev = await boot({ duration: 0.6, search: "?dev=1" });
+  check("?dev=1 raises the badge", !!dev.doc.querySelector(".devbadge"), "no badge");
+  check("the badge says so plainly", /DEV/.test(dev.doc.querySelector(".devbadge").textContent),
+    dev.doc.querySelector(".devbadge").textContent);
+  dev.restore();
+
+  // The five-tap gesture is the ONLY route once Combify is installed: a
+  // home-screen app on iOS gets its own storage, separate from the Safari tab
+  // it was installed from, and there is no address bar in there to retype
+  // ?dev=1 into.
+  clearStore();
+  const tap = await boot({ duration: 0.6 });
+  const tagEl = tap.doc.querySelector(".brand__tag");
+  const hit = () => tagEl.dispatchEvent(new tap.window.MouseEvent("click", { bubbles: true }));
+  for (let i = 0; i < 4; i++) hit();
+  check("four taps do nothing", !tap.doc.querySelector(".devbadge"), "turned on too early");
+  hit();
+  check("the fifth tap turns dev mode on", !!tap.doc.querySelector(".devbadge"), "no badge after five taps");
+  check("and it says what just happened", /dev mode on/i.test(tagEl.textContent), tagEl.textContent);
+  check("the flag is stored for next launch", peekStore()["combify.dev"] === "1",
+    String(peekStore()["combify.dev"]));
+  for (let i = 0; i < 5; i++) hit();
+  check("five more taps turn it back off", !tap.doc.querySelector(".devbadge"), "badge stayed");
+  check("and the flag is gone", peekStore()["combify.dev"] === undefined,
+    String(peekStore()["combify.dev"]));
+  tap.restore();
+
+  // A platform override is dev-only: the key alone must never be enough, or a
+  // stale value could pin a real member to somebody else's install steps.
+  const { installGuide } = await import("../js/platform.js");
+  clearStore();
+  const pinned = await boot({ duration: 0.6, search: "?dev=1" });
+  pinned.window.localStorage.setItem("combify.dev.platform", "ipad");
+  check("dev mode can pin the install card to another device",
+    installGuide(false).steps[0].includes("at the top of Safari"), installGuide(false).steps[0]);
+  pinned.window.localStorage.removeItem("combify.dev");
+  check("without dev mode the override is ignored",
+    installGuide(false).mode !== "ios-safari" || !installGuide(false).steps[0].includes("at the top"),
+    installGuide(false).mode);
+  pinned.restore();
+  clearStore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);

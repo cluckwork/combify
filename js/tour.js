@@ -59,6 +59,11 @@ export function tourSeen() {
 function markSeen() {
   try { localStorage.setItem(KEY, "1"); } catch (e) {}
 }
+// Forget that this device has seen it, so the dev panel can replay a
+// once-per-lifetime experience without clearing every other setting too.
+export function resetTour() {
+  try { localStorage.removeItem(KEY); } catch (e) {}
+}
 
 // Combined bounds of a stop's target(s) — `also` lets one caption cover two
 // controls that are only meaningful together (level and pace).

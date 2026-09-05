@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.22.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "A workbench for whoever's building the app",
+    notes: [
+      "Nothing changes for members. This adds a hidden developer panel so the app can be checked properly without sitting through it: jump straight to the finish screen, run a thirty-second session, replay the walkthrough, preview a seven-day streak, or see the home-screen card exactly as an iPhone, an iPad or an Android phone would show it — all from one device.",
+      "Turned on by visiting with ?dev=1, or by tapping \"by Boxing With Bakr\" in the header five times. That gesture matters: once Combify is installed to a home screen it keeps its own separate storage, and there's no address bar in there to type a web address into.",
+      "A device in developer mode wears a badge saying so, and its training is tagged and left out of the daily numbers — so testing the app never gets counted as somebody using it.",
+    ],
+  },
+  {
     v: "1.21.0",
     date: "2026-09-05",
     size: "minor",

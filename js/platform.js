@@ -23,7 +23,40 @@
 // caching them makes the module untestable — the test harness boots many
 // simulated devices against one loaded copy of this file, and a UA captured at
 // import time would answer every one of them with the first device's answer.
+// ---------- Developer override ----------
+// The panel in js/dev.js can pin the answers to a device the founder is not
+// holding, so all five install cards can be reviewed from one laptop instead
+// of borrowing an iPhone, an iPad and an Android phone. Gated twice: the key
+// is only ever written by the dev panel, AND dev mode itself must be on, so a
+// member cannot end up pinned to somebody else's platform.
+const OVERRIDES = {
+  "ios-safari":  { device: "phone",   os: "ios",     browser: "safari",    tablet: false },
+  "ios-other":   { device: "phone",   os: "ios",     browser: "ios-other", tablet: false },
+  "ipad":        { device: "tablet",  os: "ios",     browser: "safari",    tablet: true },
+  "android":     { device: "phone",   os: "android", browser: "chromium",  tablet: false },
+  "desktop":     { device: "desktop", os: "desktop", browser: "desktop",   tablet: false },
+};
+export const OVERRIDE_NAMES = Object.keys(OVERRIDES);
+
+function overrideEnv() {
+  try {
+    if (localStorage.getItem("combify.dev") !== "1") return null;
+    return OVERRIDES[localStorage.getItem("combify.dev.platform")] || null;
+  } catch (e) { return null; }
+}
+
+// Whether the dev panel is pretending the browser handed us a one-tap install
+// prompt — the one branch that cannot be reached by faking a user-agent.
+export function devForcesPrompt() {
+  try {
+    return localStorage.getItem("combify.dev") === "1"
+      && localStorage.getItem("combify.dev.prompt") === "1";
+  } catch (e) { return false; }
+}
+
 function read() {
+  const forced = overrideEnv();
+  if (forced) return forced;
   const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
   const touchPoints = (typeof navigator !== "undefined" && navigator.maxTouchPoints) || 0;
 

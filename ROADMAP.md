@@ -295,6 +295,17 @@ Directly serves the business goal.
     by visiting `?dev=1`) marks the founder's own phones so his testing can be
     subtracted; at five testers, two of your own sessions is a third of the day
     and every number was a lie without it. Still no user-agent is ever sent.
+    Set with `?dev=1`, or by tapping "by Boxing With Bakr" five times — the
+    gesture exists because an installed iOS web app gets its OWN localStorage,
+    separate from the Safari tab it was installed from, so a phone flagged in
+    Safari comes back unflagged inside the app, where there is no address bar.
+  - ✅ **Dev panel** (v1.22.0, `js/dev.js`). The same flag unlocks a workbench
+    for the states that are slow to reach: jump to the finish finale, run a
+    30-second session, replay the once-per-lifetime walkthrough, preview a
+    7- or 30-day streak, and render any platform's install card from whatever
+    device is in hand. Every button drives the REAL code path — a shortcut that
+    faked the finish screen would prove nothing about the finish screen. Styled
+    deliberately unlike the app so it can never be mistaken for member UI.
   - ⏳ **The sink is the weak point.** Pings and problem reports share one
     Google Form column, posted `no-cors` so delivery can never be confirmed.
     Fine for a handful of testers, not for a gym-wide rollout. When it outgrows
