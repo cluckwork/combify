@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.23.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "The Safari card comes back if you never answered it",
+    notes: [
+      "Fixed: tapping \"Open in Safari\" sends you out of the app, and if that tab never came back, Combify counted it as though you'd said no. Reopening the link only showed a small strip buried below the settings. Closing a tab is no longer treated as an answer — the card returns until you actually skip it, up to three times.",
+      "In a browser that can't add apps to your home screen, that strip now sits at the top of the page under the logo instead of below the settings, where nobody would scroll to find it.",
+    ],
+  },
+  {
     v: "1.22.2",
     date: "2026-09-05",
     size: "patch",

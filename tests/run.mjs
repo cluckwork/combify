@@ -1883,10 +1883,46 @@ async function collectSpokenVsShown(app, ms) {
   check("the button offers to take them there",
     /Safari/i.test(wrong.doc.getElementById("insGo").textContent),
     wrong.doc.getElementById("insGo").textContent);
-  wrong.click("insSkip");
-  check("skipping leaves the quiet strip behind",
-    wrong.doc.getElementById("installNudge").hidden === false, "strip gone");
+  check("and the strip is lifted above the settings, not buried under them",
+    wrong.doc.getElementById("installNudge").style.order === "-1",
+    wrong.doc.getElementById("installNudge").style.order || "(no order)");
+
+  // Closing the tab is NOT an answer. Tapping "Open in Safari" sends you away
+  // and the tab often never comes back; the old build counted that as a
+  // decision, so reopening the link only ever showed the quiet strip and the
+  // instructions were effectively gone.
   wrong.restore();
+  const again = await boot({ duration: 0.6, ...CHROME_IOS });
+  await again.clock.advance(50);
+  check("closing the tab without answering asks again",
+    again.doc.getElementById("insModal").hidden === false, "went silent after a closed tab");
+  again.click("insSkip");
+  check("skipping leaves the quiet strip behind",
+    again.doc.getElementById("installNudge").hidden === false, "strip gone");
+  again.restore();
+
+  const answered = await boot({ duration: 0.6, ...CHROME_IOS });
+  await answered.clock.advance(50);
+  check("but an actual answer is remembered",
+    answered.doc.getElementById("insModal").hidden === true, "asked again after being told no");
+  check("and the footer still offers a way back",
+    [...answered.doc.querySelectorAll(".foot button")].some((b) => /home screen/i.test(b.textContent)),
+    "no route back");
+  answered.restore();
+
+  // Never forever, though: three unanswered appearances and it stops.
+  clearStore();
+  for (let i = 0; i < 3; i++) {
+    const nag = await boot({ duration: 0.6, ...CHROME_IOS });
+    await nag.clock.advance(50);
+    check(`ask ${i + 1} of 3 still appears`, nag.doc.getElementById("insModal").hidden === false, "stopped early");
+    nag.restore();
+  }
+  const capped = await boot({ duration: 0.6, ...CHROME_IOS });
+  await capped.clock.advance(50);
+  check("a fourth time would be nagging, so it stops",
+    capped.doc.getElementById("insModal").hidden === true, "asked a fourth time");
+  capped.restore();
 
   // The earned rule is untouched everywhere it still applies.
   clearStore();

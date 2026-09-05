@@ -122,6 +122,8 @@ function buildPanel() {
   jump.appendChild(button("Finish screen", () => { hide(); actions.replayFinish && actions.replayFinish(); }));
   jump.appendChild(button("Quick session", () => { hide(); actions.quickSession && actions.quickSession(); }));
   jump.appendChild(button("Walkthrough", () => { hide(); actions.replayTour && actions.replayTour(); }));
+  // The whole arrival, in order: walkthrough then home-screen card.
+  jump.appendChild(button("Full first run", () => { hide(); actions.firstRun && actions.firstRun(); }));
   p.appendChild(jump);
 
   // --- Every install card, from whatever device is in your hand ---

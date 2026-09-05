@@ -75,6 +75,11 @@ body:has(.app[data-focus="1"]) { padding: 0; }
 
 /* Top bar */
 .topbar {
+  /* Pinned first in the flex column. The install strip lifts itself to
+     order:-1 in a browser that cannot install (js/app.js), and without this
+     it would jump ABOVE the logo — a card floating over the masthead reads as
+     a broken page, not an urgent notice. */
+  order: -2;
   display: flex;
   align-items: center;
   justify-content: space-between;

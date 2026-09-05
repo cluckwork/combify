@@ -85,7 +85,7 @@ function boundsFor(stop) {
   return { top, left, width: right - left, height: bottom - top, bottom };
 }
 
-export function startTour() {
+export function startTour(onDone) {
   if (tourSeen()) return false;
 
   const root = document.getElementById("tour");
@@ -167,6 +167,7 @@ export function startTour() {
   const onScroll = () => render(false);
 
   function finish() {
+    if (root.hidden) return;   // finish() can be reached twice (skip during the last stop)
     root.hidden = true;
     root.removeEventListener("click", onClick);
     window.removeEventListener("resize", onScroll);
@@ -174,6 +175,7 @@ export function startTour() {
     window.removeEventListener("scroll", onScroll);
     document.removeEventListener("scroll", onScroll, true);
     document.removeEventListener("keydown", onKey);
+    if (typeof onDone === "function") { try { onDone(); } catch (e) {} }
   }
 
   function onClick(e) {

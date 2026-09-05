@@ -1415,6 +1415,12 @@ function refreshInstallNudge() {
       el.installSteps.hidden = guide.steps.length === 0;
     }
   }
+  // A member in Chrome on an iPhone will never scroll past the settings to
+  // find this. When the browser is the problem, the strip goes to the top of
+  // the column instead of the bottom (.app is a flex column, so this reorders
+  // without touching the DOM). Everywhere else it stays the quiet aside it was
+  // designed to be.
+  el.installNudge.style.order = guide.mode === "ios-wrong-browser" ? "-1" : "";
   el.installNudge.hidden = false;
 }
 
@@ -1495,13 +1501,40 @@ refreshInstallNudge();
 // there, the browser tab is already a fine way to use Combify, and interrupting
 // a laptop user with phone instructions is how an app teaches people that its
 // dialogs are worth dismissing unread.
-const INS_SEEN_KEY = "combify.install.asked.v1";
+// Opening the dialog is NOT the same as the member answering it. The first
+// version marked it seen the moment it appeared, so closing the tab — which is
+// what happens when someone taps "Open in Safari", gets sent away, and never
+// comes back to that tab — counted as a decision. Reopening the link then only
+// ever got the quiet strip, buried below the settings, and the actual
+// instructions were effectively gone.
+//
+// So: count the times it has OPENED, and separately record whether they
+// actually answered. Skip, the scrim, or the action button are answers. A tab
+// that just disappears is not, and gets asked again — up to a cap, because
+// something that returns forever is a nag no matter how good the reason.
+const INS_ASKS_KEY = "combify.install.asks.v1";
+const INS_ANSWERED_KEY = "combify.install.answered.v1";
+const INS_MAX_ASKS = 3;
 
-function insSeen() {
-  try { return localStorage.getItem(INS_SEEN_KEY) === "1"; } catch (e) { return false; }
+function insAsks() {
+  try { return parseInt(localStorage.getItem(INS_ASKS_KEY), 10) || 0; } catch (e) { return 0; }
 }
-function markInsSeen() {
-  try { localStorage.setItem(INS_SEEN_KEY, "1"); } catch (e) {}
+function insAnswered() {
+  try { return localStorage.getItem(INS_ANSWERED_KEY) === "1"; } catch (e) { return false; }
+}
+function noteInsOpened() {
+  try { localStorage.setItem(INS_ASKS_KEY, String(insAsks() + 1)); } catch (e) {}
+}
+function noteInsAnswered() {
+  try { localStorage.setItem(INS_ANSWERED_KEY, "1"); } catch (e) {}
+}
+// Used by the dev panel to replay a first run without wiping everything else.
+function clearInsAsk() {
+  try {
+    localStorage.removeItem(INS_ASKS_KEY);
+    localStorage.removeItem(INS_ANSWERED_KEY);
+    localStorage.removeItem(INSTALL_KEY);
+  } catch (e) {}
 }
 
 function openInstallDialog(force) {
@@ -1528,7 +1561,7 @@ function openInstallDialog(force) {
     go.hidden = !guide.action;
     if (guide.actionLabel) go.textContent = guide.actionLabel;
   }
-  markInsSeen();
+  if (!force) noteInsOpened();
   modal.hidden = false;
   audit("install", `dialog ${guide.mode}`);
   return true;
@@ -1536,6 +1569,7 @@ function openInstallDialog(force) {
 function closeInstallDialog() {
   const modal = document.getElementById("insModal");
   if (modal) modal.hidden = true;
+  noteInsAnswered();
   // Whatever the member does next, the quiet strip is what remains — so the
   // route back in is always there without this dialog ever reopening itself.
   refreshInstallNudge();
@@ -1582,6 +1616,7 @@ function closeInstallDialog() {
         go.textContent = copied
           ? "Link copied — paste it in Safari"
           : "Copy this page's address";
+        noteInsAnswered();
         audit("install", copied ? "link copied" : "copy failed");
         try { location.href = location.href.replace(/^https?:/, "x-safari-https:"); } catch (e) {}
         return;
@@ -1616,7 +1651,7 @@ function closeInstallDialog() {
 // session), never while snoozed or declined, and only the first time.
 function maybeAskToInstall() {
   if (!canInstall() || isStandalone()) return;
-  if (insSeen() || installSilenced()) return;
+  if (insAnswered() || insAsks() >= INS_MAX_ASKS || installSilenced()) return;
   if (!installEarned() && !installBlocked()) return;
   openInstallDialog();
 }
@@ -1658,6 +1693,15 @@ initDev({
   },
   showInstall() { openInstallDialog(true); },
   replayTour() { resetTour(); startTour(); },
+  // The two first-run moments in the order a new member actually meets them:
+  // the walkthrough, then the home-screen card the moment it ends. Reviewing
+  // them one at a time hides the thing most worth judging — how much is being
+  // asked of someone in their first thirty seconds.
+  firstRun() {
+    resetTour();
+    clearInsAsk();
+    startTour(() => openInstallDialog(true));
+  },
   // Writes N consecutive days ending today, so the streak flame and the ready
   // screen's summary can be seen at any length without waiting N days.
   setStreak(n) {
