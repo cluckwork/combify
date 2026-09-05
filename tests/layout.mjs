@@ -124,6 +124,24 @@ const probe = () => {
 
 const server = await serve();
 const base = `http://127.0.0.1:${server.address().port}/index.html`;
+
+// BELT AND BRACES over js/app.js's own localhost guard. This suite drives a
+// real browser with real network access and runs real sessions to completion,
+// so a regression in that guard means production telemetry filling up with
+// rows minted by this repo — which is exactly what happened, once, to the tune
+// of 94 fictional "members" in a single afternoon. Every request to a
+// telemetry host is aborted at the browser, and recorded so a test can fail on
+// it rather than the damage being discovered in a daily digest.
+const TELEMETRY_HOSTS = /docs\.google\.com|formsubmit\.co/;
+async function sealContext(ctx) {
+  const escaped = [];
+  await ctx.route("**/*", (route) => {
+    const url = route.request().url();
+    if (TELEMETRY_HOSTS.test(url)) { escaped.push(url); return route.abort(); }
+    return route.continue();
+  });
+  return escaped;
+}
 const browser = await chromium.launch();
 if (SHOTS) fs.mkdirSync(shotDir, { recursive: true });
 
@@ -187,6 +205,7 @@ async function runDevice(dev) {
     viewport: { width: dev.width, height: dev.height },
     deviceScaleFactor: dev.dpr, isMobile: dev.mobile, hasTouch: dev.mobile,
   });
+  const escaped = await sealContext(ctx);
   const page = await ctx.newPage();
   // Log every unmuted sfx play with a timestamp, so the finale can prove the
   // count-up stays silent until its numbers are actually on screen.
@@ -344,6 +363,7 @@ async function runDevice(dev) {
   check("exit returns to the normal screen", m.focus !== "1" && m.settingsVisible, `focus=${m.focus}`);
 
   check("no JavaScript errors on this device", errors.length === 0, errors.join(" | "));
+  check("no telemetry escaped to the network", escaped.length === 0, escaped.join(", "));
   await ctx.close();
   return { lines, pass, fail };
 }
@@ -366,6 +386,7 @@ async function runRotation() {
   // like an app bug and wasn't.
   const rotBrowser = await chromium.launch();
   const ctx = await rotBrowser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  const escaped = await sealContext(ctx);
   const page = await ctx.newPage();
   // Rotation is simulated by resizing the window, and Chromium refuses to
   // resize one in a fullscreen state — which starting a session puts it in.
@@ -441,6 +462,7 @@ async function runRotation() {
     await page.textContent("#phase"));
   check("finish screen survives rotation", m2.docScrollW <= m2.docClientW + 1, `${m2.docScrollW} > ${m2.docClientW}`);
   check("finish summary still on screen after rotating", m2.stats.bottom <= m2.vh + 1, `${m2.stats.bottom} vs ${m2.vh}`);
+  check("no telemetry escaped while rotating", escaped.length === 0, escaped.join(", "));
   await ctx.close();
   await rotBrowser.close();
   return { lines, pass, fail };
@@ -476,6 +498,7 @@ async function runInstallCard() {
     const ctx = await browser.newContext({
       viewport: { width: 390, height: c.h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: c.ua,
     });
+    const escaped = await sealContext(ctx);
     const page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -533,6 +556,7 @@ async function runInstallCard() {
       }
     }
     check(`${c.name}: no JavaScript errors`, errors.length === 0, errors.join("; "));
+    check(`${c.name}: no telemetry escaped`, escaped.length === 0, escaped.join(", "));
     if (SHOTS) await page.screenshot({ path: path.join(shotDir, `install-${c.name.replace(/\s+/g, "-")}.png`) });
     await ctx.close();
   }

@@ -309,6 +309,22 @@ Directly serves the business goal.
     device is in hand. Every button drives the REAL code path — a shortcut that
     faked the finish screen would prove nothing about the finish screen. Styled
     deliberately unlike the app so it can never be mistaken for member UI.
+  - ⚠️ **The day the numbers lied (2026-09-05).** A digest reported **94 unique
+    members**. All but a handful were `tests/layout.mjs`: it drives a real
+    Chromium with real network access and runs real sessions to completion, so
+    every finish fired a genuine `pingUsage` into the production Form — and
+    because each Playwright context starts with empty localStorage, each one
+    minted a fresh anonymous id and looked like a new person. The tell was in
+    the digest: ~18 bursts of ~7 devices, all `desktop-desktop`, identical
+    12-14s durations, starting and finishing inside the same second.
+    **Fixed at the source:** `pingUsage` now returns immediately on localhost,
+    127.0.0.1, `.local` and `file:` — because the test suite is not the only
+    thing that runs Combify locally, and every session played through during
+    development had been counted as a member too. The layout suite also aborts
+    any request to a telemetry host at the browser and fails if one is
+    attempted, so a regression in that guard breaks a test instead of surfacing
+    in a digest days later. **Treat all data from before 2026-09-05 as
+    contaminated by development traffic.**
   - ⏳ **The sink is the weak point.** Pings and problem reports share one
     Google Form column, posted `no-cors` so delivery can never be confirmed.
     Fine for a handful of testers, not for a gym-wide rollout. When it outgrows

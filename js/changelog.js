@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.28.1",
+    date: "2026-09-05",
+    size: "patch",
+    title: "Development traffic stops counting as members",
+    notes: [
+      "Combify no longer reports anonymous usage when it's running on a developer's own machine. The automated tests drive a real browser and run real sessions, so every test run was quietly filing itself into the team's usage numbers as if it were members training — one afternoon of work showed up as 94 people.",
+      "Nothing changes for anyone using the real app. This only silences the copy running on localhost.",
+    ],
+  },
+  {
     v: "1.28.0",
     date: "2026-09-05",
     size: "minor",

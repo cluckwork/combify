@@ -257,7 +257,29 @@ function firstSeenDay() {
   } catch (e) { return ""; }
 }
 
+// Never report from a machine that is building the app.
+//
+// This is written in blood: the layout suite drives a REAL browser with REAL
+// network access and runs real sessions to completion, so every test run was
+// filing genuine-looking rows into the production sheet. One afternoon of
+// development produced 94 "unique members" — each Playwright context starts
+// with empty localStorage and therefore mints a fresh anonymous id — and
+// buried a handful of actual members inside it.
+//
+// The guard belongs HERE rather than only in the tests, because the tests are
+// not the only thing that runs Combify locally: `python3 -m http.server` while
+// working on it does too, and every session played through during development
+// was being counted as a member training.
+function isLocalHost() {
+  try {
+    const h = location.hostname || "";
+    return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1"
+      || h === "" || h.endsWith(".local") || location.protocol === "file:";
+  } catch (e) { return false; }
+}
+
 function pingUsage(kind, extra) {
+  if (isLocalHost()) return;
   try {
     const row = new URLSearchParams();
     row.set(REPORT_SHEET_FIELDS.description, "SESSION_PING");

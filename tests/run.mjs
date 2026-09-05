@@ -1897,6 +1897,35 @@ async function collectSpokenVsShown(app, ms) {
     String(devPings[devPings.length - 1].s));
   appDev.restore();
 
+  // The guard that stops development traffic being counted as members. The
+  // layout suite drives a real browser with real network access, so without
+  // this every test run filed real-looking rows into the production sheet —
+  // one afternoon produced 94 "unique members", every one of them a browser
+  // context this repo had just launched.
+  posts.length = 0;
+  const local = await boot({ duration: 0.6, origin: "http://localhost:8000/" });
+  globalThis.fetch = async (url, opts) => { posts.push({ url, body: String((opts && opts.body) || "") }); return { ok: true }; };
+  local.set("rounds", 1); local.set("workSec", 15); local.set("restSec", 5);
+  local.click("startBtn");
+  await local.clock.advance(40000);
+  await local.clock.advance(50);
+  check("a session on localhost pings nothing at all",
+    posts.filter((p) => p.body.includes("SESSION_PING")).length === 0,
+    `${posts.filter((p) => p.body.includes("SESSION_PING")).length} pings escaped`);
+  check("and the session itself still runs normally",
+    local.doc.getElementById("phase").textContent.trim() === "Done",
+    local.doc.getElementById("phase").textContent);
+  local.restore();
+
+  const file = await boot({ duration: 0.6, origin: "http://127.0.0.1:8000/" });
+  posts.length = 0;
+  file.set("rounds", 1); file.set("workSec", 15); file.set("restSec", 5);
+  file.click("startBtn");
+  await file.clock.advance(40000);
+  check("127.0.0.1 is silent too", posts.filter((p) => p.body.includes("SESSION_PING")).length === 0,
+    `${posts.filter((p) => p.body.includes("SESSION_PING")).length} pings escaped`);
+  file.restore();
+
   globalThis.fetch = testStub;
   clearStore();
 }

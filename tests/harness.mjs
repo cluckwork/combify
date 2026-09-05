@@ -282,7 +282,14 @@ export async function boot(cfg = {}) {
   const html = fs.readFileSync(path.join(REPO, "index.html"), "utf8");
   // `search` lets a test boot the app at a URL with a query string — the app
   // reads ?dev=1 from it to mark a device as the developer's own.
-  const dom = new JSDOM(html, { url: `http://localhost/${cfg.search || ""}`, pretendToBeVisual: false });
+  // The production origin, not localhost: js/app.js deliberately sends no usage
+  // pings from a local host, so booting there would silently disable the very
+  // behaviour the ping tests are asserting. `origin` lets a test opt into a
+  // local URL to check that suppression.
+  const dom = new JSDOM(html, {
+    url: `${cfg.origin || "https://cluckwork.github.io/combify/"}${cfg.search || ""}`,
+    pretendToBeVisual: false,
+  });
   const { window } = dom;
   const clock = new Clock();
   // Lets a test boot "the next day" so streak logic can be exercised across
