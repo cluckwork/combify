@@ -1365,6 +1365,18 @@ function loadInstallState() {
 function installEarned() {
   return !!(history && history.totals && history.totals.sessions > 0);
 }
+// Being in a browser that cannot install at all is not the same question as
+// "would you like to install this?", and it does not wait for a finished
+// session. The member is in Chrome on an iPhone, where Combify can never lose
+// the address bar and can never work offline — and the cost of moving to
+// Safari only goes UP the longer they stay, because settings and training
+// history live per-browser. Telling them on arrival is the helpful moment;
+// telling them after three sessions means those sessions are in the wrong
+// place. Every other platform keeps the earned rule from v1.20.0.
+function installBlocked() {
+  return installGuide(false).mode === "ios-wrong-browser";
+}
+
 function installSilenced() {
   const s = loadInstallState();
   if (s.declines >= INSTALL_MAX_DECLINES) return true;   // asked twice, told no twice
@@ -1379,7 +1391,7 @@ let installMode = null; // "prompt" = browser offers real install | "hint" = iOS
 // earlier, so a stale caller can never force it open.
 function refreshInstallNudge() {
   if (!el.installNudge) return;
-  if (!installMode || isStandalone() || installSilenced() || !installEarned()) {
+  if (!installMode || isStandalone() || installSilenced() || !(installEarned() || installBlocked())) {
     hideInstallNudge();
     return;
   }
@@ -1505,7 +1517,11 @@ function openInstallDialog(force) {
   const go = document.getElementById("insGo");
   const title = document.getElementById("insTitle");
 
-  if (title) title.textContent = deviceClass() === "tablet" ? "Keep Combify on your iPad" : "Keep Combify on your phone";
+  if (title) {
+    title.textContent = guide.mode === "ios-wrong-browser"
+      ? "Open Combify in Safari"          // the honest headline: this is a browser problem
+      : deviceClass() === "tablet" ? "Keep Combify on your iPad" : "Keep Combify on your phone";
+  }
   if (sub) sub.textContent = guide.sub;
   if (steps) renderInstallSteps(steps, guide.steps);
   if (go) {
@@ -1546,17 +1562,28 @@ function closeInstallDialog() {
         return;
       }
       if (guide.action === "copy") {
-        // Wrong browser on iOS. Putting the URL on the clipboard removes the
-        // one genuinely annoying part of "go and open this in Safari" — there
-        // is now nothing to remember and nothing to type.
-        let ok = false;
-        try { await navigator.clipboard.writeText(location.href); ok = true; } catch (e) {}
-        if (!ok && navigator.share) {
-          try { await navigator.share({ title: "Combify", url: location.href }); ok = true; } catch (e) {}
+        // Wrong browser on iOS. Two attempts, in order of how little the
+        // member has to do:
+        //
+        // 1. The clipboard FIRST, always, and awaited — it is the only step
+        //    guaranteed to work, and it must happen while we still hold the
+        //    tap that authorised it. If step 2 navigates away mid-write, the
+        //    fallback is gone.
+        // 2. x-safari-https:, an undocumented iOS scheme that hands a URL
+        //    straight to Safari. It works from Chrome on iPhone today, but
+        //    Apple has never promised it and it fails silently when it
+        //    doesn't — hence the ordering, and hence the button text below
+        //    telling them what to do if nothing happened.
+        let copied = false;
+        try { await navigator.clipboard.writeText(location.href); copied = true; } catch (e) {}
+        if (!copied && navigator.share) {
+          try { await navigator.share({ title: "Combify", url: location.href }); copied = true; } catch (e) {}
         }
-        go.textContent = ok ? "Link copied — open Safari" : "Copy this page's address";
-        go.disabled = ok;
-        audit("install", ok ? "link copied" : "copy failed");
+        go.textContent = copied
+          ? "Link copied — paste it in Safari"
+          : "Copy this page's address";
+        audit("install", copied ? "link copied" : "copy failed");
+        try { location.href = location.href.replace(/^https?:/, "x-safari-https:"); } catch (e) {}
         return;
       }
       closeInstallDialog();
@@ -1589,7 +1616,8 @@ function closeInstallDialog() {
 // session), never while snoozed or declined, and only the first time.
 function maybeAskToInstall() {
   if (!canInstall() || isStandalone()) return;
-  if (insSeen() || installSilenced() || !installEarned()) return;
+  if (insSeen() || installSilenced()) return;
+  if (!installEarned() && !installBlocked()) return;
   openInstallDialog();
 }
 // Both of the deferred boot steps below run at module top level, where

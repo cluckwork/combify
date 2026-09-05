@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.22.1",
+    date: "2026-09-05",
+    size: "patch",
+    title: "The walkthrough keeps up, and Chrome gets told sooner",
+    notes: [
+      "Fixed: scrolling during the first-time walkthrough left the highlight behind, pointing at empty space. It now follows the page exactly, and each step scrolls itself into view so nothing gets explained off screen.",
+      "If you open Combify in Chrome on an iPhone, it now says so the moment you arrive instead of waiting until you've trained. Only Safari can put an app on an iPhone home screen, so the sooner you move across the better — and the button now tries to hand you straight to Safari, copying the link as a backup.",
+      "Safari and Android are unchanged: they're still only asked after you've finished a session.",
+    ],
+  },
+  {
     v: "1.22.0",
     date: "2026-09-05",
     size: "minor",

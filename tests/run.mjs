@@ -1862,6 +1862,51 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
+// ------------- 43. A browser that CANNOT install is told straight away
+{
+  section("43. Chrome on iPhone is told on arrival, not after a session");
+  // v1.20.0 made the install ask earned, and that rule stands — for browsers
+  // that can actually install. Chrome on an iPhone never can: the address bar
+  // stays forever and offline never works. Waiting for a finished session
+  // there just means the session happened in the wrong browser.
+  const CHROME_IOS = { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) CriOS/120.0 Mobile Safari/604.1", maxTouchPoints: 5, noVibrate: true };
+  const SAFARI_IOS = { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Version/17.0 Mobile Safari/604.1", maxTouchPoints: 5, noVibrate: true };
+
+  clearStore();
+  const wrong = await boot({ duration: 0.6, ...CHROME_IOS });
+  await wrong.clock.advance(50);
+  check("a brand new Chrome-on-iPhone visitor is told immediately",
+    wrong.doc.getElementById("insModal").hidden === false, "stayed quiet");
+  check("and the headline names the actual problem",
+    /Safari/.test(wrong.doc.getElementById("insTitle").textContent),
+    wrong.doc.getElementById("insTitle").textContent);
+  check("the button offers to take them there",
+    /Safari/i.test(wrong.doc.getElementById("insGo").textContent),
+    wrong.doc.getElementById("insGo").textContent);
+  wrong.click("insSkip");
+  check("skipping leaves the quiet strip behind",
+    wrong.doc.getElementById("installNudge").hidden === false, "strip gone");
+  wrong.restore();
+
+  // The earned rule is untouched everywhere it still applies.
+  clearStore();
+  const right = await boot({ duration: 0.6, ...SAFARI_IOS });
+  await right.clock.advance(50);
+  check("Safari on iPhone still waits for a finished session",
+    right.doc.getElementById("insModal").hidden === true, "asked a stranger");
+  check("and its strip stays down too",
+    right.doc.getElementById("installNudge").hidden === true, "strip jumped the gun");
+  right.restore();
+
+  clearStore();
+  const laptop = await boot({ duration: 0.6 });
+  await laptop.clock.advance(50);
+  check("a computer is still never asked at all",
+    laptop.doc.getElementById("insModal").hidden === true, "asked a laptop");
+  laptop.restore();
+  clearStore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);

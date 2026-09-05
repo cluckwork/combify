@@ -163,14 +163,14 @@ export function installGuide(hasPrompt) {
   if (env.os === "ios") {
     return {
       mode: "ios-wrong-browser",
-      sub: "This browser can't add apps to your home screen — only Safari can. Copy the link and open it there.",
+      sub: "You're not in Safari, and on iPhone only Safari can put an app on your home screen. Move over now and Combify opens fullscreen, with no address bar, and works with no signal.",
       steps: [
-        "Tap <strong>Copy link</strong> below",
-        "Open <strong>Safari</strong> and paste it in the address bar",
-        `Tap {share} <strong>Share</strong> ${WHERE}, then <strong>Add to Home Screen</strong>`,
+        "Tap <strong>Open in Safari</strong> below — the link gets copied too, in case it doesn't jump across on its own",
+        `In Safari, tap {share} <strong>Share</strong> ${WHERE}`,
+        "Scroll down and tap <strong>Add to Home Screen</strong>",
       ],
       action: "copy",
-      actionLabel: "Copy link",
+      actionLabel: "Open in Safari",
     };
   }
   // Android without a prompt event: Firefox, or Chrome that hasn't decided the

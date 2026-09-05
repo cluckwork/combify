@@ -107,10 +107,16 @@ export function startTour() {
 
   let i = 0;
 
-  function render() {
+  // `animate` glides the spotlight between stops. It must be OFF for
+  // scroll-driven redraws: a 0.28s ease chasing a finger makes the spotlight
+  // lag behind the thing it is supposed to be pointing at, which reads as the
+  // overlay being broken rather than smooth.
+  function render(animate) {
     const stop = live[i];
     const b = boundsFor(stop);
     if (!b) { finish(); return; }
+
+    spot.style.transition = animate ? "" : "none";
 
     spot.style.top = `${b.top - PAD}px`;
     spot.style.left = `${b.left - PAD}px`;
@@ -142,14 +148,31 @@ export function startTour() {
   function next() {
     i += 1;
     if (i >= live.length) { finish(); return; }
-    render();
+    // Bring the next target into view before measuring it. The settings live
+    // below the fold on a short phone, and a spotlight drawn around something
+    // off screen is just a dark screen with a rectangle in it.
+    const stop = live[i];
+    const target = document.querySelector(stop.sel);
+    if (target && target.scrollIntoView) {
+      try { target.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {}
+    }
+    render(true);
   }
+
+  // The spotlight is positioned in viewport coordinates, so ANY scroll moves
+  // the target out from under it. Without this the whole overlay slides off
+  // the thing it is describing the moment someone flicks the page — which is
+  // exactly what it looked like: a caption stuck to the screen, pointing at
+  // nothing. Passive, and it only writes styles, so it stays cheap.
+  const onScroll = () => render(false);
 
   function finish() {
     root.hidden = true;
     root.removeEventListener("click", onClick);
-    window.removeEventListener("resize", render);
-    window.removeEventListener("orientationchange", render);
+    window.removeEventListener("resize", onScroll);
+    window.removeEventListener("orientationchange", onScroll);
+    window.removeEventListener("scroll", onScroll);
+    document.removeEventListener("scroll", onScroll, true);
     document.removeEventListener("keydown", onKey);
   }
 
@@ -164,12 +187,16 @@ export function startTour() {
 
   root.addEventListener("click", onClick);
   document.addEventListener("keydown", onKey);
-  // Rotating the phone mid-tour moves every target; re-measure rather than
-  // leaving the spotlight sitting over empty space.
-  window.addEventListener("resize", render);
-  window.addEventListener("orientationchange", render);
+  // Rotating the phone or scrolling mid-tour moves every target; re-measure
+  // rather than leaving the spotlight sitting over empty space. The capturing
+  // document listener catches scrolls inside a scrolling child element, which
+  // never reach window.
+  window.addEventListener("resize", onScroll);
+  window.addEventListener("orientationchange", onScroll);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  document.addEventListener("scroll", onScroll, true);
 
   root.hidden = false;
-  render();
+  render(false);
   return true;
 }
