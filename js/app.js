@@ -1374,7 +1374,11 @@ function installEarned() {
 // telling them after three sessions means those sessions are in the wrong
 // place. Every other platform keeps the earned rule from v1.20.0.
 function installBlocked() {
-  return installGuide(false).mode === "ios-wrong-browser";
+  // Either the browser cannot install at all, or this tab exists BECAUSE the
+  // member already said yes in another one. Both skip the "finished a session
+  // first" rule: the first because waiting helps nobody, the second because
+  // they have already agreed and are mid-flow.
+  return installGuide(false).mode === "ios-wrong-browser" || arrivedForInstall();
 }
 
 function installSilenced() {
@@ -1516,6 +1520,39 @@ const INS_ASKS_KEY = "combify.install.asks.v1";
 const INS_ANSWERED_KEY = "combify.install.answered.v1";
 const INS_MAX_ASKS = 3;
 
+// The Chrome card hands off to Safari with ?ath=1 on the URL. Safari has no
+// idea a decision was already made in another browser — the two share nothing
+// on iOS, not even localStorage — so the marker is the only way the second
+// half of the journey knows it is the second half. Without it, someone who
+// just agreed to switch browsers lands in Safari and is shown nothing at all,
+// because Safari's ask waits for a finished session.
+const ATH_KEY = "combify.install.arrived";
+const ATH_PARAM = "ath";
+
+(function readArrival() {
+  try {
+    if (new URLSearchParams(location.search).get(ATH_PARAM) !== "1") return;
+    localStorage.setItem(ATH_KEY, "1");
+    // Take it back out of the address bar: it has done its job, and a URL the
+    // member might bookmark or share should not carry our internal breadcrumb.
+    // NOTE window.history, spelled out: this module has its own module-level
+    // `history` (the member's training log), which shadows the global. Written
+    // as bare `history.replaceState` the check is silently undefined and the
+    // parameter just stays in the address bar.
+    if (window.history && window.history.replaceState) {
+      const u = new URL(location.href);
+      u.searchParams.delete(ATH_PARAM);
+      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    }
+  } catch (e) {}
+})();
+function arrivedForInstall() {
+  try { return localStorage.getItem(ATH_KEY) === "1"; } catch (e) { return false; }
+}
+function clearArrival() {
+  try { localStorage.removeItem(ATH_KEY); } catch (e) {}
+}
+
 function insAsks() {
   try { return parseInt(localStorage.getItem(INS_ASKS_KEY), 10) || 0; } catch (e) { return 0; }
 }
@@ -1550,12 +1587,23 @@ function openInstallDialog(force) {
   const go = document.getElementById("insGo");
   const title = document.getElementById("insTitle");
 
+  // Naming the journey's length is the cheapest reassurance available. Someone
+  // being asked to change browser has no idea whether they are one tap from
+  // done or ten, and "step 1 of 2" answers that before they have to decide.
+  const eyebrow = modal.querySelector(".ins__eyebrow");
+  if (eyebrow) {
+    eyebrow.textContent = guide.mode === "ios-wrong-browser" ? "Step 1 of 2"
+      : (arrivedForInstall() && guide.mode === "ios-safari") ? "Step 2 of 2"
+      : "Add to home screen";
+  }
   if (title) {
     title.textContent = guide.mode === "ios-wrong-browser"
       ? "Open Combify in Safari"          // the honest headline: this is a browser problem
       : deviceClass() === "tablet" ? "Keep Combify on your iPad" : "Keep Combify on your phone";
   }
-  if (sub) sub.textContent = guide.sub;
+  if (sub) {
+    sub.textContent = (arrivedForInstall() && guide.arrivedSub) ? guide.arrivedSub : guide.sub;
+  }
   if (steps) renderInstallSteps(steps, guide.steps);
   if (go) {
     go.hidden = !guide.action;
@@ -1570,6 +1618,7 @@ function closeInstallDialog() {
   const modal = document.getElementById("insModal");
   if (modal) modal.hidden = true;
   noteInsAnswered();
+  clearArrival();   // the journey that started in Chrome is over, either way
   // Whatever the member does next, the quiet strip is what remains — so the
   // route back in is always there without this dialog ever reopening itself.
   refreshInstallNudge();
@@ -1608,17 +1657,24 @@ function closeInstallDialog() {
         //    Apple has never promised it and it fails silently when it
         //    doesn't — hence the ordering, and hence the button text below
         //    telling them what to do if nothing happened.
+        const handoff = (() => {
+          try {
+            const u = new URL(location.href);
+            u.searchParams.set(ATH_PARAM, "1");
+            return u.toString();
+          } catch (e) { return location.href; }
+        })();
         let copied = false;
-        try { await navigator.clipboard.writeText(location.href); copied = true; } catch (e) {}
+        try { await navigator.clipboard.writeText(handoff); copied = true; } catch (e) {}
         if (!copied && navigator.share) {
-          try { await navigator.share({ title: "Combify", url: location.href }); copied = true; } catch (e) {}
+          try { await navigator.share({ title: "Combify", url: handoff }); copied = true; } catch (e) {}
         }
         go.textContent = copied
           ? "Link copied — paste it in Safari"
           : "Copy this page's address";
         noteInsAnswered();
         audit("install", copied ? "link copied" : "copy failed");
-        try { location.href = location.href.replace(/^https?:/, "x-safari-https:"); } catch (e) {}
+        try { location.href = handoff.replace(/^https?:/, "x-safari-https:"); } catch (e) {}
         return;
       }
       closeInstallDialog();

@@ -1120,10 +1120,19 @@ button.foot__link {
   inset: 0;
   z-index: 60; /* above .report's 50 — never both open, but order must be defined */
   display: flex;
-  align-items: flex-start;
+  /* CENTRED, unlike .report — and the difference is deliberate. .report is
+     anchored high because focusing its textarea summons the iPhone keyboard
+     over the bottom of the screen. This card has no text field and no
+     keyboard, so the only things it has to clear are the browser's own bars:
+     Chrome on iOS puts its address bar at the TOP, which is precisely where
+     an anchored-high card put its instructions. Centred clears both ends. */
+  align-items: center;
   justify-content: center;
-  padding: max(7vh, calc(env(safe-area-inset-top) + 24px)) 20px
-           max(20px, env(safe-area-inset-bottom));
+  /* dvh, not vh. On iOS `vh` resolves against the viewport with the toolbars
+     HIDDEN, so a card positioned in vh sits underneath a toolbar that is
+     actually on screen — the exact overlap being fixed here. */
+  padding: max(4dvh, calc(env(safe-area-inset-top) + 16px)) 20px
+           max(4dvh, calc(env(safe-area-inset-bottom) + 16px));
   overflow-y: auto;
   background: rgba(0, 0, 0, 0.74);
   backdrop-filter: blur(6px);

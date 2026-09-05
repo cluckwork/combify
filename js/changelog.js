@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.24.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "One thing at a time when you're in the wrong browser",
+    notes: [
+      "If you're in Chrome on an iPhone, the card now asks for one thing only: open it in Safari. The home-screen steps used to be printed there too, which meant reading a list you couldn't follow until you'd already left. They now appear once you're actually in Safari, where they can be done.",
+      "Combify carries the handoff across, so landing in Safari picks up where you left off instead of starting the explanation over. The card is labelled step 1 of 2 and step 2 of 2, so you can see how short it is before you commit.",
+      "The card also sits in the middle of the screen now instead of near the top, where Chrome's address bar was covering the instructions.",
+    ],
+  },
+  {
     v: "1.23.0",
     date: "2026-09-05",
     size: "minor",

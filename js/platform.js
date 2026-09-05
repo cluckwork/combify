@@ -144,6 +144,10 @@ export function installGuide(hasPrompt) {
   if (env.os === "ios" && env.browser === "safari") {
     return {
       mode: "ios-safari",
+      // `arrived` is set when this Safari tab was opened by the Chrome card's
+      // handoff: they already agreed to this, so the card picks up the thread
+      // instead of re-arguing the case.
+      arrivedSub: "You're in Safari now — three taps and it's on your home screen.",
       sub: "One time. Then it opens fullscreen — no address bar — and works offline.",
       steps: [
         `Tap {share} <strong>Share</strong> ${WHERE}`,
@@ -163,12 +167,12 @@ export function installGuide(hasPrompt) {
   if (env.os === "ios") {
     return {
       mode: "ios-wrong-browser",
-      sub: "Only Safari can add apps to an iPhone home screen. Takes three taps once you're there.",
-      steps: [
-        "Tap <strong>Open in Safari</strong> below",
-        `Tap {share} <strong>Share</strong> ${WHERE}`,
-        "Scroll down, tap <strong>Add to Home Screen</strong>",
-      ],
+      sub: "Only Safari can add apps to an iPhone home screen. One tap and you're there — Combify will pick up where it left off.",
+      // Deliberately EMPTY. This card asks for one thing: change browser. The
+      // home-screen steps belong on the other side, once they are in Safari
+      // and can actually follow them — a list spanning two browsers is a list
+      // most people abandon halfway.
+      steps: [],
       action: "copy",
       actionLabel: "Open in Safari",
     };

@@ -1883,6 +1883,11 @@ async function collectSpokenVsShown(app, ms) {
   check("the button offers to take them there",
     /Safari/i.test(wrong.doc.getElementById("insGo").textContent),
     wrong.doc.getElementById("insGo").textContent);
+  // ONE ask. The home-screen steps cannot be followed in this browser, so
+  // printing them here just makes a list most people abandon halfway.
+  check("and it asks for one thing only — no home-screen steps yet",
+    wrong.doc.getElementById("insSteps").children.length === 0,
+    `${wrong.doc.getElementById("insSteps").children.length} steps`);
   check("and the strip is lifted above the settings, not buried under them",
     wrong.doc.getElementById("installNudge").style.order === "-1",
     wrong.doc.getElementById("installNudge").style.order || "(no order)");
@@ -1940,6 +1945,34 @@ async function collectSpokenVsShown(app, ms) {
   check("a computer is still never asked at all",
     laptop.doc.getElementById("insModal").hidden === true, "asked a laptop");
   laptop.restore();
+  clearStore();
+
+  // ---- Stage two: landing in Safari because Chrome sent them ----
+  // Chrome and Safari share nothing on iOS, not even localStorage, so the
+  // handoff URL carries ?ath=1. Without it someone who just agreed to switch
+  // browsers arrives in Safari and is shown nothing, because Safari's ask
+  // waits for a finished session they haven't done.
+  const arrived = await boot({ duration: 0.6, search: "?ath=1", ...SAFARI_IOS });
+  await arrived.clock.advance(50);
+  check("arriving in Safari from the handoff shows the steps at once",
+    arrived.doc.getElementById("insModal").hidden === false, "showed nothing");
+  check("and picks up the thread rather than re-arguing it",
+    /You're in Safari now/.test(arrived.doc.getElementById("insSub").textContent),
+    arrived.doc.getElementById("insSub").textContent);
+  check("now the home-screen steps appear",
+    /Add to Home Screen/.test(arrived.doc.getElementById("insSteps").textContent),
+    arrived.doc.getElementById("insSteps").textContent);
+  check("the breadcrumb is taken back out of the address bar",
+    !/ath=1/.test(arrived.window.location.search), arrived.window.location.search);
+  arrived.click("insSkip");
+  arrived.restore();
+
+  // Answering clears it, so it does not reappear on every later visit.
+  const settled = await boot({ duration: 0.6, ...SAFARI_IOS });
+  await settled.clock.advance(50);
+  check("once answered, Safari goes back to the earned rule",
+    settled.doc.getElementById("insModal").hidden === true, "kept asking");
+  settled.restore();
   clearStore();
 }
 
