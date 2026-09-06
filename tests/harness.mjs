@@ -212,8 +212,18 @@ export function makeAudioFactory(clock, cfg) {
       clock.setTimeout(() => { if (this._sounding) this._emit("playing"); }, 0);
       if (this._endTimer) clock.clear(this._endTimer);
       const drop = typeof cfg.dropEnded === "function" ? cfg.dropEnded(this) : !!cfg.dropEnded;
-      this._endTimer = clock.setTimeout(() => {
+      const onEnd = () => {
         this._endTimer = null;
+        // A looping element never ends — it wraps and keeps sounding. The
+        // silent-switch keeper is the only looper in the app, and modelling it
+        // as ending after one pass made it read as dead the moment it started:
+        // the Web Audio path (which requires a LIVE keeper) could never engage
+        // in a test, so the entire sample-accurate sfx route went uncovered.
+        if (this.loop) {
+          this._ct = 0;
+          this._endTimer = clock.setTimeout(onEnd, this.duration * 1000);
+          return;
+        }
         if (this._sounding) { this._sounding = false; stats.playing--; if (this.isVoice) stats.voicePlaying--; }
         // Spec: natural end does NOT set paused — only pause() does. The
         // real phone confirmed it ("ended PLAYING" log entries), and the old
@@ -258,7 +268,8 @@ export function makeAudioFactory(clock, cfg) {
           return;
         }
         if (!drop) this._emit("ended");
-      }, this.duration * 1000);
+      };
+      this._endTimer = clock.setTimeout(onEnd, this.duration * 1000);
       return Promise.resolve();
     }
   }
@@ -359,7 +370,19 @@ export async function boot(cfg = {}) {
   // must fail fast instead of touching the real internet (the report relay
   // would otherwise receive a POST on every suite run).
   saved.fetch = g.fetch;
-  g.fetch = () => Promise.reject(new Error("network disabled in tests"));
+  // cfg.sfxBuffers opts INTO the Web Audio path. audio.js prefers a decoded
+  // buffer for every bell/tick/warning/blip whenever the keeper is up, so on a
+  // real phone that is the path the member actually hears — but it needs
+  // fetch + decodeAudioData, and with the network hard-off it never engaged
+  // once in this suite. Every sfx assertion here was silently testing the
+  // media-element FALLBACK only, which is how a bug that made the buffer path
+  // claim success while producing no sound reached a real device.
+  g.fetch = (url) => {
+    if (cfg.sfxBuffers && /audio\/sfx\//.test(String(url))) {
+      return Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(64)) });
+    }
+    return Promise.reject(new Error("network disabled in tests"));
+  };
 
   // cfg.animate turns on a real requestAnimationFrame (driven by real time, not
   // the virtual clock) plus a vibrate spy, so the count-up/pop/haptic path can
@@ -411,7 +434,10 @@ export async function boot(cfg = {}) {
   // is a sound the user never hears. That distinction is the whole point —
   // the old code happily created oscillators into a suspended context and
   // reported no error while the app sat there silent.
-  const synth = { oscStarted: 0, lost: 0, resumes: 0, ctx: null };
+  // wa/waLost: sounds that went out over Web Audio, split by whether the
+  // context was actually running when they started. waLost is a sound the
+  // member never heard.
+  const synth = { oscStarted: 0, lost: 0, resumes: 0, ctx: null, wa: [], waLost: 0 };
   window.AudioContext = g.AudioContext = class {
     constructor() {
       this.state = cfg.audioSuspended ? "suspended" : "running";
@@ -436,6 +462,26 @@ export async function boot(cfg = {}) {
       };
     }
     createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: (n) => n }; }
+    decodeAudioData(buf, ok, fail) {
+      // Real decodeAudioData is async; resolving on the virtual clock keeps
+      // the buffers arriving after the priming tap, as they do on a phone.
+      if (!cfg.sfxBuffers) { fail && fail(new Error("no decode in tests")); return Promise.reject(new Error("no decode")); }
+      const decoded = { duration: 0.3, sampleRate: 44100 };
+      clock.setTimeout(() => ok && ok(decoded), 5);
+      return Promise.resolve(decoded);
+    }
+    createBufferSource() {
+      if (!cfg.sfxBuffers) throw new Error("no buffer source in tests");
+      const ctx = this;
+      return {
+        buffer: null, playbackRate: { value: 1 }, connect: (n) => n,
+        start(when) {
+          if (ctx.state === "running") synth.wa.push({ t: clock.now, when: when || 0, rate: this.playbackRate.value });
+          else synth.waLost++;
+        },
+        stop() {},
+      };
+    }
   };
 
   // Copy app.js + combos.js as .mjs so Node treats them as ES modules

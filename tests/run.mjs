@@ -2454,6 +2454,113 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
+// -------------- 48. The fastest pace must not damage the callout
+{
+  section("48. Blitz: back-to-back combos, still one word at a time");
+  // Blitz closes the gap BETWEEN combos to 150ms, and its derived word gap
+  // lands exactly on the 40ms floor. That floor is the only thing keeping
+  // consecutive words from being scheduled on top of each other once the chain
+  // runs back-to-back, so this asserts the audio invariants directly rather
+  // than trusting the arithmetic.
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("level", "advanced");          // the longest combos, the most words
+  app.set("pace", "150");
+  app.set("rounds", 2); app.set("workSec", 30); app.set("restSec", 5);
+  check("Blitz is a real option", app.doc.querySelector('#pace .seg__opt[data-value="150"]') !== null,
+    "the 150 segment is missing");
+
+  app.click("startBtn");
+  await app.clock.advance(80000);        // countdown + two full rounds + finish
+
+  check("the session ran to the end", app.doc.getElementById("phase").textContent.trim() === "Done",
+    app.doc.getElementById("phase").textContent);
+  check("plenty of words were actually spoken", app.stats.plays > 40, `${app.stats.plays} plays`);
+
+  // THE INVARIANTS. Any of these failing means the pace broke the voice.
+  check("never two words sounding at once",
+    app.stats.maxVoiceConcurrent <= 1, `${app.stats.maxVoiceConcurrent} concurrent, ${app.stats.overlapEvents.length} overlaps`);
+  // At most one stop per round, and only at the bell. nextCombo already holds a
+  // fresh combo when under 1300ms remain and playClips holds each later word
+  // under 450ms, so nothing STARTS into the bell — but a word still sounding
+  // when the round ends is stopped by design, and the fake clock lands on that
+  // boundary more often than a real one does. Anything beyond one per round
+  // would mean the pace itself is shredding words.
+  check("no word cut off except at most one per round, at the bell",
+    app.stats.cutShort.length <= 2,
+    `${app.stats.cutShort.length} cuts: ${app.stats.cutShort.slice(0, 3).map((c) => `${c.key}@${c.at}`).join(", ")}`);
+  check("nothing was seeked while it was sounding",
+    app.stats.seeksWhilePlaying.length === 0, `${app.stats.seeksWhilePlaying.length} mid-sound seeks`);
+  check("no clip was asked to play from a displaced position",
+    app.stats.seekRaces.length === 0, `${app.stats.seekRaces.length} seek races`);
+  app.restore();
+
+  // And the slowest pace must be unaffected by the new option existing.
+  clearStore();
+  const slow = await boot({ duration: 0.6 });
+  slow.set("pace", "3000");
+  slow.set("rounds", 1); slow.set("workSec", 25); slow.set("restSec", 5);
+  slow.click("startBtn");
+  await slow.clock.advance(45000);
+  check("Relaxed still behaves",
+    slow.stats.maxVoiceConcurrent <= 1 && slow.stats.cutShort.length <= 1
+      && slow.stats.seeksWhilePlaying.length === 0,
+    `${slow.stats.maxVoiceConcurrent} concurrent, ${slow.stats.cutShort.length} cut, ${slow.stats.seeksWhilePlaying.length} mid-sound seeks`);
+  slow.restore();
+  clearStore();
+
+  section("49. A dead keeper never costs the sound effects their voice");
+  // THE BUG (founder, 2026-09-06): finish a session, wait, start another —
+  // countdown ticks gone, combos still called. The signature of every
+  // "all sfx silent, voice fine" report this project has had.
+  //
+  // THE MECHANISM. audio.js prefers a decoded Web Audio buffer for every
+  // bell/tick/warning/blip, because media elements were 105-124ms late and
+  // wobbled the count-up riff. Web Audio's one fatal flaw is that the
+  // ring/silent switch mutes it, and the ONLY thing holding that off is the
+  // looping silence.wav keeper putting the page on iOS's media channel.
+  // The gate on that path was `silenceOk` — a latch set when the keeper's
+  // play() promise resolved, and never lowered when the element later
+  // STOPPED. iOS pauses media elements on any interruption (a call, a
+  // notification, the screen locking) and runs none of our code. So the latch
+  // stayed up over a dead keeper: every sfx committed to Web Audio, returned
+  // TRUE, and the media-element fallback that would have been heard was never
+  // reached. The voice plays on elements throughout, which is why only the
+  // sound effects disappear.
+  //
+  // This models the nastiest real form — play() resolves while the element
+  // never actually sounds — so only the element's own paused flag can tell
+  // the truth. Revert playSfxBuffer's gate to `silenceOk` and this fails with
+  // every cue going out over inaudible Web Audio.
+  clearStore();
+  const wa = await boot({ sfxBuffers: true, duration: 0.6 });
+  wa.set("rounds", 1); wa.set("workSec", 30); wa.set("restSec", 20); wa.set("pace", "1500");
+  wa.click("startBtn");
+  // Stepped, not one big jump: the buffer load is a real promise chain and
+  // each advance drains one microtask checkpoint.
+  for (let i = 0; i < 20; i++) await wa.clock.advance(500);
+  check("the Web Audio path is actually under test",
+    wa.synth.wa.length > 0, "buffers never engaged — this test would prove nothing");
+
+  const keeper = wa.stats.live.find((a) => /silence/.test(a.src));
+  check("the keeper is a real looping element", !!keeper && keeper.loop === true,
+    keeper ? `loop=${keeper.loop}` : "no keeper element");
+  keeper.play = () => { keeper.paused = true; return Promise.resolve(); };
+  keeper.pause();
+
+  const waBefore = wa.synth.wa.length, elBefore = wa.stats.audible.length;
+  for (let i = 0; i < 56; i++) await wa.clock.advance(500); // the 10s warning, the last-3s cues, the bell
+  const lostToWa = wa.synth.wa.length - waBefore;
+  const heard = wa.stats.audible.slice(elBefore)
+    .filter((a) => !a.voice && !a.muted && a.key !== "silence");
+  check("the cues still reach the member through the elements",
+    heard.length >= 5, `${heard.length} audible sfx`);
+  check("nothing was thrown away into a muted Web Audio context",
+    lostToWa === 0, `${lostToWa} cues went out over Web Audio with the keeper down`);
+  wa.restore();
+  clearStore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);

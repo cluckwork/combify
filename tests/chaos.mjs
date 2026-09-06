@@ -44,7 +44,7 @@ async function chaosRun(seed) {
     rounds: 1 + Math.floor(rng() * 2),
     work: 15 + 5 * Math.floor(rng() * 3),
     rest: 5 + 5 * Math.floor(rng() * 2),
-    pace: ["3000", "1500", "500"][Math.floor(rng() * 3)],
+    pace: ["3000", "1500", "500", "150"][Math.floor(rng() * 4)],
     level: ["beginner", "intermediate", "advanced"][Math.floor(rng() * 3)],
   };
   const chaosRng = mulberry32(seed ^ 0x9e3779b9);

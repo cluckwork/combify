@@ -351,12 +351,50 @@ export function startAudioSession() {
   const s = getSilence();
   s.muted = false;
   s.loop = true;
+  // Already looping (a resume, a restart, a second startAudioSession in the
+  // same session): leave it alone. play() on an element that is already
+  // playing is a no-op at best and an AbortError at worst on iOS, and a
+  // rejection here would drop silenceOk on a keeper that is running fine.
+  if (!s.paused && !s.ended) { silenceOk = true; audit("session", "keeper already up"); return; }
   try {
     const p = s.play();
     if (p && p.then) p.then(() => { silenceOk = true; }, () => { silenceOk = false; audit("session:reject"); });
     else silenceOk = true;
   } catch (e) { silenceOk = false; }
   audit("session", "keeper start");
+}
+
+// Is the keeper SOUNDING, right now?
+//
+// silenceOk on its own is a latch: it records that play() resolved once, and
+// nothing ever lowers it when the element later stops. iOS pauses media
+// elements on any interruption — a notification, a call, the screen locking,
+// another app taking audio focus — and none of that runs our code. So a latch
+// left up through a paused keeper told playSfxBuffer the page was still on the
+// media channel when it no longer was: every tick, bell and warning committed
+// to Web Audio, which the ring/silent switch mutes, and returned TRUE, so the
+// media-element fallback that would have been heard was never reached. The
+// voice plays on elements and kept working, which is why the failure always
+// reads as "all the sound effects are gone but it's still calling combos" —
+// the founder reported exactly that, twice, most recently as a second session
+// starting with a silent countdown.
+//
+// The element's own paused/ended flags are the truth, so ask them.
+function keeperLive() {
+  if (!silenceOk || !silenceEl) return false;
+  try { return silenceEl.paused === false && !silenceEl.ended; } catch (e) { return false; }
+}
+
+// Put the keeper back up if something outside the app stopped it. Called once
+// a second from the app's heartbeat while a session is running — cheap (a
+// property read) in the normal case, since it only acts on a dead keeper.
+// Without it a single interruption costs the REST of the session its
+// silent-switch protection, because nothing else re-plays the element until
+// the next start.
+export function ensureAudioSession() {
+  if (!silenceEl || keeperLive()) return;
+  audit("session", "keeper revive");
+  startAudioSession();
 }
 export function stopAudioSession() {
   silenceOk = false;
@@ -413,7 +451,10 @@ function loadSfxBuffers() {
   });
 }
 function playSfxBuffer(key, rate) {
-  if (!silenceOk || !sfxBuffers[key]) return false;
+  // keeperLive(), not silenceOk — see the note there. Declining here is not a
+  // failure: playSfx falls straight through to the pooled media element, which
+  // survives the silent switch and is the proven path.
+  if (!keeperLive() || !sfxBuffers[key]) return false;
   const ctx = getAudioCtx();
   if (!ctx || ctx.state !== "running" || !ctx.createBufferSource) return false;
   try {
@@ -430,7 +471,7 @@ function playSfxBuffer(key, rate) {
 // main-thread stalls entirely. Sources are kept so a restart can cut them.
 let riffSources = [];
 export function scheduleBlipRiff(offsetsMs, rates) {
-  if (!silenceOk || !sfxBuffers.blip) return false;
+  if (!keeperLive() || !sfxBuffers.blip) return false;
   const ctx = getAudioCtx();
   if (!ctx || ctx.state !== "running" || !ctx.createBufferSource) return false;
   try {

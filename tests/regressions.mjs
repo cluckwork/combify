@@ -88,6 +88,27 @@ const REGRESSIONS = [
     selfTest: `function stop(){ silenceEl.removeAttribute("src"); silenceEl.load(); }`,
   },
   {
+    id: "keeper-live-gate",
+    file: "js/audio.js",
+    shipped: "v2.1.3",
+    symptom: "All sound effects vanish while the voice keeps calling combos — most often on a second session.",
+    why:
+      "Web Audio is preferred for every bell/tick/warning/blip because media elements were\n" +
+      "  105-124ms late. It is muted by the ring/silent switch, and the ONLY thing holding that\n" +
+      "  off is the looping keeper putting the page on iOS's media channel. So the gate on that\n" +
+      "  path must ask whether the keeper is sounding RIGHT NOW. `silenceOk` cannot answer it:\n" +
+      "  it is a latch set when play() resolved, and iOS pauses media elements on any\n" +
+      "  interruption without running our code. A latch left up over a dead keeper sends every\n" +
+      "  cue into a muted context AND returns true, so the element fallback never runs.",
+    test: (src) => {
+      const body = fnBody(src, "playSfxBuffer");
+      if (body == null) return "playSfxBuffer not found — this rule needs updating";
+      if (/\bkeeperLive\s*\(/.test(body)) return null;
+      return "playSfxBuffer gates on something other than a live keeper check";
+    },
+    selfTest: `function playSfxBuffer(key, rate){\n  if (!silenceOk || !sfxBuffers[key]) return false;\n  return true;\n}`,
+  },
+  {
     id: "sfx-unmute",
     file: "js/audio.js",
     shipped: "v2.0.1",

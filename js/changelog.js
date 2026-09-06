@@ -48,6 +48,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "2.2.0",
+    date: "2026-09-06",
+    size: "minor",
+    title: "Blitz",
+    notes: [
+      "New Blitz pace — combos called back to back, for conditioning rounds.",
+      "Fixed the bells, ticks and warnings going quiet while the combos kept coming.",
+    ],
+  },
+  {
     v: "2.1.3",
     from: "2.1.2",
     date: "2026-09-06",

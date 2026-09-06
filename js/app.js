@@ -8,7 +8,7 @@ import {
   configureVoice, speakCombo, stopVoice,
   armAudio, unlockAudioForMobile, markNeedsReprime,
   ringBell, playTick, playWarning, playBlip, playLand, parkIdleSfx, parkAllIdle,
-  startAudioSession, stopAudioSession, scheduleBlipRiff, stopBlipRiff,
+  startAudioSession, stopAudioSession, ensureAudioSession, scheduleBlipRiff, stopBlipRiff,
 } from "./audio.js";
 import { audit, auditOn, setAudit, auditDump, auditPersist, auditReport } from "./audit.js";
 import { deviceOS, deviceClass, canInstall, isStandalone, installGuide, platformTag, devForcesPrompt } from "./platform.js";
@@ -533,6 +533,13 @@ document.addEventListener("visibilitychange", () => {
 // as at "Relaxed." Derive a small inter-word gap from the same pace value so
 // one setting now governs both: faster pace = quicker cadence AND shorter
 // gap between combos.
+// NOTE the 40ms floor is doing real work at the fast end. Fast (500) already
+// derives 45ms, so Blitz (150) lands ON the floor rather than below it: past
+// this point the app cannot speak faster, because a spoken word is a recording
+// of fixed length — "six" takes 815ms whatever the setting. What Blitz
+// shortens is the silence BETWEEN combos, 500ms down to 150. The floor is what
+// keeps consecutive words from being scheduled on top of one another when the
+// chain is already running back-to-back.
 const getWordGap = () => Math.max(40, Math.min(300, getPace() * 0.09));
 
 // ---------- Helpers ----------
@@ -1198,6 +1205,11 @@ function tick() {
     if (remaining >= 1 && remaining <= 3) playTick();
   }
   reviveComboLoop();
+  // The silent-switch keeper gets the same treatment as the combo loop: iOS
+  // pauses it on any interruption and never tells us, and a dead keeper costs
+  // every remaining bell and warning its protection. Only acts when it is
+  // genuinely down.
+  if (state.running) ensureAudioSession();
   parkIdleSfx(); // once a second, any sfx that finished goes back to zero
   if (remaining <= 0) {
     if (state.phase === "work") {
