@@ -48,6 +48,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "2.1.0",
+    date: "2026-09-06",
+    size: "minor",
+    title: "A new icon",
+    notes: [
+      "Combify has its own mark: the countdown ring, opened into a C, cooling teal to a warm tip.",
+      "The old teal square with a letter in it read as a sibling of the BWB logo. This does not.",
+      "You may need to remove and re-add it to your home screen to see the new one.",
+    ],
+  },
+  {
     v: "2.0.1",
     date: "2026-09-06",
     size: "patch",
