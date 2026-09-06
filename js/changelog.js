@@ -48,7 +48,8 @@
 // Newest first.
 export const CHANGELOG = [
   {
-    v: "2.1.0",
+    v: "2.1.1",
+    from: "2.1.0",
     date: "2026-09-06",
     size: "minor",
     title: "A new icon",
