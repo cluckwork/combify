@@ -1869,6 +1869,12 @@ async function collectSpokenVsShown(app, ms) {
     app.doc.getElementById("insSteps").textContent.includes("Add to Home Screen"),
     app.doc.getElementById("insSteps").textContent);
   check("with an escape hatch", !!app.doc.getElementById("insSkip"), "no skip");
+  // A stray tap outside the card must NOT answer the question. This is the
+  // one moment the app asks for something it wants, and dismissing by reflex
+  // is not the same as deciding.
+  const scrim = app.doc.getElementById("insModal");
+  scrim.dispatchEvent(new app.window.MouseEvent("click", { bubbles: true }));
+  check("tapping the scrim does not dismiss it", scrim.hidden === false, "a stray tap closed it");
   app.click("insSkip");
   check("skip closes it", dlg().hidden === true, "still open");
   check("the quiet strip is what remains", app.doc.getElementById("installNudge").hidden === false, "strip gone too");

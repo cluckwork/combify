@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.31.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "The home-screen card asks properly",
+    notes: [
+      "Tapping outside the add-to-home-screen card no longer dismisses it. Putting Combify on your home screen is the one thing the app actually asks for, and a stray tap shouldn't count as an answer — \"Not now\" is there, and it's still one tap.",
+      "\"Not now\" stays quiet but is now a proper thumb-sized target, since it's the only way out.",
+    ],
+  },
+  {
     v: "1.30.4",
     date: "2026-09-05",
     size: "patch",

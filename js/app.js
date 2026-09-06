@@ -1784,8 +1784,15 @@ function closeInstallDialog() {
     });
   }
   if (skip) skip.addEventListener("click", closeInstallDialog);
-  // Tapping the scrim is the other way everyone expects to close a dialog.
-  modal.addEventListener("click", (e) => { if (e.target === modal) closeInstallDialog(); });
+  // NO scrim-to-dismiss, deliberately. Tapping outside a card is a reflex
+  // rather than a decision, and this is the one moment the app asks for
+  // something it genuinely wants: a stray tap should not answer it. "Not now"
+  // is the only way out, so declining is a thing someone chose to do.
+  //
+  // The obligation that comes with that: the exit must always be reachable.
+  // The scrim scrolls (overflow-y: auto) and the layout suite asserts "Not
+  // now" sits inside the viewport on every phone it tests — a card that grew
+  // past the bottom of a small screen would turn this from firm into trapped.
 
   // A way back in for anyone who said "not now" — the same footer idiom as
   // "Report a problem". Hidden on computers and once installed, where it would

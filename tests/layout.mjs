@@ -555,6 +555,23 @@ async function runInstallCard() {
           `${Math.round(m.aim.centreFromRight)}px from the right edge, wanted ${c.inset}`);
       }
     }
+    if (m.shown) {
+      // The scrim no longer dismisses, so "Not now" is the ONLY exit. If it
+      // ever renders off screen the card stops being firm and becomes a trap.
+      const skip = await page.evaluate(() => {
+        const r = document.getElementById("insSkip").getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, h: r.height, vh: window.innerHeight };
+      });
+      check(`${c.name}: the only exit is on screen`,
+        skip.top >= 0 && skip.bottom <= skip.vh + 1,
+        `Not now at ${Math.round(skip.top)}-${Math.round(skip.bottom)} of ${skip.vh}`);
+      check(`${c.name}: and is big enough to hit`, skip.h >= 40, `${Math.round(skip.h)}px tall`);
+      // A stray tap on the scrim must leave it open.
+      await page.mouse.click(8, Math.round(skip.vh / 2));
+      await page.waitForTimeout(200);
+      check(`${c.name}: a tap outside the card does not dismiss it`,
+        await page.isVisible("#insModal"), "closed on a stray tap");
+    }
     check(`${c.name}: no JavaScript errors`, errors.length === 0, errors.join("; "));
     check(`${c.name}: no telemetry escaped`, escaped.length === 0, escaped.join(", "));
     if (SHOTS) await page.screenshot({ path: path.join(shotDir, `install-${c.name.replace(/\s+/g, "-")}.png`) });
