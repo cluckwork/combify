@@ -154,6 +154,10 @@ export const FLAME = {
     // TURBULENCE — curl noise perturbing radius and height so paths breathe
     // and wander instead of tracing perfect circles.
     curl: { scale: 1.9, speed: 0.42, ampR: 0.20, ampY: 0.16 },
+    // How much brighter everything gets between the current taking hold and
+    // the catch. This is the wind-up: the light has to climb into the moment
+    // it releases, or the catch reads as arriving from nowhere.
+    charge: 2.6,
     // How often an element gets flung wide before being pulled back.
     flingChance: 0.18,
     flingAmp: 0.42,
@@ -199,7 +203,44 @@ export const FLAME = {
   },
   sheets:    { count: 3,   opacity: 0.34, in: 1.45, peak: 2.10, fade: 2.90 },  // phase 2
   glints:    { count: 14,  opacity: 0.95, in: 1.40, fade: 2.50 },              // phase 2
-  flame:     { opacity: 1.00 },                                                // phase 3
+  // ---- The flame ----
+  //
+  // Drawn as CEL BANDS, not per-pixel noise. Each tongue is filled three times
+  // at shrinking size — deep rim, amber body, white-hot core — which gives the
+  // stepped, graphic look the rest of the app has, keeps the silhouette clean
+  // at small sizes, and costs ~40 fills a frame instead of a million pixels.
+  // Continuous fbm mush would be both slower and, in a flat minimal UI, more
+  // obviously out of place.
+  flame: {
+    opacity: 1.00,
+    tongues: 17,       // overlapping tongues — never one outline (rule 2)
+    height: 0.40,      // tallest tongue, in viewport-min units
+    width: 0.050,      // half-width at the base
+    baseY: 0.455,      // where the flame stands, viewport fraction
+    lick: 1.55,        // how fast tongues lick upward
+    // Max |dx/dy| of a tongue's centreline. 0.42 is about 23 degrees off
+    // vertical at the extreme — a definite lean, never a limb.
+    coneSlope: 0.52,
+    shear: 0.42,       // lean rotates slowly — it remembers the spin
+    wobble: 0.070,     // S-curve amplitude of the centreline
+    detachFrom: 0.62,  // above this height a tip can pinch off and rise free
+    glow: 1.05,        // additive halo behind the body
+    embers: 16,
+    steps: 24,         // points sampled up one edge of a tongue — 13 showed as polygon edges
+  },
+
+  // Fire ramp, separate from the vortex ramp. Value carries this, not hue:
+  // white-hot core against a dim rim (rule 5), with the core allowed to clip
+  // (rule 6). The violet appears ONLY in the thinnest dissolving wisps — any
+  // more and it reads as rainbow fire, which is the cheap look.
+  fire: {
+    core:  [255, 253, 246],
+    mid:   [255, 201,  98],
+    outer: [255, 124,  38],
+    rim:   [188,  46,  20],
+    base:  [206, 232, 255],   // blue-white, only at the very foot
+    wisp:  [132, 120, 205],
+  },
 
   // ---- Colour.
   //
@@ -458,6 +499,14 @@ function moteAt(m, t, W, H, R) {
   let r = rEnter + (rOrbit - rEnter) * E;
   const theta = m.enterAngle + IN.sweep * Math.PI * 2 * E + orbit * E;
 
+  // THE CONSUMPTION. After the catch the vortex material does not simply fade
+  // out where it stands — it is drawn inward and down into the flame\'s base,
+  // so the flame reads as being MADE of what was swirling rather than pasted
+  // over the top of it. Radius collapses toward the axis and the height sinks
+  // toward the foot of the fire.
+  const eaten = span(t, FLAME.t.katch, FLAME.t.katch + 0.55);
+  if (eaten > 0) r *= 1 - eaten * 0.92;
+
   // Turbulence and flings only apply once the current has hold. A mote still
   // out on its stream should read as travelling, not as being buffeted.
   r *= 1 + cu * V.curl.ampR * E;
@@ -471,7 +520,8 @@ function moteAt(m, t, W, H, R) {
   const rise = (m.riseRate * span(t, m.capturedAt, FLAME.t.katch)) + cv * V.curl.ampY * E;
 
   const x = W * V.cx + pre.ox * R * E + Math.cos(theta) * r * R;
-  const y = H * V.cy - (m.y0 * E + rise) * R + Math.sin(theta) * r * R * tilt;
+  let y = H * V.cy - (m.y0 * E + rise) * R + Math.sin(theta) * r * R * tilt;
+  if (eaten > 0) y += (H * FLAME.flame.baseY - y) * eaten * 0.85;   // sink into the fire
   const depth = Math.sin(theta);          // +1 nearest the viewer, -1 furthest
 
   return { x, y, r, depth, theta, ap };
@@ -566,6 +616,363 @@ function buildSprites() {
 }
 
 // ============================================================================
+// THE FLAME
+// ============================================================================
+// Shape language, straight off the effects-animation rules in the config:
+// a strong base thinning as it rises, a centreline that is an S-swoop rather
+// than a straight axis, half-widths pinched by C-shapes and pushed out by
+// hooks, and no two tongues the same height or phase — so the crown breaks
+// into uneven tips on its own instead of being a symmetrical dome.
+let tongues = [];
+let embers = [];
+
+function buildFlame(seed = 1) {
+  const F = FLAME.flame;
+  tongues = [];
+  for (let i = 0; i < F.tongues; i++) {
+    const h1 = hash2(i * 5.3 + seed, 71.7);
+    const h2 = hash2(i * 7.1 + seed, 83.9);
+    const h3 = hash2(i * 9.7 + seed, 97.3);
+    tongues.push({
+      // Spread across the base, densest in the middle so the body reads as one
+      // mass with tongues rising out of it rather than a row of candles.
+      x: (h1 - 0.5) * 1.15 * (0.35 + h2 * 0.65),
+      h: F.height * (0.42 + h2 * 0.58),
+      // Thickness spans nearly 4x, not a polite 2x. A set of same-shaped
+      // tongues at slightly different scales still reads as one stamp
+      // repeated.
+      w: F.width * (0.34 + h1 * 1.02),
+      // PROFILE. Low values give a blunt, fat tongue; high values give a thin
+      // spike. This is what actually makes two tongues different SHAPES rather
+      // than the same shape at two sizes. The range starts well above 0.5
+      // because a low exponent holds its width almost to the tip, and a body
+      // made of those reads as an egg rather than as flame.
+      taper: 0.80 + h3 * 1.35,
+      // Each tongue carries its bands differently — on some the white core
+      // rides high and wide, on others it is a small ember low in the body.
+      bandW: 0.80 + h2 * 0.42,
+      bandH: 0.78 + h1 * 0.46,
+      // Each foot sits at its own height. Without this every closed path
+      // ended on the same line and the whole body was cut off by a hard
+      // horizontal edge — the single most artificial thing about the first
+      // draft. Fire has no bottom edge.
+      foot: h2 * 0.018,
+      phase: h3 * Math.PI * 2,
+      lick: F.lick * (0.78 + h1 * 0.5),
+      lean: (h2 - 0.5) * 1.05,
+      // BRANCHING. A tongue can fork partway up, the way a trunk throws a
+      // limb — the branch carries its own bands and its own lean, so the
+      // banding forks with it instead of every tongue being a single stem.
+      branch: h1 > 0.45,
+      branchAt: 0.26 + h2 * 0.30,
+      branchLean: (h3 - 0.5) * 0.95,
+      branchScale: 0.42 + h1 * 0.28,
+      // Tips above detachFrom can pinch off and rise free. Staggered so they
+      // never let go together.
+      detach: h3 > 0.68,
+      detachPhase: h1 * Math.PI * 2,
+      seed: h1 * 53.1 + h3 * 17.9,
+      depth: h2,            // back-to-front ordering
+    });
+  }
+  tongues.sort((a, b) => a.depth - b.depth);
+
+  embers = [];
+  for (let i = 0; i < F.embers; i++) {
+    const e1 = hash2(i * 3.7 + seed, 131.1);
+    const e2 = hash2(i * 6.1 + seed, 149.3);
+    embers.push({ x: (e1 - 0.5) * 1.2, born: e2, rise: 0.5 + e1 * 0.8,
+                  drift: (e2 - 0.5) * 0.5, size: 0.7 + e2 * 1.4, seed: e1 * 31.7 });
+  }
+}
+
+// One tongue's outline at time t, as a closed path on the context.
+// `shrink` nests the cel bands: 1 = full silhouette, smaller = inner band.
+// Bands are SCALED, and a band a tongue is too thin to carry is skipped
+// outright.
+//
+// Two wrong turns are recorded here because both looked reasonable. Scaling
+// alone gives a slim tongue a hair-thin core — a string down its middle.
+// Switching to a fixed INSET fixed the strings and destroyed the flame: with
+// most tongues narrower than the largest inset, nearly every one lost all its
+// inner bands and became a flat rim-coloured triangle, so the whole body went
+// angular and lost its colour structure. Scale for shape, skip for legibility.
+function tonguePath(g, tn, t, cx, by, R, shrink, grow, band) {
+  const F = FLAME.flame;
+  const N = F.steps;
+  const wob = F.wobble;
+  // Each BAND gets its own phase, its own noise patch and its own lick rate,
+  // so the four bands slip against one another instead of being nested copies
+  // of one outline. This is the difference between layered fire and a shape
+  // with piping: in real flame the white core surges and falls on a different
+  // beat from the envelope around it.
+  const bs = band ? band.seed : 0;
+  const bl = band ? band.lick : 1;
+  const bp = band ? band.phase : 0;
+  // Rotational shear: the lean direction turns slowly, so the whole body keeps
+  // a twist that reads as a memory of the spin.
+  const shear = Math.sin(t * F.shear + tn.phase) * 0.6;
+  const h = tn.h * grow * (0.86 + 0.14 * noise2(tn.seed, t * tn.lick));
+
+  const pt = (u, side) => {
+    // Centreline: an S-swoop, not an axis. Amplitude grows with height so the
+    // foot stays planted while the tip swings.
+    const scroll = t * tn.lick * bl;
+    // Two harmonics plus noise, and a hook that only bites near the tip. One
+    // low-amplitude sine gave straight spikes: the shape language (S-swoop in,
+    // hook at the end) never appeared, so the tongues read as rigid triangles
+    // rather than as flame licking. The tip term is what curls the ends.
+    const sway = Math.sin(u * Math.PI * 1.45 + tn.phase + bp + scroll) * wob * u
+               + Math.sin(u * Math.PI * 3.10 + tn.phase * 1.7 + scroll * 1.3) * wob * 0.42 * u
+               + (noise2(tn.seed + bs + u * 2.6, scroll) - 0.5) * wob * 1.15 * u
+               + Math.sin(scroll * 0.9 + tn.phase) * wob * 0.55 * Math.pow(u, 3.0);
+    
+    // THE RISE CONE. Lateral offset is clamped to a fraction of how far the
+    // tongue has already risen, so nothing can ever point sideways — at worst
+    // it leans. Without this, lean plus shear plus sway could add up to a
+    // near-horizontal limb, and a flame with two of those sticking out looks
+    // like it has hands. Fire goes up; it only ever leans on the way.
+    const lat = (tn.lean + shear) * u * u * wob * 1.7 + sway;
+    const cone = F.coneSlope * u * (h / R);
+    const latC = Math.max(-cone, Math.min(cone, lat));
+    const cxx = cx + (tn.x * F.width * 2.3 + latC) * R;
+    // Half-width: thick through the body, thinning to a point, with C-shape
+    // pinches and hook bulges so the edge is never a clean parabola. The
+    // extra term near u=0 pulls the very foot back in, so tongues meet the
+    // base as a ragged rounded mass instead of a sawn-off block.
+    // The foot profile is a QUARTER CIRCLE, not a straight ramp. Width still
+    // reaches exactly zero at the very bottom (so no shape closes along a flat
+    // line and leaves a sawn-off edge), but it gets there on a curve, so the
+    // base of the mass is rounded. A linear ramp makes every shape a V, and a
+    // body built from a dozen V's converges to a point — the whole flame read
+    // as a kite standing on its tip.
+    const fu = Math.min(1, u / 0.30);
+    const foot = Math.sqrt(1 - (1 - fu) * (1 - fu));
+    const taper = Math.pow(1 - u, tn.taper) * foot;
+    // Hook amplitude is per-shape. At +-0.95 a WIDE shape gets notches cut so
+    // deep it reads as an angular star rather than a mass of fire; narrow
+    // tongues can carry far more variation than the body can.
+    const hookAmp = tn.hookAmp != null ? tn.hookAmp : 0.85;
+    const hook = 1 + (noise2(tn.seed * 1.7 + bs * 2.3 + u * 3.1, scroll * 0.8) - 0.5) * hookAmp;
+    const w = tn.w * shrink * taper * hook * R;
+    return [cxx + side * w, by + tn.foot * R - u * h * R];
+  };
+
+  // Too thin to read as a band — it would draw as a thread, so it is simply
+  // not part of this tongue. Slim tongues end up all rim and outer, which is
+  // exactly right: a thin lick of flame has no white core.
+  if (tn.w * shrink < 0.011) return false;
+
+  g.beginPath();
+  for (let k = 0; k <= N; k++) { const [x, y] = pt(k / N, -1); k ? g.lineTo(x, y) : g.moveTo(x, y); }
+  for (let k = N; k >= 0; k--) { const [x, y] = pt(k / N, 1); g.lineTo(x, y); }
+  g.closePath();
+  return true;
+}
+
+function rgba(c, a) { return `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`; }
+
+function renderFlame(g, t, W, H, R) {
+  const F = FLAME.flame, C = FLAME.fire;
+  // Grows out of the catch, burns, then shrinks away as it travels.
+  const born = envelope(t, FLAME.t.katch, FLAME.t.alive, FLAME.t.travel, FLAME.t.done);
+  if (born <= 0.004) return;
+  const grow = 0.35 + 0.65 * span(t, FLAME.t.katch, FLAME.t.alive + 0.25);
+  // The travel: the body shrinks and slides toward where the badge will sit.
+  const tv = span(t, FLAME.t.travel, FLAME.t.done);
+  const shrinkAll = 1 - tv * 0.82;
+
+  const cx = W * FLAME.vortex.cx * (1 - tv) + W * 0.5 * tv;
+  const by = H * F.baseY + (H * 0.30) * tv * tv;
+  const a = born * FLAME.flame.opacity;
+
+  // --- Additive glow behind. The room reacting is what sells a light source
+  // (rule 8); this also spills onto the stats sitting under it. ---
+  const spr = buildSprites();
+  const gr = R * 0.42 * grow * shrinkAll * (1 + 0.05 * Math.sin(t * 7.3));
+  g.globalAlpha = a * F.glow * 0.42;
+  g.drawImage(spr[RAMP - 1], cx - gr, by - gr * 1.5, gr * 2, gr * 2);
+  const gr2 = gr * 0.55;
+  g.globalAlpha = a * F.glow * 0.5;
+  g.drawImage(spr[RAMP - 1], cx - gr2, by - gr2 * 1.5, gr2 * 2, gr2 * 2);
+
+  // THE BODY IS NOT ADDITIVE.
+  //
+  // Everything else on this canvas composites with 'lighter', which is right
+  // for motes and glow — overlapping light should brighten. It is exactly
+  // wrong for cel bands: fifteen tongues times four bands stacked additively
+  // saturate to flat white wherever they cross, which is what turned the
+  // middle of the flame into one featureless blob no matter how the bands
+  // were sized. Painted shapes occlude; only light adds.
+  g.globalCompositeOperation = "source-over";
+
+  // --- THE BODY MASS ---
+  // Tapering every tongue to a point at its foot leaves dark V-shaped gaps
+  // between neighbours, and against a near-black screen those read as black
+  // triangles cut into the base of the fire. Real flame has a coherent burning
+  // body down there that the tongues rise out of. These three wide, low, blunt
+  // shapes are that body; everything else stands on them.
+  // LOW AND DIM ON PURPOSE. The first version ran to 2.5x the tongue width and
+  // 0.30 of the flame height at full opacity, including a white core band —
+  // which is not a base, it is a solid cone standing in front of every tongue,
+  // and it swallowed the whole body. All this needs to do is close the gaps
+  // between the tongue feet in the bottom tenth of the flame.
+  for (const [i, wide, high, col, al] of [
+    [0, 1.55, 0.115, C.rim, 0.50],
+    [1, 1.15, 0.085, C.outer, 0.60],
+    [2, 0.70, 0.055, C.mid, 0.55],
+  ]) {
+    const bodyTn = {
+      x: 0, w: F.width * wide, h: F.height * high, foot: 0,
+      taper: 1.05, phase: i * 1.9, lick: F.lick * (0.5 + i * 0.14),
+      lean: 0, seed: 60 + i * 11, bandW: 1, bandH: 1, hookAmp: 0.30,
+    };
+    g.globalAlpha = a * al;
+    g.fillStyle = rgba(col, 1);
+    if (tonguePath(g, bodyTn, t, cx, by, R, 1, grow * shrinkAll,
+                   { seed: i * 7.7, lick: 0.8 + i * 0.21, phase: i * 2.1 })) g.fill();
+  }
+
+  // --- Body: nested cel bands per tongue, back to front. Rim first so
+  // the hotter bands sit inside it. ---
+  for (let i = 0; i < tongues.length; i++) {
+    const tn = tongues[i];
+    const dep = 0.55 + tn.depth * 0.45;
+    // Each band is narrower AND SHORTER than the one outside it. Scaling only
+    // the width made every band a concentric copy of the same outline, so the
+    // body read as a white blob wearing orange piping. Dropping the height too
+    // puts the white-hot region low in the flame where it belongs, and lets
+    // each colour own a real area instead of a rim.
+    // lick and phase are deliberately non-harmonic across the bands: the core
+    // runs fastest (hot gas moves), the rim slowest, and none of the rates
+    // divide into each other, so the four never fall back into step.
+    // Fire is not four flat bands. Outside the rim there are thin wisps
+    // dissolving into nothing; inside the body a soft haze sits between the
+    // amber and the white; and the core itself is small and low. Six layers,
+    // each on its own beat.
+    // FOUR bands, drawn solid. The seven-layer version — with extra haze
+    // passes and an outsized violet wisp band — composited into something
+    // that read as overlapping panes of coloured glass, and the violet came
+    // forward as purple flames, which is the exact "rainbow fire looks cheap"
+    // failure. Stylised means fewer, more confident shapes.
+    for (const [shrink, hscale, col, alpha, band] of [
+      [1.00, 1.00, C.rim,   0.72, { seed: 0.0,  lick: 0.71, phase: 0.0 }],
+      [0.74, 0.84, C.outer, 0.88, { seed: 4.3,  lick: 0.94, phase: 1.7 }],
+      [0.50, 0.68, C.mid,   0.94, { seed: 9.1,  lick: 1.23, phase: 3.4 }],
+      [0.26, 0.46, C.core,  0.95, { seed: 15.7, lick: 1.61, phase: 5.2 }],
+    ]) {
+      g.globalAlpha = a * alpha * dep;
+      g.fillStyle = rgba(col, 1);
+      const bh = 1 - (1 - hscale) * tn.bandH;
+      const bw = 1 - (1 - shrink) * tn.bandW;
+      if (tonguePath(g, tn, t, cx, by, R, bw * shrinkAll, grow * shrinkAll * bh, band)) g.fill();
+    }
+  }
+
+  // --- Branches. A limb thrown off the trunk partway up, with its own bands
+  // and its own lean, so the banding forks rather than running as one stem. ---
+  for (const tn of tongues) {
+    if (!tn.branch) continue;
+    const sh = Math.sin(t * F.shear + tn.phase) * 0.6;
+    const bu = tn.branchAt;
+    const limb = {
+      ...tn,
+      // Its base sits partway up the parent, offset along the parent's lean.
+      x: tn.x + (tn.lean + sh) * bu * bu * F.wobble * 1.7 / (F.width * 1.3) * 0.5,
+      foot: tn.foot - bu * tn.h,
+      h: tn.h * tn.branchScale,
+      w: tn.w * tn.branchScale * 0.85,
+      lean: tn.branchLean,
+      phase: tn.phase + 2.4,
+      seed: tn.seed + 27.3,
+      taper: tn.taper * 0.9,
+    };
+    const dep = 0.55 + tn.depth * 0.45;
+    for (const [inset, hscale, col, alpha, band] of [
+      [1.00, 1.00, C.rim,   0.50, { seed: 2.2,  lick: 0.77, phase: 0.6 }],
+      [0.72, 0.84, C.outer, 0.72, { seed: 5.5,  lick: 1.02, phase: 2.2 }],
+      [0.44, 0.58, C.mid,   0.86, { seed: 10.4, lick: 1.31, phase: 3.9 }],
+      [0.22, 0.34, C.core,  1.00, { seed: 16.9, lick: 1.7,  phase: 5.6 }],
+    ]) {
+      g.globalAlpha = a * alpha * dep;
+      g.fillStyle = rgba(col, 1);
+      if (tonguePath(g, limb, t, cx, by, R, inset * tn.bandW, grow * shrinkAll * hscale, band)) g.fill();
+    }
+  }
+
+  // --- Detaching tips. A tongue that licks high enough pinches off: the top
+  // travels on alone, thinning and dissolving, while the parent falls back.
+  // Fire sheds its tips constantly and nothing else in the body says that. ---
+  for (const tn of tongues) {
+    if (!tn.detach) continue;
+    const cyc = ((t * 0.62 + tn.detachPhase) % 1);
+    if (cyc < 0.12) continue;
+    const k = (cyc - 0.12) / 0.88;
+    const lift = k * 0.16 * R;
+    const ghost = {
+      ...tn,
+      // Small, and shrinking as it goes — a shed tip does not hold its size.
+      h: tn.h * 0.22 * (1 - k * 0.55),
+      w: tn.w * 0.38 * (1 - k * 0.5),
+      foot: tn.foot - (F.detachFrom * tn.h + lift / R),
+      taper: tn.taper * 1.35,
+    };
+    for (const [shrink, hscale, col, al, band] of [
+      [1.00, 1.00, C.outer, 0.45, { seed: 3.1, lick: 1.1, phase: 1.1 }],
+      [0.50, 0.62, C.mid, 0.70, { seed: 8.8, lick: 1.4, phase: 2.9 }],
+    ]) {
+      g.globalAlpha = a * al * (1 - k) * (1 - k);
+      g.fillStyle = rgba(col, 1);
+      if (tonguePath(g, ghost, t, cx, by, R, shrink * shrinkAll, grow * shrinkAll * hscale, band)) g.fill();
+    }
+  }
+
+  // --- Blue-white foot. Only at the very base, only a smear. ---
+  g.globalCompositeOperation = "lighter";
+  g.globalAlpha = a * 0.5;
+  const bw = R * 0.10 * shrinkAll;
+  g.drawImage(spr[RAMP - 1], cx - bw, by - bw * 0.5, bw * 2, bw);
+  g.fillStyle = rgba(C.base, 1);
+  g.globalAlpha = a * 0.22;
+  g.beginPath();
+  g.ellipse(cx, by - R * 0.012 * shrinkAll, R * 0.055 * shrinkAll, R * 0.022 * shrinkAll, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // --- Embers off the tips ---
+  g.globalAlpha = 1;
+  for (const e of embers) {
+    const cyc = ((t - FLAME.t.katch) * 0.55 + e.born) % 1;
+    if (cyc < 0.02) continue;
+    const ey = by - (F.height * R * 0.9 + cyc * e.rise * R * 0.42) * grow * shrinkAll;
+    const ex = cx + (e.x * F.width * 2.4 + e.drift * cyc + (noise2(e.seed, t * 0.8) - 0.5) * 0.06) * R;
+    const ea = a * (1 - cyc) * 0.85;
+    if (ea <= 0.004) continue;
+    const es = e.size * (1 - cyc * 0.5) * shrinkAll;
+    g.globalAlpha = ea;
+    g.drawImage(spr[RAMP - 2], ex - es * 2.5, ey - es * 2.5, es * 5, es * 5);
+  }
+}
+
+// THE CATCH — a rounded bloom of warm light expanding fast with soft edges,
+// decelerating sharply as the flame resolves out of it. No hard flash frame,
+// no ring, no debris: gas igniting, not something detonating.
+function renderCatch(g, t, W, H, R) {
+  const k = span(t, FLAME.t.katch, FLAME.t.alive + 0.30);
+  if (k <= 0 || k >= 1) return;
+  // Fast out, hard deceleration — the expansion is nearly over by a third of
+  // the way through, which is what makes it read as a whump rather than a ring.
+  const e = 1 - Math.pow(1 - k, 3.6);
+  const rad = R * (0.10 + 0.46 * e);
+  const a = (1 - k) * (1 - k) * 0.85;
+  const spr = buildSprites();
+  g.globalAlpha = a;
+  g.drawImage(spr[RAMP - 1], W * FLAME.vortex.cx - rad, H * FLAME.flame.baseY - rad * 1.15, rad * 2, rad * 2);
+  g.globalAlpha = a * 0.6;
+  const r2 = rad * 0.55;
+  g.drawImage(spr[RAMP - 1], W * FLAME.vortex.cx - r2, H * FLAME.flame.baseY - r2 * 1.15, r2 * 2, r2 * 2);
+}
+
+// ============================================================================
 // Draw one frame at time t. Pure: same t, same picture.
 // ============================================================================
 let mask = { motes: true, filaments: true, sheets: true, glints: true, flame: true };
@@ -593,6 +1000,7 @@ export function renderAt(t) {
     const env = envelope(t, F.in, F.peak, FLAME.t.katch, F.fade);
     if (env > 0.004) {
       const heat = span(t, FLAME.t.current, FLAME.t.peak);
+      const charge = 1 + FLAME.vortex.charge * Math.pow(span(t, FLAME.t.current, FLAME.t.katch), 2);
       g.lineCap = "round";
       for (let i = 0; i < filaments.length; i++) {
         const f = filaments[i];
@@ -623,7 +1031,7 @@ export function renderAt(t) {
             const taper = 1 - u;
             const near = (p.depth + 1) / 2;
             const nearAxis = clamp01(1 - p.r / FLAME.vortex.radius);
-            const a = env * F.opacity * taper * taper * (0.30 + near * 0.70)
+            const a = env * F.opacity * charge * taper * taper * (0.30 + near * 0.70)
                     * (0.55 + (f.size / F.width[1]) * 0.55);
             if (a > 0.004) {
               const c = heatColor(clamp01(nearAxis * 0.7 + heat * 0.55));
@@ -645,6 +1053,12 @@ export function renderAt(t) {
     const M = FLAME.motes;
     const env = envelope(t, M.in, M.peak, FLAME.t.katch, M.fade);
     const heat = span(t, FLAME.t.current, FLAME.t.peak);
+    // Same charge curve as the filaments: as the spiral tightens it also
+    // BRIGHTENS. Without this the gather was almost flat in total light —
+    // 53 to 138 over more than a second — so nothing felt like it was
+    // building, and there was a dip right before the catch where the vortex
+    // had shrunk away before the flame arrived to replace it.
+    const charge = 1 + FLAME.vortex.charge * Math.pow(span(t, FLAME.t.current, FLAME.t.katch), 2);
     const spr = buildSprites();
     for (let i = 0; i < motes.length; i++) {
       const p = moteAt(motes[i], t, W, H, R);
@@ -654,7 +1068,7 @@ export function renderAt(t) {
       const near = (p.depth + 1) / 2;
       const scale = 0.72 + near * 0.6;
       const nearAxis = clamp01(1 - p.r / FLAME.vortex.radius);
-      const a = env * M.opacity * (0.35 + near * 0.65) * (0.5 + nearAxis * 0.5);
+      const a = env * M.opacity * charge * (0.35 + near * 0.65) * (0.5 + nearAxis * 0.5);
       if (a <= 0.004) continue;
       // Pick the pre-tinted sprite instead of building a gradient. Colour
       // warms toward the axis and as the vortex tightens.
@@ -670,6 +1084,11 @@ export function renderAt(t) {
       g.globalAlpha = a;
       g.drawImage(img, p.x - s * 0.8, p.y - s * 0.8, s * 1.6, s * 1.6);
     }
+  }
+
+  if (mask.flame && FLAME.flame.opacity > 0) {
+    renderCatch(g, t, W, H, R);
+    renderFlame(g, t, W, H, R);
   }
 
   g.globalAlpha = 1;
@@ -695,6 +1114,7 @@ export function play(opts = {}) {
   stop();
   motes = buildElements(FLAME.motes.count, opts.seed || 1, FLAME.motes.size);
   filaments = buildElements(FLAME.filaments.count, (opts.seed || 1) + 37, FLAME.filaments.width);
+  buildFlame(opts.seed || 1);
   onDone = opts.onDone || null;
   scrubbed = null;
   playing = true;
@@ -727,6 +1147,7 @@ export function scrubTo(t) {
   if (!motes.length) {
     motes = buildElements(FLAME.motes.count, 1, FLAME.motes.size);
     filaments = buildElements(FLAME.filaments.count, 38, FLAME.filaments.width);
+    buildFlame(1);
   }
   playing = false;
   if (raf) cancelAnimationFrame(raf);

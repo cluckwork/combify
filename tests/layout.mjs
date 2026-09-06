@@ -827,7 +827,15 @@ async function runSegRamp() {
     const out = [];
     for (let i = 0; i < n; i++) {
       await page.locator(`#${id} .seg__opt`).nth(i).click();
-      await page.waitForTimeout(420);                 // let the tint finish easing
+      // WAIT FOR THE STATE, don't just sleep. A fixed delay made this test
+      // flaky under load: a click occasionally landed while the previous
+      // transition was still settling and the read came back stale, so the
+      // ramp looked like it stopped halfway. Poll --i until the control has
+      // actually moved, then let the tint finish easing.
+      await page.waitForFunction(
+        ([segId, want]) => Number(getComputedStyle(document.getElementById(segId)).getPropertyValue("--i")) === want,
+        [id, i], { timeout: 4000 });
+      await page.waitForTimeout(420);
       const meta = await page.evaluate((segId) => {
         const seg = document.getElementById(segId);
         return {
