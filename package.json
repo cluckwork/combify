@@ -1,6 +1,6 @@
 {
   "name": "combify",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "Combify \u2014 round timer + boxing combo caller, by Boxing With Bakr",
   "type": "module",

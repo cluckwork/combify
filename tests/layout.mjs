@@ -238,6 +238,21 @@ async function runDevice(dev) {
   // ---- Ready screen ----
   let m = await page.evaluate(probe);
   check("no horizontal scrolling on the ready screen", m.docScrollW <= m.docClientW + 1, `${m.docScrollW} > ${m.docClientW}`);
+  // No dead space under the footer. min-height:100dvh used to sit on BOTH body
+  // and .app, and iOS browsers do not reliably resolve dvh to the toolbar-shown
+  // height — so the page was sized to the taller toolbar-hidden viewport and
+  // the difference became a screen of scrollable nothing below the content.
+  // Anything past the app's own 40px bottom padding is that bug returning.
+  const dead = await page.evaluate(() => {
+    const de = document.documentElement;
+    const footBottom = document.querySelector(".foot").getBoundingClientRect().bottom + window.scrollY;
+    // Only space past BOTH the content and the viewport is dead. A document is
+    // always at least viewport-tall, and on a big screen that gap sits below
+    // the footer without being scrollable — measuring against the footer alone
+    // flagged every desktop layout.
+    return Math.round(de.scrollHeight - Math.max(footBottom, de.clientHeight));
+  });
+  check("no dead scroll space below the footer", dead <= 70, `${dead}px of nothing under the last element`);
   check("settings visible before starting", m.settingsVisible);
   check("Start button on screen", m.controls && m.controls.bottom <= m.vh + 1, `controls bottom ${m.controls?.bottom} vs ${m.vh}`);
   // The ring is decorative — but if it renders, the time must genuinely sit

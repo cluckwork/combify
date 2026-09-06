@@ -32,9 +32,17 @@ html, body {
 }
 
 body {
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* NO min-height here. It used to be 100dvh, stacked with another 100dvh on
+     .app, and the pair left a screen of dead black under the footer on a
+     phone. Viewport units are the wrong tool for this: iOS browsers do not
+     reliably resolve dvh to the toolbar-SHOWN height, so the page gets sized
+     to the taller toolbar-hidden viewport while you are looking at the shorter
+     one, and the difference becomes scrollable nothing. The ready screen is
+     now exactly as tall as its content; html/body already paint the background
+     across the whole viewport, so nothing needs stretching to fill it. */
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* An app, not a page: no rubber-band past the end, and no pull-to-refresh. */
+  overscroll-behavior-y: none;
   /* An app, not a document: a long-press mid-round selecting "Rest" with
      blue handles reads as a web page, not a trainer. Selection stays ON for
      the changelog (.app--doc below), which is reading material. The audit
@@ -62,7 +70,6 @@ body:has(.app[data-focus="1"]) { padding: 0; }
   max-width: 560px;
   margin: 0 auto;
   padding: 20px 18px 40px;
-  min-height: 100dvh;        /* lets the stage grow to fill the screen in focus mode */
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -266,7 +273,11 @@ body:has(.app[data-focus="1"]) { padding: 0; }
 /* ACTUALLY full screen: no column max-width, no page padding, no card chrome —
    the stage IS the screen. The controls float over it as icons (below), so not
    a single pixel band is reserved for buttons. */
+/* Focus mode is the one place a full-height column is actually wanted: the
+   stage has to grow to fill the phone while a round runs. Scoped here so the
+   ready screen can never inherit it. */
 .app[data-focus="1"] {
+  min-height: 100dvh;
   max-width: none;
   padding: 0;
   gap: 0;
