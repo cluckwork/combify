@@ -2657,6 +2657,43 @@ async function collectSpokenVsShown(app, ms) {
   const nowAvg = lengths.reduce((s, r) => s + r.now, 0) / lengths.length;
   check("the trimmed set is at least 10% shorter overall", nowAvg < wasAvg * 0.9,
     `${wasAvg.toFixed(3)}s → ${nowAvg.toFixed(3)}s (${(100 * (wasAvg - nowAvg) / wasAvg).toFixed(0)}%)`);
+
+  section("51. The streak celebration can never break the finish screen");
+  // A flourish is the last thing that should be able to take the results
+  // screen down with it. This is the no-motion / no-canvas path: jsdom has no
+  // 2D context and no requestAnimationFrame, which is exactly what a phone set
+  // to reduce motion looks like from the app's side. The session must finish
+  // normally, the numbers must be right, and nothing may be left behind.
+  clearStore();
+  const fl = await boot({ duration: 0.5 });
+  fl.set("rounds", 1); fl.set("workSec", 20); fl.set("restSec", 5); fl.set("pace", "1500");
+  fl.click("startBtn");
+  await fl.clock.advance(40000);          // countdown + round + the whole finale
+
+  check("the session still reaches the finish screen",
+    fl.phase() === "Done", fl.phase());
+  check("the punch total is still shown",
+    /\d/.test(fl.doc.getElementById("stats").textContent), fl.doc.getElementById("stats").textContent.slice(0, 60));
+  // First session ever: the streak went 0 -> 1, so the trigger DID fire. What
+  // must not happen is the dim being left switched on over a screen that will
+  // never be un-dimmed, because the celebration bailed on reduced motion.
+  check("no darkening is left switched on",
+    fl.doc.querySelector(".app").dataset.flame === undefined,
+    `data-flame=${fl.doc.querySelector(".app").dataset.flame}`);
+  check("no celebration canvas was mounted where it cannot draw",
+    fl.doc.querySelector("canvas.flamefx") === null, "a canvas was mounted with no 2d context");
+
+  // And a second session on the SAME day must not celebrate again: the streak
+  // did not move. This is the difference between "there is a streak" and "the
+  // streak went up", and getting it wrong means the animation plays every
+  // single session.
+  fl.click("startBtn");                    // finish screen -> reset + start
+  await fl.clock.advance(40000);
+  check("a second session the same day does not re-trigger",
+    fl.doc.querySelector(".app").dataset.flame === undefined,
+    "the celebration armed again on an unchanged streak");
+  fl.restore();
+  clearStore();
 }
 
 console.log(results.join("\n"));

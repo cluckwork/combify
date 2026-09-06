@@ -14,6 +14,7 @@ import { audit, auditOn, setAudit, auditDump, auditPersist, auditReport } from "
 import { deviceOS, deviceClass, canInstall, isStandalone, installGuide, platformTag, devForcesPrompt } from "./platform.js";
 import { startTour, tourSeen, resetTour } from "./tour.js";
 import { initDev, devOn, readDevFromUrl } from "./dev.js";
+import * as flame from "./flame.js";
 
 // ---------- Segmented control: tap a segment, or swipe across it ----------
 function initSeg(id) {
@@ -469,7 +470,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, msLeft: 0, tickTimer: null, comboTimer: null, finaleTimer: null, settleTimer: null, entranceTimer: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, msLeft: 0, tickTimer: null, comboTimer: null, finaleTimer: null, settleTimer: null, entranceTimer: null, flameTimer: null };
 
 // ---------- Screen wake lock ----------
 // Keeps the screen on while a session runs, so a member who sets the phone
@@ -741,7 +742,14 @@ function buildFinishSummary(streak, streakBit) {
   heroNum.style.textAlign = "center";
   const staged = el.stage.classList.contains("is-finale") && !el.stage.classList.contains("is-finale-reveal");
   // No fixed ms: countUp sizes the climb to the punch total itself.
-  el.stats.__runCountUp = () => countUp(digits, session.punches, { pop: true, haptics: true, sound: true, glow: halo });
+  // The celebration hangs off the END of the count-up, not off finish(): the
+  // punch total is the app's one dopamine moment and it gets to land clean
+  // before anything else moves. countUp's own landing plus FLAME.t.lead is the
+  // beat where the number sits fully lit.
+  el.stats.__runCountUp = () => {
+    countUp(digits, session.punches, { pop: true, haptics: true, sound: true, glow: halo });
+    if (shouldCelebrateStreak()) runStreakFlame();
+  };
   if (!staged) el.stats.__runCountUp();
 
   // Everything else is supporting detail on one quieter line.
@@ -1126,7 +1134,63 @@ function startFinale() {
     }, FINALE_GLIDE_MS + 80);
   }, FINALE_HOLD_MS);
 }
+// ---------- Streak celebration ----------
+//
+// THE TRIGGER, in one place so it is easy to find and easy to change.
+//
+// "The streak went up" is not the same as "there is a streak". The streak
+// increments on the FIRST COMPLETED ROUND of a new day — inside
+// completeWorkRound, minutes before finish() runs — so by the time the finish
+// screen exists the new value is already the current one. Comparing against a
+// snapshot taken when the session started is the only way to know it moved.
+//
+// Deliberately not gated on streak >= 2: a member finishing their first ever
+// session went from 0 to 1, and that is the moment most worth celebrating.
+let streakAtStart = 0;
+let flameShownThisSession = false;
+
+export function shouldCelebrateStreak() {
+  if (flameShownThisSession) return false;          // once per session, ever
+  // ---------------------------------------------------------------------
+  // DEV ONLY WHILE THE SEQUENCE IS UNFINISHED.
+  //
+  // The vortex gathers and then nothing catches — the flame is phase 3. A
+  // member on a real streak would get a build-up with no payoff, which is
+  // worse than no celebration at all. DELETE THIS LINE when the flame,
+  // audio and badge hand-off are in; the real trigger is the line below it.
+  // ---------------------------------------------------------------------
+  if (!devOn()) return false;
+  return currentStreak(history) > streakAtStart;
+}
+
+// Runs the sequence after the count-up has landed and had its beat. Everything
+// here is defensive: the celebration is a flourish, and a flourish must never
+// be what breaks the finish screen.
+function runStreakFlame() {
+  if (!motionOK()) return;                          // reduced motion: badge only
+  flameShownThisSession = true;
+  if (el.app) el.app.dataset.flame = "1";
+  audit("flame", `streak ${streakAtStart} -> ${currentStreak(history)}`);
+  state.flameTimer = setTimeout(() => {
+    flame.play({
+      onDone: () => { if (el.app) delete el.app.dataset.flame; },
+    });
+  }, flame.FLAME.t.lead * 1000);
+}
+
+function stopStreakFlame() {
+  clearTimeout(state.flameTimer);
+  flame.stop();
+  if (el.app) delete el.app.dataset.flame;
+}
+
+// Tap anywhere to skip to the end state.
+document.addEventListener("pointerdown", () => {
+  if (el.app && el.app.dataset.flame === "1") { clearTimeout(state.flameTimer); flame.skip(); }
+}, true);
+
 function clearFinale() {
+  stopStreakFlame();
   stopBlipRiff(); // a restart mid-riff must not leave scheduled blips ringing into the countdown
   clearTimeout(state.finaleTimer);
   el.stage.classList.remove("is-finale", "is-finale-reveal");
@@ -1398,6 +1462,9 @@ function deferIdle(fn) {
 function chooseClipSet() { setClipSet(getPace() === BLITZ_PACE ? "blitz" : "std"); }
 
 function start() {
+  // Snapshot BEFORE any round completes — see shouldCelebrateStreak.
+  streakAtStart = currentStreak(history);
+  flameShownThisSession = false;
   armAudio();
   chooseClipSet();
   unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
@@ -1427,7 +1494,7 @@ function pause() { state.running = false; audit("phase", "paused"); state.msLeft
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
 function resume() { state.running = true; audit("phase", `resume ${state.phase}`); armAudio(); unlockAudioForMobile(); startAudioSession(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + (state.msLeft > 0 ? state.msLeft : state.secondsLeft * 1000); state.msLeft = 0; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
-function reset() { deferIdle(auditPersist); parkAllIdle("reset"); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); stopAudioSession(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; state.msLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); applyPendingReload(); }
+function reset() { deferIdle(auditPersist); parkAllIdle("reset"); stopStreakFlame(); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); stopAudioSession(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; state.msLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); applyPendingReload(); }
 
 // ---------- Wire up the buttons ----------
 // "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1
@@ -1447,6 +1514,9 @@ el.startBtn.addEventListener("click", () => {
 // began. THAT was the "massive lag spike on restart". This never leaves the
 // session screen: same fullscreen, same wake lock, fresh session.
 function restartSession() {
+  streakAtStart = currentStreak(history);
+  flameShownThisSession = false;
+  stopStreakFlame();
   clearInterval(state.tickTimer);
   clearTimeout(state.settleTimer);
   stopComboLoop();
@@ -2064,6 +2134,18 @@ window.addEventListener("pagehide", () => {
 // Every action below drives the REAL code path rather than a mock — a shortcut
 // that fakes the finish screen would prove nothing about the finish screen.
 initDev({
+  // --- Streak celebration preview. The sequence is minutes and a streak away
+  // in real use; rotation is a feel thing and cannot be judged at full speed.
+  flameDuration: () => flame.FLAME.t.done,
+  flamePlay: () => {
+    if (el.app) el.app.dataset.flame = "1";
+    flame.play({ onDone: () => { if (el.app) delete el.app.dataset.flame; } });
+  },
+  flameScrub: (t) => {
+    if (el.app) el.app.dataset.flame = "1";
+    flame.scrubTo(t);
+  },
+  flameLayer: (name, on) => flame.setMask(name, on),
   // The id this device puts in every ping. Surfaced on the badge because
   // nothing else can tie a sheet row back to a physical phone.
   deviceId: usageId(),

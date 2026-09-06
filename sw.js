@@ -16,7 +16,7 @@ const ASSETS = [
   "./js/audit.js",
   "./js/changelog.js",
   "./js/combos.js",
-  "./js/dev.js",
+  "./js/dev.js", "./js/flame.js",
   "./js/platform.js",
   "./js/tour.js",
   "./js/stats.js",
