@@ -34,6 +34,11 @@
 // Fields:
 //   v     version, or null for the work done before version numbers existed
 //         (the first few days). Those are shown as "Early build".
+//   from  optional. The FIRST build of a run when one entry covers several.
+//         The version moves on every deploy, so finishing a theme over five
+//         builds leaves four numbers with no entry of their own; `from` shows
+//         the span — "v1.14.0 ~ 1.14.4" — so the gap reads as one piece of
+//         work rather than as missing releases. Omit it for a single build.
 //   size  "minor" = something new you can see and use · "patch" = fixes and
 //         refinements. This is what the page labels New / Fixes, and it is
 //         the HONEST description of the release — two early versions were
@@ -43,18 +48,21 @@
 // Newest first.
 export const CHANGELOG = [
   {
-    v: "1.36.1",
+    v: "2.0.0",
     date: "2026-09-05",
-    size: "patch",
-    title: "This page, rewritten",
+    size: "minor",
+    title: "Version numbers, reset",
     notes: [
-      "Every entry is short now. One line per change, no paragraphs.",
-      "Releases that were really the same work are merged, so 59 entries became 21.",
-      "Dropped the boxes. It reads as a list.",
+      "Renumbered. Combify shipped 36 numbered builds in six weeks, which said more about how often it deployed than about what changed.",
+      "One number is now one real change. Everything below has been renumbered to match, so an old screenshot will show a number that no longer exists.",
+      "A number's middle digit now means something new to use; the last digit means fixes. So the number tells you how big the change was.",
+      "Where one change took several builds, the entry shows the span, like v1.14.0 ~ 1.14.4.",
+      "This page rewritten with it: short lines, merged releases, no boxes. 59 entries became 22.",
     ],
   },
   {
-    v: "1.36.0",
+    v: "1.12.7",
+    from: "1.12.0",
     date: "2026-09-05",
     size: "minor",
     title: "Putting Combify on your home screen",
@@ -69,7 +77,8 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.35.1",
+    v: "1.11.2",
+    from: "1.11.0",
     date: "2026-09-05",
     size: "minor",
     title: "The countdown hits, the finish lands",
@@ -82,9 +91,10 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.35.0",
+    v: "1.10.9",
+    from: "1.10.6",
     date: "2026-09-05",
-    size: "minor",
+    size: "patch",
     title: "Sound fixes",
     notes: [
       "Fixed words starting mid-syllable after locking your phone. Pivot as vot, slip as lip.",
@@ -95,9 +105,10 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.33.0",
+    v: "1.10.5",
+    from: "1.10.3",
     date: "2026-09-05",
-    size: "minor",
+    size: "patch",
     title: "Nothing waits on the app",
     notes: [
       "Pausing no longer adds up to a second to your round.",
@@ -106,7 +117,8 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.30.2",
+    v: "1.10.2",
+    from: "1.10.0",
     date: "2026-09-05",
     size: "minor",
     title: "A walkthrough on your first visit",
@@ -118,7 +130,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.28.1",
+    v: "1.9.5",
     date: "2026-09-05",
     size: "patch",
     title: "Honest usage numbers",
@@ -127,9 +139,10 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.22.0",
+    v: "1.9.4",
+    from: "1.9.3",
     date: "2026-09-05",
-    size: "minor",
+    size: "patch",
     title: "Developer tools",
     notes: [
       "Hidden panel: jump to the finish screen, replay the walkthrough, preview a streak, or see any platform's install card.",
@@ -137,9 +150,9 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.20.0",
+    v: "1.9.2",
     date: "2026-08-30",
-    size: "minor",
+    size: "patch",
     title: "The home-screen tip waits until you have trained",
     notes: [
       "Waits until you have finished a session before mentioning the home screen.",
@@ -148,7 +161,8 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.19.0",
+    v: "1.9.1",
+    from: "1.9.0",
     date: "2026-07-24",
     size: "minor",
     title: "The app counts its own training days",
@@ -158,7 +172,8 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.17.3",
+    v: "1.8.6",
+    from: "1.8.0",
     date: "2026-07-24",
     size: "minor",
     title: "Report a problem, from inside the app",
@@ -173,7 +188,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.15.0",
+    v: "1.7.0",
     date: "2026-07-24",
     size: "minor",
     title: "A new sound engine",
@@ -186,9 +201,10 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.14.1",
+    v: "1.6.8",
+    from: "1.6.1",
     date: "2026-07-23",
-    size: "minor",
+    size: "patch",
     title: "Chasing the stutter",
     notes: [
       "Fixed the word stutter and double bell strikes: the app and the phone were both rewinding a sound at once.",
@@ -203,7 +219,7 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.12.0",
+    v: "1.6.0",
     date: "2026-07-23",
     size: "minor",
     title: "Know your session, never miss the bell",
@@ -214,7 +230,8 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.11.6",
+    v: "1.5.9",
+    from: "1.5.0",
     date: "2026-07-23",
     size: "minor",
     title: "A finish worth watching",
@@ -230,7 +247,8 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.9.2",
+    v: "1.4.5",
+    from: "1.4.0",
     date: "2026-07-23",
     size: "minor",
     title: "Sound that stays on",
@@ -244,9 +262,9 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.8.0",
+    v: "1.3.3",
     date: "2026-07-23",
-    size: "minor",
+    size: "patch",
     title: "This page",
     notes: [
       "Added this list of updates, so you can see what changed and when.",
@@ -254,7 +272,8 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.7.1",
+    v: "1.3.2",
+    from: "1.3.0",
     date: "2026-07-23",
     size: "minor",
     title: "True fullscreen training",
@@ -266,7 +285,8 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.5.1",
+    v: "1.2.2",
+    from: "1.2.0",
     date: "2026-07-22",
     size: "minor",
     title: "A proper look",
@@ -278,7 +298,8 @@ export const CHANGELOG = [
     ],
   },
   {
-    v: "1.3.1",
+    v: "1.1.4",
+    from: "1.1.0",
     date: "2026-07-22",
     size: "minor",
     title: "Streaks, and Bakr's 10 combo",

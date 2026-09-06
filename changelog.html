@@ -60,7 +60,14 @@
       // The first couple of days predate version numbers; they still count as
       // changes, so they're listed with their date and marked as early work
       // rather than given a number that was never really shipped.
-      const ver = make("span", "log__ver", rel.v ? "v" + rel.v : "Early build");
+      // One entry can cover several builds: the version moves on every deploy,
+      // but a run of them refining one thing is a single entry. Showing the
+      // span makes those gaps read as one piece of work instead of as
+      // releases that went missing.
+      const label = !rel.v ? "Early build"
+        : rel.from && rel.from !== rel.v ? `v${rel.from} ~ ${rel.v}`
+        : `v${rel.v}`;
+      const ver = make("span", "log__ver", label);
       if (rel.v === VERSION) ver.classList.add("is-current");
       head.appendChild(ver);
       head.appendChild(make("span", "log__date", rel.date));

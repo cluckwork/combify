@@ -1152,13 +1152,36 @@ things shipped together:
 - **Minor** — something new you can see and use. Focus mode, the progress ring,
   streaks, true fullscreen, the changelog page.
 - **Patch** — fixes, refinements and tweaks, however many land at once.
-- **Major** — not used yet. Combify has been `1.x` since the first working
-  build; `2.0.0` would mean something like the breakdown-animation rewrite
-  (§6.3), not another round of polish.
+- **Major** — `2.0.0` (2026-09-05) was the renumbering below, not a rewrite.
 
 Bumping also means moving `VERSION` in `js/version.js`, `CACHE` in `sw.js`, and
 `version` in `package.json` together (the suite fails the build if they
-disagree), plus adding an entry to `js/changelog.js` (also enforced).
+disagree). The changelog's NEWEST entry must carry the new number too (also
+enforced) — but see below: that is often an edit, not a new entry.
+
+**The 2026-09-05 renumbering.** Combify shipped 36 numbered builds in six
+weeks. That number described how often it deployed, not what changed — the
+changelog read as 59 releases when it was really 21 pieces of work, and the
+version sequence on the page jumped around with holes in it. Both were fixed
+together:
+
+- **The version still moves on EVERY deploy.** Non-negotiable: it is how the
+  founder confirms a build actually reached his phone, and `sw.js` keys its
+  offline cache on it.
+- **One changelog entry is one theme, not one deploy.** A run of builds
+  refining the same thing is a single entry.
+- **An entry that spans several builds shows the span** — `from` renders as
+  "v1.10.0 ~ 1.10.2". That is what stops the gaps reading as missing releases.
+  So finishing a theme over five builds means editing that entry's `v` up to
+  the newest number, not adding a new entry.
+- **The digit that moves says how big it was**, and the width of the range says
+  how long it took. History was renumbered so both are true retroactively.
+- A four-part version (`0.0.0.1`) was considered for the churn and rejected: it
+  moves the same problem down a digit. The fix is fewer entries, not a finer
+  number.
+
+A version with no entry of its own is therefore not an error. It is a deploy
+that had nothing worth telling a member.
 
 **The audit (2026-07-23).** Reviewing every release against that rule, two were
 numbered too generously and one too meanly:
