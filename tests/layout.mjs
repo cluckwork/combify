@@ -798,6 +798,89 @@ async function runTour() {
   return { lines, pass, fail };
 }
 
+// The segmented controls warm from the logo's teal toward its ember as you
+// step up. This runs in a REAL browser because the whole effect is
+// color-mix() + a registered @property, neither of which jsdom computes — in
+// the unit suite the thumb is just an empty style string.
+async function runSegRamp() {
+  const lines = [];
+  let pass = 0, fail = 0;
+  const check = (name, cond, detail = "") => {
+    if (cond) { pass++; lines.push(`  ✅ ${name}`); }
+    else { fail++; lines.push(`  ❌ ${name}${detail ? `  → ${detail}` : ""}`); }
+  };
+  lines.push("\n── segmented controls warm as they step up ──");
+
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await sealContext(ctx);
+  const page = await ctx.newPage();
+  await page.addInitScript(() => { try { localStorage.setItem("combify.tour.v1", "1"); } catch (e) {} });
+  await page.goto(base, { waitUntil: "load" });
+  await page.waitForTimeout(300);
+
+  // Read the thumb's actual painted colour at each position of a control.
+  // REAL pointer input, not element.click(): the control selects on
+  // pointerdown (so a swipe across it scrubs), and a synthetic click event
+  // moves nothing at all.
+  const ramp = async (id) => {
+    const n = await page.locator(`#${id} .seg__opt`).count();
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      await page.locator(`#${id} .seg__opt`).nth(i).click();
+      await page.waitForTimeout(420);                 // let the tint finish easing
+      const meta = await page.evaluate((segId) => {
+        const seg = document.getElementById(segId);
+        return {
+          t: Number(getComputedStyle(seg).getPropertyValue("--t")),
+          bg: getComputedStyle(seg.querySelector(".seg__thumb")).backgroundImage,
+        };
+      }, id);
+      // The PAINTED colour, not the declaration. Chromium leaves color-mix()
+      // unresolved in a computed background-image, so the only honest way to
+      // ask what the member sees is to look at the pixels. Sampled near the
+      // thumb's left edge, clear of the centred label glyphs.
+      const box = await page.locator(`#${id} .seg__thumb`).boundingBox();
+      const shot = await page.screenshot({ clip: { x: box.x + 5, y: box.y + box.height / 2, width: 3, height: 3 } });
+      const rgb = await page.evaluate((u) => new Promise((res) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = document.createElement("canvas");
+          c.width = img.width; c.height = img.height;
+          const g = c.getContext("2d");
+          g.drawImage(img, 0, 0);
+          const d = g.getImageData(1, 1, 1, 1).data;
+          res([d[0], d[1], d[2]]);
+        };
+        img.src = u;
+      }), "data:image/png;base64," + shot.toString("base64"));
+      out.push({ ...meta, rgb });
+    }
+    return out;
+  };
+
+  for (const [name, id, count] of [["Level", "level", 3], ["Combo pace", "pace", 4]]) {
+    const steps = await ramp(id);
+    check(`${name} has ${count} segments`, steps.length === count, `${steps.length}`);
+    check(`${name} spans the full ramp`,
+      steps[0].t === 0 && steps[steps.length - 1].t === 1,
+      `--t ran ${steps.map((s) => s.t).join(" → ")}`);
+    check(`${name} thumb is a gradient, not a flat fill`,
+      steps.every((s) => /gradient/.test(s.bg)), steps[0].bg.slice(0, 40));
+    // Warmer means more red than blue. At the bottom of the ramp the teal has
+    // more blue than red; at the top the ember has clearly more red.
+    const rb = (s) => s.rgb[0] - s.rgb[2];
+    check(`${name} starts cool and ends warm`,
+      rb(steps[0]) < 0 && rb(steps[steps.length - 1]) > 40,
+      `rgb ${steps.map((s) => s.rgb.join(",")).join("  →  ")}`);
+    check(`${name} warms at every step, never backwards`,
+      steps.every((s, i) => i === 0 || rb(s) > rb(steps[i - 1])),
+      steps.map((s) => rb(s)).join(" → "));
+  }
+
+  await ctx.close();
+  return { lines, pass, fail };
+}
+
 // Devices run through the pool; the rotation section owns a separate browser
 // and runs alongside them, so it is never the thing everything else waits on.
 const devices = DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONLY.toLowerCase()));
@@ -805,14 +888,16 @@ const wantRotation = !ONLY || "rotating mid-session".includes(ONLY.toLowerCase()
 const wantInstall = !ONLY || "install card pointer".includes(ONLY.toLowerCase());
 const wantTour = !ONLY || "first-run walkthrough tour".includes(ONLY.toLowerCase());
 const wantBeat = !ONLY || "countdown beat".includes(ONLY.toLowerCase());
-const [devResults, rotResult, insResult, tourResult, beatResult] = await Promise.all([
+const wantSeg = !ONLY || "segmented controls warm as they step up".includes(ONLY.toLowerCase());
+const [devResults, rotResult, insResult, tourResult, beatResult, segResult] = await Promise.all([
   pool(devices, JOBS, runDevice),
   wantRotation ? runRotation() : null,
   wantInstall ? runInstallCard() : null,
   wantTour ? runTour() : null,
   wantBeat ? runCountdownBeat() : null,
+  wantSeg ? runSegRamp() : null,
 ]);
-for (const r of [...devResults, rotResult, insResult, tourResult, beatResult]) {
+for (const r of [...devResults, rotResult, insResult, tourResult, beatResult, segResult]) {
   if (!r) continue;
   lines.push(...r.lines); pass += r.pass; fail += r.fail;
 }

@@ -13,6 +13,20 @@
   --accent-ink: #010101;   /* text placed on a solid accent background */
   --work: var(--accent);
   --rest: #6f9d6a;         /* muted sage — reads as "rest" without breaking the palette */
+  /* The logo's ember, sampled from icons/icon.svg — the arc cools from deep
+     teal through bright teal to a warm tip. The segmented controls travel this
+     same ramp as you step up, so picking Advanced or Blitz literally lights
+     the flame. */
+  --ember-cool: #2a7d78;
+  --ember-mid: #49c5b6;
+  --ember-hot: #ffc46b;    /* the logo's actual tip — used by the icon, not the UI */
+  /* What the SEGMENTED CONTROLS ramp to. Deliberately short of --ember-hot and
+     of --streak. The two never share a screen — the orange flame is built by
+     buildFinishSummary, which runs only on the finish screen, where focus mode
+     has hidden these controls — so this is not a collision, it is restraint:
+     warm stays strongest where it means "you earned this". Same warm family,
+     hue 29 vs the flame's 35, saturation 0.58 against its 1.00. */
+  --ember-tip: #d69a63;
   --streak: #ffb347;       /* the ONE warm accent, used only for the streak */
   --streak-deep: #ff8a1f;  /* base of the flame */
   --streak-hot: #ffd166;   /* highlight inside the flame */
@@ -222,6 +236,8 @@ body:has(.app[data-focus="1"]) { padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   .dial__pulse.is-shock { animation: none; }
   .clock.is-slam { animation: none; }
+  /* the tint still changes, it just doesn't ease */
+  .seg { transition: none; }
 }
 
 /* ==========================================================================
@@ -579,15 +595,45 @@ label {
   user-select: none;
   -webkit-user-select: none;
 }
+/* --t is the thumb's position along the row, 0 at the first option and 1 at
+   the last (js/app.js sets it). Registering it as a real number is what lets
+   the tint EASE across with the slide — an unregistered custom property is a
+   string to the animation system, so the colour would snap while the thumb
+   glided. Where @property is unsupported the tint simply changes instantly;
+   nothing else depends on it. */
+@property --t {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+.seg { transition: --t .26s cubic-bezier(.34, 1.2, .5, 1); }
+
 .seg__thumb {
   position: absolute;
   top: 4px; bottom: 4px; left: 4px;
   width: calc((100% - 8px) / var(--count));
+  /* Flat accent first: a browser without color-mix drops the two rules below
+     and keeps exactly the thumb this control has always had. */
   background: var(--accent);
+  /* oklch, not oklab. Rectangular spaces interpolate straight through the
+     neutral axis, so teal -> amber passes through a desaturated sage and the
+     middle options (Intermediate, Steady, Fast) came out muddy — the exact
+     colours nothing in this palette uses. A polar space travels the hue angle
+     with chroma intact, giving teal -> green -> yellow -> amber: a ramp that
+     reads as heat rather than as a colour going grey on its way somewhere. */
+  background: linear-gradient(
+    105deg,
+    color-mix(in oklch shorter hue, var(--ember-tip) calc(var(--t, 0) * 78%), var(--accent)),
+    color-mix(in oklch shorter hue, var(--ember-tip) calc(var(--t, 0) * 92% + 12%), var(--ember-mid))
+  );
   border-radius: 10px;
   transform: translateX(calc(var(--i) * 100%));
   transition: transform .24s cubic-bezier(.34, 1.2, .5, 1);
   box-shadow: 0 2px 8px rgba(73, 149, 146, 0.4);
+  /* The glow warms with the fill, so the whole control gains heat rather than
+     an amber chip sitting in a teal halo. */
+  box-shadow: 0 2px 10px color-mix(in srgb,
+    color-mix(in oklch shorter hue, var(--ember-tip) calc(var(--t, 0) * 100%), var(--accent)) 42%, transparent);
   pointer-events: none;
 }
 .seg__opt {

@@ -48,6 +48,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "2.3.1",
+    date: "2026-09-06",
+    size: "patch",
+    title: "The settings warm up as you step them up",
+    notes: [
+      "Level and Combo pace shift from the logo's teal toward its ember as you pick harder settings.",
+    ],
+  },
+  {
     v: "2.3.0",
     date: "2026-09-06",
     size: "minor",

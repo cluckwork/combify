@@ -24,6 +24,11 @@ function initSeg(id) {
   function setIndex(i) {
     i = Math.max(0, Math.min(opts.length - 1, i));
     seg.style.setProperty("--i", i);
+    // 0 at the first option, 1 at the last, whatever the option count — this is
+    // what carries the thumb from the logo's teal to its ember tip. Computed
+    // here rather than in CSS so Level (3 options) and Combo pace (4) both
+    // travel the full range despite their segments being different widths.
+    seg.style.setProperty("--t", opts.length > 1 ? i / (opts.length - 1) : 0);
     seg.dataset.value = opts[i].dataset.value;
     opts.forEach((o, k) => o.setAttribute("aria-selected", k === i));
     saveSettings();
