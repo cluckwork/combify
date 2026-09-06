@@ -2100,6 +2100,18 @@ initDev({
     session.rounds = 3; session.punches = 84; session.seconds = 360;
     session.pendingPunches = 0; session.started = true;
     state.phase = "done";
+    // THE FINALE FLAG GOES UP BEFORE THIS RENDER, exactly as finish() does.
+    //
+    // renderStats builds the summary during render and decides from this class
+    // whether it is building a HIDDEN one. Without it the preview built a
+    // visible summary and fired the count-up — blips and all — right here,
+    // 900ms before finish() ran. Then finish() added the class, which hides
+    // the stats, and startFinale ran the count-up a second time after the
+    // glide. On screen: the numbers animate, get cut off and vanish, then come
+    // back and animate again. That is the fourth distinct way this preview has
+    // misrepresented the real finish, so the rule is worth restating: anything
+    // finish() does before its render, this must do too.
+    if (motionOK()) el.stage.classList.add("is-finale");
     render();                       // focus mode on; the chrome starts folding
     // Long enough for the 0.3s chrome transition to land AND the keeper's
     // play() promise to resolve. Cleared on re-entry, so hammering the button

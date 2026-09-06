@@ -881,6 +881,136 @@ async function runSegRamp() {
   return { lines, pass, fail };
 }
 
+// The dev "Finish screen" preview must show the summary ONCE.
+//
+// This is a browser-only fault by construction: it turns on whether
+// motionOK() is true, and jsdom has no requestAnimationFrame, so the unit
+// suite cannot see it at all. The founder saw the count-up run, get cut off
+// and vanish, then come back and run again.
+async function runFinishPreview() {
+  const lines = [];
+  let pass = 0, fail = 0;
+  const check = (name, cond, detail = "") => {
+    if (cond) { pass++; lines.push(`  ✅ ${name}`); }
+    else { fail++; lines.push(`  ❌ ${name}${detail ? `  → ${detail}` : ""}`); }
+  };
+  lines.push("\n── dev finish-screen preview ──");
+
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await sealContext(ctx);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript(() => {
+    localStorage.setItem("combify.tour.v1", "1");
+    localStorage.setItem("combify.ath.v1", "never");
+    localStorage.setItem("combify.dev", "1");
+  });
+  await page.goto(base, { waitUntil: "load" });
+  await page.waitForTimeout(300);
+
+  // Watch the summary's visibility for the whole preview, sampling fast enough
+  // to catch a flash. Every rising edge is one "the numbers appeared".
+  await page.evaluate(() => {
+    window.__vis = [];
+    window.__t = setInterval(() => {
+      const st = document.getElementById("stats");
+      const o = st ? Number(getComputedStyle(st).opacity) : 0;
+      window.__vis.push(o > 0.5 ? 1 : 0);
+    }, 50);
+  });
+  // The panel opens from the DEV badge. (Five taps on the brand tag toggles
+  // dev mode on or off — with it already on, that would switch it off.)
+  //
+  // Dispatched IN PAGE, not via page.locator().click(), for the reason given
+  // above sealContext: a real Playwright click carries a user gesture, and
+  // that made the whole finale stall — is-finale-reveal never arrived and the
+  // count-up never ran, so this test failed against code that was fine.
+  await page.evaluate(() => document.querySelector(".devbadge").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  await page.waitForTimeout(200);
+  const pressed = await page.evaluate(() => {
+    const b = [...document.querySelectorAll(".devpanel__btn")].find((x) => /finish screen/i.test(x.textContent));
+    if (!b) return false;
+    b.click();
+    return true;
+  });
+  check("the dev preview button is reachable", pressed, "no Finish screen button");
+
+  // WAIT FOR THE STATE, not for a duration. A single uninterrupted
+  // waitForTimeout leaves the page with no interaction, and its timers get
+  // throttled — the finale's 1700ms hold simply never fired, so this failed
+  // against code that was working. Polling keeps the page alive and asserts
+  // the thing actually meant.
+  const revealed = await page.waitForFunction(
+    () => document.getElementById("stage").classList.contains("is-finale-reveal"),
+    null, { timeout: 15000 }).then(() => true).catch(() => false);
+  check("the finale revealed the summary", revealed, "is-finale-reveal never arrived");
+  const counted = await page.waitForFunction(
+    // Not \b84\b: the digits run straight into "punches", so there is no word
+    // boundary after the 4 and that pattern never matches.
+    () => document.getElementById("stats").textContent.includes("84"),
+    null, { timeout: 15000 }).then(() => true).catch(() => false);
+  const edges = await page.evaluate(() => {
+    clearInterval(window.__t);
+    let rises = 0;
+    for (let i = 1; i < window.__vis.length; i++) if (window.__vis[i] && !window.__vis[i - 1]) rises++;
+    return { rises, samples: window.__vis.length };
+  });
+  check("the summary appears exactly once, never flashing away and returning",
+    edges.rises <= 1, `${edges.rises} separate appearances`);
+  const endState = await page.evaluate(() => ({
+    op: getComputedStyle(document.getElementById("stats")).opacity,
+    cls: document.getElementById("stage").className,
+    focus: document.querySelector(".app").dataset.focus,
+  }));
+  check("the summary is on screen at the end", Number(endState.op) > 0.5, JSON.stringify(endState));
+  check("the punch total counted all the way up", counted,
+    await page.evaluate(() => document.getElementById("stats").textContent.slice(0, 40)));
+  check("no JavaScript errors", errors.length === 0, errors.slice(0, 2).join(" | "));
+  await ctx.close();
+
+  // ---- And the lockdown: a member must never meet any of this. ----
+  // Dev mode changes what the numbers mean — a member's session filed as the
+  // developer's is silently dropped from the digest — so "can an ordinary
+  // visitor reach it" is worth asserting rather than assuming.
+  const plain = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await sealContext(plain);
+  const p2 = await plain.newPage();
+  await p2.addInitScript(() => { localStorage.setItem("combify.tour.v1", "1"); localStorage.setItem("combify.ath.v1", "never"); });
+  await p2.goto(base, { waitUntil: "load" });
+  await p2.waitForTimeout(400);
+  check("a fresh visitor sees no dev badge",
+    await p2.locator(".devbadge").count() === 0);
+  check("a fresh visitor has no dev panel in the DOM",
+    await p2.locator(".devpanel").count() === 0);
+  check("nothing dev-related is exposed on window",
+    // Precise: `devicePixelRatio` is a standard property and matched a lazier
+    // pattern here, which made this fail on a page that was perfectly fine.
+    await p2.evaluate(() => !Object.keys(window).some((k) => /^(combify|__dev|devPanel|devOn|setDev)/.test(k))),
+    await p2.evaluate(() => Object.keys(window).filter((k) => /^(combify|__dev|devPanel|devOn|setDev)/.test(k)).join(",")));
+  check("the dev flag is not set for them",
+    await p2.evaluate(() => localStorage.getItem("combify.dev")) === null);
+
+  // Four taps must NOT arm it — only the full five.
+  await p2.evaluate(() => {
+    const tag = document.querySelector(".brand__tag");
+    for (let i = 0; i < 4; i++) tag.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await p2.waitForTimeout(150);
+  check("four taps on the brand tag do nothing",
+    await p2.locator(".devbadge").count() === 0);
+
+  // Five does, because that is the intended way in.
+  await p2.evaluate(() => {
+    document.querySelector(".brand__tag").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await p2.waitForTimeout(200);
+  check("five taps arm it, as designed", await p2.locator(".devbadge").count() === 1);
+  await plain.close();
+
+  return { lines, pass, fail };
+}
+
 // Devices run through the pool; the rotation section owns a separate browser
 // and runs alongside them, so it is never the thing everything else waits on.
 const devices = DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONLY.toLowerCase()));
@@ -889,15 +1019,17 @@ const wantInstall = !ONLY || "install card pointer".includes(ONLY.toLowerCase())
 const wantTour = !ONLY || "first-run walkthrough tour".includes(ONLY.toLowerCase());
 const wantBeat = !ONLY || "countdown beat".includes(ONLY.toLowerCase());
 const wantSeg = !ONLY || "segmented controls warm as they step up".includes(ONLY.toLowerCase());
-const [devResults, rotResult, insResult, tourResult, beatResult, segResult] = await Promise.all([
+const wantPrev = !ONLY || "dev finish-screen preview".includes(ONLY.toLowerCase());
+const [devResults, rotResult, insResult, tourResult, beatResult, segResult, prevResult] = await Promise.all([
   pool(devices, JOBS, runDevice),
   wantRotation ? runRotation() : null,
   wantInstall ? runInstallCard() : null,
   wantTour ? runTour() : null,
   wantBeat ? runCountdownBeat() : null,
   wantSeg ? runSegRamp() : null,
+  wantPrev ? runFinishPreview() : null,
 ]);
-for (const r of [...devResults, rotResult, insResult, tourResult, beatResult, segResult]) {
+for (const r of [...devResults, rotResult, insResult, tourResult, beatResult, segResult, prevResult]) {
   if (!r) continue;
   lines.push(...r.lines); pass += r.pass; fail += r.fail;
 }

@@ -48,7 +48,8 @@
 // Newest first.
 export const CHANGELOG = [
   {
-    v: "2.3.1",
+    v: "2.3.2",
+    from: "2.3.1",
     date: "2026-09-06",
     size: "patch",
     title: "The settings warm up as you step them up",
