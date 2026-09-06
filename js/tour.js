@@ -25,6 +25,8 @@
 // entire rest of the screen. One element, no SVG masks, no canvas, and it
 // animates by moving a single box — which the compositor handles for free.
 
+import { deviceClass } from "./platform.js";
+
 const KEY = "combify.tour.v1";
 
 // Each stop names a target by selector and what to say about it.
@@ -43,6 +45,12 @@ const STOPS = [
   {
     sel: ".stage__main",
     text: "Combos appear here, and get called out loud.",
+    // Phones only, and appended rather than given a stop of its own. Everyone
+    // already knows a screen rotates; what they do not know is that landscape
+    // is genuinely the better way to read a combo from a propped-up phone
+    // mid-round. That is a benefit worth one clause, not a lesson worth a stop
+    // — and on a laptop it would just be wrong.
+    phoneExtra: "Turn sideways for a bigger view.",
   },
   {
     sel: "#level",
@@ -112,7 +120,10 @@ export function startTour(onDone) {
   // Resolve the stops we can actually show BEFORE committing to opening. On a
   // layout where nothing measures (no layout engine, display:none app) this
   // leaves the member with the plain app rather than a black screen.
-  const live = STOPS.filter((s) => boundsFor(s));
+  const onPhone = deviceClass() === "phone";
+  const live = STOPS.filter((s) => boundsFor(s)).map((s) => (
+    onPhone && s.phoneExtra ? { ...s, text: `${s.text} ${s.phoneExtra}` } : s
+  ));
   if (!live.length) return false;
 
   // Written now, not at the end: an interrupted tour still counts as asked.

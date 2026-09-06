@@ -337,6 +337,22 @@ Directly serves the business goal.
     re-recording the id. Remember an installed iOS home-screen app has its own
     localStorage separate from the browser it was installed from — so the
     founder's phone legitimately accounts for two ids, not one.
+  - 🔊 **The lock-screen clipping bug (found + fixed 2026-09-05, v1.33.0).**
+    Founder reported "pivot" heard as "vot", "six" as "s", "slip" as "lip"
+    after locking the phone and returning, and sometimes a word making no sound
+    at all. CAUSE: iOS pauses sounding elements when it backgrounds the app,
+    leaving them mid-file and NOT `ended`. On return, `unlockAudioForMobile`
+    re-primes only `pool[0]` of each sound — the spare slots wait for
+    `deepPrime` on some later tap — so a spare could sit at currentTime 0.31
+    indefinitely. Round-robin then handed it to the next word, and the only
+    rewind left was the lazy one at play time, which on iOS is an ASYNCHRONOUS
+    seek that loses its race with `play()`. FIX: `parkAllIdle()` rewinds every
+    displaced pool element at moments the app knows are quiet (returning from
+    background, ending a session), so seeks land in idle time — the module's
+    own long-standing principle, applied to the whole pool rather than one
+    element of it. Explicitly NOT v1.13.0's reverted `parkOnEnded`: no event
+    listeners, one-shot calls only, and it never touches a sounding element.
+    Tests reproduce the displacement and fail without the fix.
   - ⏳ **The sink is the weak point.** Pings and problem reports share one
     Google Form column, posted `no-cors` so delivery can never be confirmed.
     Fine for a handful of testers, not for a gym-wide rollout. When it outgrows

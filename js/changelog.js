@@ -21,6 +21,18 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.33.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "Words no longer start mid-syllable after a lock screen",
+    notes: [
+      "Fixed the big one: after locking your phone and coming back, \"pivot\" could come out as \"vot\", \"six\" as \"s\", \"slip\" as \"lip\" — and sometimes a word made no sound at all. When iOS takes the app away it pauses the sounds part-way through, and Combify wasn\'t rewinding all of them on the way back. It does now, both when you return to the app and when a session ends.",
+      "Pausing no longer costs you time. The clock was rounding up when you resumed, so every pause quietly added up to a second to your round — and the timer then sat frozen for a beat before ticking. Both gone.",
+      "Start, pause, exit and restart all respond immediately now. They were doing slow bookkeeping inside the button press itself, which is time the button spends looking dead.",
+      "On a phone, the walkthrough now mentions that turning sideways gives you a bigger view.",
+    ],
+  },
+  {
     v: "1.32.1",
     date: "2026-09-05",
     size: "patch",

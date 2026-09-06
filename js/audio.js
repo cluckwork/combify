@@ -614,6 +614,55 @@ function deepPrime() {
   } catch (e) { deepPrimePending = true; }
 }
 
+// Park EVERY pooled element that is sitting displaced, at a moment nothing is
+// sounding. This closes the hole that produced "pivot" heard as "vot", "six"
+// as "s" and "slip" as "lip" after the phone had been locked and reopened.
+//
+// THE MECHANISM. iOS pauses playing elements when the app is backgrounded,
+// leaving them mid-file and — crucially — NOT `ended`. On return,
+// unlockAudioForMobile re-primes only pool[0] of each sound; the spare slots
+// wait for deepPrime on some later tap. So a spare could sit at currentTime
+// 0.31 indefinitely. Round-robin then hands that element to the next "pivot",
+// and the only rewind left is the lazy one at play time — which on iOS is an
+// ASYNCHRONOUS seek that loses its race with play(). The word starts from the
+// old position: the first syllable is simply gone. An element parked near the
+// end of its file is the same bug at its limit, heard as a word that never
+// arrives at all.
+//
+// The fix is the module's existing principle applied to the whole pool rather
+// than one element of it: rewind in idle time, so seeks have landed long
+// before anything plays. Deliberately NOT v1.13.0's reverted parkOnEnded —
+// there are no event listeners here. It is a one-shot call made from moments
+// the app knows are quiet (returning from the background, ending a session),
+// and it never touches an element that is currently sounding.
+export function parkAllIdle(reason) {
+  let moved = 0, skipped = 0;
+  try {
+    // Walk the pools that EXIST. Deliberately not eachPool(), which fills a
+    // short pool by constructing new Audio elements — reset() runs during
+    // boot, and that would have built ~35 of them before the app had drawn
+    // anything, which is the same "freeze inside the tap" this module already
+    // fought once. Parking something that was never created is a no-op
+    // anyway: it is already at zero.
+    const pools = [];
+    for (const k in clipPool) if (clipPool[k]) pools.push(clipPool[k]);
+    for (const k in sfxPool) if (sfxPool[k]) pools.push(sfxPool[k]);
+    pools.forEach((pool) => {
+      for (const a of pool) {
+        try {
+          if (a.paused === false && !a.ended) { skipped++; continue; } // sounding — leave it alone
+          if (a.currentTime > 0.05) { a.currentTime = 0; moved++; }
+        } catch (e) {}
+      }
+    });
+    // The keeper only if it already exists — getSilence() would create it.
+    try { const sil = silenceEl; if (sil && sil.paused && sil.currentTime > 0.05) sil.currentTime = 0; } catch (e) {}
+  } catch (e) {}
+  // Logged so a real-device audit can show the displacement being cleared —
+  // "parkAll visible moved=7" is the evidence that this was the bug.
+  audit("audio:parkAll", `${reason || ""} moved=${moved}${skipped ? ` busy=${skipped}` : ""}`);
+}
+
 // Idle-time maintenance: park every sfx element that has ENDED back at zero,
 // called from the app's own quiet moments (the 1s heartbeat, the top of a
 // countdown, the moment a session finishes). This is NOT v1.13.0's reverted

@@ -7,7 +7,7 @@ import { loadHistory, saveHistory, recordRound, currentStreak, trainedToday, for
 import {
   configureVoice, speakCombo, stopVoice,
   armAudio, unlockAudioForMobile, markNeedsReprime,
-  ringBell, playTick, playWarning, playBlip, playLand, parkIdleSfx,
+  ringBell, playTick, playWarning, playBlip, playLand, parkIdleSfx, parkAllIdle,
   startAudioSession, stopAudioSession, scheduleBlipRiff, stopBlipRiff,
 } from "./audio.js";
 import { audit, auditOn, setAudit, auditDump, auditPersist, auditReport } from "./audit.js";
@@ -460,7 +460,7 @@ const getRounds = () => roundsCtl.value;
 const getWork = () => workCtl.value;
 const getRest = () => restCtl.value;
 
-const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, tickTimer: null, comboTimer: null, finaleTimer: null, settleTimer: null, entranceTimer: null };
+const state = { running: false, phase: "ready", currentRound: 0, secondsLeft: 0, phaseEndsAt: 0, msLeft: 0, tickTimer: null, comboTimer: null, finaleTimer: null, settleTimer: null, entranceTimer: null };
 
 // ---------- Screen wake lock ----------
 // Keeps the screen on while a session runs, so a member who sets the phone
@@ -514,6 +514,11 @@ document.addEventListener("visibilitychange", () => {
     return;
   }
   armAudio();
+  // iOS paused every sounding element when it took the app away, leaving them
+  // mid-file. Rewind them NOW, while nothing is playing, so the async seeks
+  // land during this idle moment instead of racing the next word's play() —
+  // that race is what turns "pivot" into "vot" after a lock screen.
+  parkAllIdle("visible");
   if (state.running) startAudioSession(); // best-effort; a rejection just means no keeper until the next tap
   if (state.running && state.phase === "work" && !state.comboTimer) startComboLoop();
 });
@@ -989,6 +994,7 @@ function stopComboLoop() {
 function beginPhase(seconds) {
   state.secondsLeft = seconds;
   state.phaseEndsAt = Date.now() + seconds * 1000;
+  state.msLeft = 0;   // a fresh phase carries no leftover from a pause
 }
 function enterWork() {
   state.phase = "work"; beginPhase(getWork()); state.warned10 = false;
@@ -1277,11 +1283,19 @@ function armCountdownStart() {
   }, motionOK() ? ENTRANCE_SETTLE_MS : 140);
 }
 
+// Work that has no business being inside a tap. Anything gesture-bound (the
+// audio unlock, fullscreen) MUST stay synchronous or iOS refuses it — but
+// everything else can wait a beat, and while it runs the button has not
+// visibly responded yet. A handler only ends when its last statement does.
+function deferIdle(fn) {
+  try { setTimeout(fn, 0); } catch (e) { try { fn(); } catch (e2) {} }
+}
+
 function start() {
   armAudio();
   unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
   startAudioSession(); // the silent keeper: warms the route, holds the session — see audio.js
-  pingUsage("start");
+  deferIdle(() => pingUsage("start"));
   enterFullscreen();
   state.running = true;
   acquireWakeLock();
@@ -1289,14 +1303,24 @@ function start() {
   resetSessionTally();
   beginEntrance();
 }
-function pause() { state.running = false; audit("phase", "paused"); stopAudioSession(); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
+// Pausing captures the exact milliseconds left, and resume restores them.
+//
+// It used to rebuild the deadline from state.secondsLeft, which is what the
+// CLOCK SHOWS — and that is Math.ceil of the real remainder. Pausing with 2.3s
+// left therefore resumed with 3.0s: the round quietly grew by up to a second
+// every single pause. Worse for the feel, the restored deadline then sat exactly
+// on a second boundary, so alignedTicker's `% 1000` came out 0 and its `|| 1000`
+// fallback waited a WHOLE second before the first tick. Tap resume, watch the
+// number sit there. That is the "one extra whole second" — arithmetic, not a
+// slow phone, which is why no amount of optimising made it go away.
+function pause() { state.running = false; audit("phase", "paused"); state.msLeft = Math.max(0, state.phaseEndsAt - Date.now()); stopAudioSession(); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); el.startBtn.textContent = "Resume"; el.startBtn.classList.remove("is-running"); render(); }
 // Resuming is a tap like any other, so it is also the moment to re-arm audio:
 // whatever suspended the context while you were paused (a call, a lock screen,
 // switching apps) is exactly the thing that used to leave the rest of the
 // session silent. unlockAudioForMobile() repairs the clip pool too if the
 // first attempt happened before the files had loaded.
-function resume() { state.running = true; audit("phase", `resume ${state.phase}`); armAudio(); unlockAudioForMobile(); startAudioSession(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + state.secondsLeft * 1000; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
-function reset() { auditPersist(); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); stopAudioSession(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); applyPendingReload(); }
+function resume() { state.running = true; audit("phase", `resume ${state.phase}`); armAudio(); unlockAudioForMobile(); startAudioSession(); enterFullscreen(); el.startBtn.textContent = "Pause"; el.startBtn.classList.add("is-running"); state.phaseEndsAt = Date.now() + (state.msLeft > 0 ? state.msLeft : state.secondsLeft * 1000); state.msLeft = 0; if (state.phase === "work") startComboLoop(); if (state.phase === "countdown") armPulse(); /* a pause inside the entrance can leave the waves held on "none" */ state.tickTimer = alignedTicker(); acquireWakeLock(); render(); }
+function reset() { deferIdle(auditPersist); parkAllIdle("reset"); clearInterval(state.tickTimer); clearTimeout(state.settleTimer); clearEntrance(); stopComboLoop(); clearFinale(); stopAudioSession(); window.speechSynthesis && window.speechSynthesis.cancel(); releaseWakeLock(); state.running = false; state.phase = "ready"; state.currentRound = 0; state.secondsLeft = 0; state.msLeft = 0; el.startBtn.textContent = "Start"; el.startBtn.classList.remove("is-running"); el.combo.textContent = "Press start to begin"; if (el.comboName) el.comboName.textContent = ""; render(); applyPendingReload(); }
 
 // ---------- Wire up the buttons ----------
 // "countdown" MUST be in the resume list. Without it, pausing during the 3-2-1
@@ -1324,7 +1348,7 @@ function restartSession() {
   armAudio();
   unlockAudioForMobile(); // free unless a background revoked the unlock
   startAudioSession();
-  pingUsage("start"); // a restart is a fresh session for the daily numbers
+  deferIdle(() => pingUsage("start")); // a restart is a fresh session for the daily numbers
   enterFullscreen();
   resetSessionTally();
   delete el.stats.dataset.finished; // next finish must rebuild its summary
@@ -1401,6 +1425,7 @@ if ("serviceWorker" in navigator) {
 function applyPendingReload() {
   if (!pendingReload || state.running) return;
   pendingReload = false;
+  auditPersist();   // deferred writes do not survive a reload; take this one now
   location.reload();
 }
 

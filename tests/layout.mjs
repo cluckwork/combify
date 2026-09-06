@@ -613,7 +613,12 @@ async function runTour() {
   lines.push("\n── first-run walkthrough ──");
 
   // A small phone: the stops below the fold are where this gets interesting.
-  const ctx = await browser.newContext({ viewport: { width: 375, height: 667 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  // A real phone user-agent, not just a phone-sized window: one stop carries a
+  // landscape clause that is only shown on phones.
+  const ctx = await browser.newContext({
+    viewport: { width: 375, height: 667 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+  });
   const escaped = await sealContext(ctx);
   const page = await ctx.newPage();
   const errors = [];
@@ -652,6 +657,8 @@ async function runTour() {
   const longest = seen.reduce((a, s) => Math.max(a, s.text.split(/\s+/).length), 0);
   check(`every stop stays short (longest ${longest} words)`, longest <= 14, `${longest} words`);
   // It must end on the button it is trying to get pressed.
+  check("a phone is told landscape is the bigger view",
+    seen.some((s) => /sideways/i.test(s.text)), seen.map((s) => s.text.slice(0, 40)).join(" | "));
   check("and it ends on the Start button",
     /Hit start/i.test(seen[seen.length - 1].text), seen[seen.length - 1].text);
   check("no JavaScript errors", errors.length === 0, errors.join("; "));

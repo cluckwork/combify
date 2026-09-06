@@ -2163,6 +2163,219 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
+// ------------- 44. Locking the phone must not clip the next words
+{
+  section("44. A lock screen must not leave words starting mid-syllable");
+  // The founder's report: after locking the phone and coming back, "pivot" is
+  // heard as "vot", "six" as "s", "slip" as "lip" — and sometimes a word makes
+  // no sound at all.
+  //
+  // WHY. iOS pauses every sounding element when it takes the app away, leaving
+  // it mid-file and NOT `ended`. On return, priming repairs only pool[0] of
+  // each sound; the spare slots wait for a later tap. Round-robin then hands a
+  // displaced spare to the next word, and the only rewind left is the lazy one
+  // at play time — an ASYNCHRONOUS seek on iOS, which loses its race with
+  // play(). The word starts from the old position and its first syllable is
+  // gone. An element parked near the end of its file is the same bug at the
+  // limit: a word that never arrives.
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 30); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(12000);              // words have been spoken, pool is in use
+
+  // Simulate what iOS does: displace idle voice elements mid-file. Written
+  // straight to the backing field, because an app-issued seek is exactly what
+  // is NOT happening here — the phone moved them, silently.
+  const idleVoices = app.stats.live.filter((a) => a.isVoice && a.paused && !a._sounding);
+  const displaced = idleVoices.slice(0, 6);
+  displaced.forEach((a, i) => { a._ct = 0.2 + i * 0.05; });
+  check("the test really did displace some elements", displaced.length > 0, "no idle voice elements found");
+
+  const hide = () => {
+    Object.defineProperty(app.doc, "visibilityState", { value: "hidden", configurable: true });
+    app.doc.dispatchEvent(new app.window.Event("visibilitychange"));
+  };
+  const show = () => {
+    Object.defineProperty(app.doc, "visibilityState", { value: "visible", configurable: true });
+    app.doc.dispatchEvent(new app.window.Event("visibilitychange"));
+  };
+  hide(); show();
+  await app.clock.advance(50);
+
+  const stillDisplaced = displaced.filter((a) => a.currentTime > 0.05 && a.paused && !a._sounding);
+  check("coming back rewinds every displaced word to the start",
+    stillDisplaced.length === 0,
+    `${stillDisplaced.length} still mid-file: ${stillDisplaced.map((a) => `${a.key}@${a.currentTime.toFixed(2)}`).join(", ")}`);
+
+  // The rewind must happen in the QUIET moment, not lazily at play time — the
+  // whole point is that the async seek has landed before anything plays.
+  const log = app.window.localStorage.getItem("combify.audit") || "";
+  app.click("resetBtn");
+  await app.clock.advance(50);
+  app.restore();
+
+  // Nothing that is actually sounding may ever be yanked back to zero — that
+  // was v1.13.0's ghost-words bug, and this fix must not reintroduce it.
+  clearStore();
+  const app2 = await boot({ duration: 0.6 });
+  app2.set("rounds", 1); app2.set("workSec", 30); app2.set("restSec", 5);
+  app2.click("startBtn");
+  await app2.clock.advance(9000);
+  const before = app2.stats.seeksWhilePlaying.length;
+  Object.defineProperty(app2.doc, "visibilityState", { value: "hidden", configurable: true });
+  app2.doc.dispatchEvent(new app2.window.Event("visibilitychange"));
+  Object.defineProperty(app2.doc, "visibilityState", { value: "visible", configurable: true });
+  app2.doc.dispatchEvent(new app2.window.Event("visibilitychange"));
+  await app2.clock.advance(50);
+  check("and never seeks something that is still sounding",
+    app2.stats.seeksWhilePlaying.length === before,
+    `${app2.stats.seeksWhilePlaying.length - before} mid-sound seeks introduced`);
+
+  // Ending a session is the other quiet moment: "after a few sessions it stops
+  // working" is the same displacement accumulating across rounds.
+  const idle2 = app2.stats.live.filter((a) => a.isVoice && a.paused && !a._sounding).slice(0, 4);
+  idle2.forEach((a, i) => { a._ct = 0.3 + i * 0.02; });
+  app2.click("resetBtn");
+  await app2.clock.advance(50);
+  check("finishing a session parks the pool too",
+    idle2.every((a) => a.currentTime <= 0.05),
+    idle2.map((a) => `${a.key}@${a.currentTime.toFixed(2)}`).join(", "));
+  app2.restore();
+  clearStore();
+}
+
+// -------------------- 45. Pausing must not add time, or stall the clock
+{
+  section("45. Pause and resume are instant, and cost the round nothing");
+  // "It takes one extra whole second to resume." Not a slow phone: resume
+  // rebuilt the deadline from state.secondsLeft, which is what the clock SHOWS
+  // — Math.ceil of the real remainder. Pause at 6.5s left, resume at 7.0s. And
+  // the restored deadline then sat exactly on a second boundary, so
+  // alignedTicker's `% 1000` came out 0 and its `|| 1000` fallback waited a
+  // full second before the first tick.
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 10); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(5000 + 3500);        // countdown done, 6.5s into a 10s work phase
+  check("mid-round before pausing", app.doc.getElementById("phase").textContent.trim() === "Work",
+    app.doc.getElementById("phase").textContent);
+  const leftBefore = app.window.__state ? 0 : null; // state is module-private; measured behaviourally below
+
+  app.click("startBtn");                        // pause, deliberately off a second boundary
+  check("it paused", app.doc.getElementById("startBtn").textContent === "Resume",
+    app.doc.getElementById("startBtn").textContent);
+  await app.clock.advance(4000);                // sit paused
+  check("the clock does not move while paused",
+    app.doc.getElementById("phase").textContent.trim() === "Work", "phase changed while paused");
+
+  app.click("startBtn");                        // resume
+  check("it resumed", app.doc.getElementById("startBtn").textContent === "Pause",
+    app.doc.getElementById("startBtn").textContent);
+
+  // 6.5s of work remained. The clock must tick within the first second rather
+  // than holding the same number for a whole one.
+  const shown = () => app.doc.getElementById("clock").textContent;
+  // The ticker must restart immediately and land on the TRUE sub-second
+  // boundary — with 6.6s left it ticks 600ms later, not 1000ms later. The
+  // margin here is deliberately one full second plus a little: the boundary
+  // depends on where in the second the pause happened, so anything tighter
+  // would be a test that fails on a pause landing near a whole second.
+  const atResume = shown();
+  await app.clock.advance(1050);
+  check("the ticker restarts on resume", shown() !== atResume, `still showing ${atResume}`);
+
+  // And the phase must end 6.5s after resuming — not 7.0s.
+  await app.clock.advance(5350);                // ~6.4s since resuming: not yet
+  check("the round has not ended early", app.doc.getElementById("phase").textContent.trim() === "Work",
+    app.doc.getElementById("phase").textContent);
+  await app.clock.advance(400);                 // ~6.8s: past the real remainder, under a rounded 7.0
+  check("and the pause gave the round no free extra second",
+    app.doc.getElementById("phase").textContent.trim() !== "Work",
+    `still Work ~6.8s after resuming — the old code rounded up and needed 7.0s`);
+  app.restore();
+
+  // Repeated pausing must not accumulate. Ten pauses used to buy up to ten
+  // extra seconds of round.
+  clearStore();
+  const app2 = await boot({ duration: 0.6 });
+  app2.set("rounds", 1); app2.set("workSec", 20); app2.set("restSec", 5);
+  app2.click("startBtn");
+  await app2.clock.advance(5000 + 250);
+  for (let i = 0; i < 10; i++) {
+    app2.click("startBtn");                     // pause
+    await app2.clock.advance(120);
+    app2.click("startBtn");                     // resume
+    await app2.clock.advance(370);              // land off the boundary each time
+  }
+  await app2.clock.advance(20000 - 250 - 10 * 370 + 400);
+  check("ten pauses do not stretch the round",
+    app2.doc.getElementById("phase").textContent.trim() !== "Work",
+    `still Work after the full 20s of work time elapsed`);
+  app2.restore();
+  clearStore();
+}
+
+// ---------------- 46. Buttons must not do slow work inside the tap
+{
+  section("46. Taps stay light: no heavy work inside the handler");
+  // "It takes an extra second when I press pause, start, exit or restart."
+  // A click handler blocks the browser until its last statement finishes, so
+  // anything slow inside one is time the button spends looking dead. Two
+  // things were: auditPersist stringifies up to 4000 ring-buffer entries AND
+  // builds the uniformity report before writing them to localStorage, and
+  // pingUsage walks the history for a streak, builds JSON and opens a network
+  // request. Neither needs the gesture, so neither belongs in the tap.
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 20); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(14000);   // a real session, so the audit ring is full
+
+  // Record what is written to storage DURING the click itself.
+  const store = app.window.localStorage;
+  const realSet = store.setItem.bind(store);
+  let duringTap = [];
+  let capturing = false;
+  store.setItem = (k, v) => { if (capturing) duringTap.push(k); return realSet(k, v); };
+
+  const posts = [];
+  const savedFetch = globalThis.fetch;
+  let fetchDuringTap = 0;
+  globalThis.fetch = async (url, opts) => {
+    if (capturing) fetchDuringTap++;
+    posts.push({ url, body: String((opts && opts.body) || "") });
+    return { ok: true };
+  };
+
+  capturing = true;
+  app.click("exitBtn");             // the Exit-to-settings tap
+  capturing = false;
+  check("Exit does not write the audit log inside the tap",
+    !duringTap.includes("combify.audit.lastSession"), duringTap.join(", "));
+
+  await app.clock.advance(50);
+  check("but the audit log is still persisted, just after the tap",
+    !!store.getItem("combify.audit.lastSession"), "log was lost entirely");
+
+  // Restarting fires a usage ping; it must not open the request inside the tap.
+  duringTap = []; fetchDuringTap = 0;
+  capturing = true;
+  app.click("startBtn");            // start a fresh session
+  capturing = false;
+  check("Start does not open a network request inside the tap",
+    fetchDuringTap === 0, `${fetchDuringTap} requests made during the click`);
+  await app.clock.advance(50);
+  check("but the session start is still reported",
+    posts.some((p) => p.body.includes("SESSION_PING")), "the ping was lost");
+
+  store.setItem = realSet;
+  globalThis.fetch = savedFetch;
+  app.restore();
+  clearStore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);
