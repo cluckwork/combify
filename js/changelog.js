@@ -21,6 +21,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.34.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "The countdown hits",
+    notes: [
+      "New countdown. Each second now lands instead of fading in — the number drops in oversized, overshoots, and throws a ring out across the dial. The old soft wave read like a spa timer; this reads like a boxing gym.",
+      "The countdown number is bigger, and \"Get ready\" no longer appears twice — the small copy inside the ring is gone, leaving the big one.",
+      "Fixed the countdown tick going silent. A sound left paused part-way through by iOS was being played from its middle, and the tick is only 90 milliseconds long, so there was nothing left to hear.",
+    ],
+  },
+  {
     v: "1.33.0",
     date: "2026-09-05",
     size: "minor",

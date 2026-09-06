@@ -340,7 +340,9 @@ async function countCombos(app, ms, step = 200) {
   app.set("rounds", 1); app.set("workSec", 30); app.set("restSec", 5);
   app.click("startBtn");
   await app.clock.advance(1000);           // still in the 3-2-1 countdown
-  check("countdown is the phase under test", app.phase() === "Get Ready", app.phase());
+  check("countdown is the phase under test",
+    app.doc.getElementById("stage").dataset.phase === "countdown",
+    app.doc.getElementById("stage").dataset.phase);
   app.click("startBtn");                   // pause DURING the countdown
   const pausedAt = app.clockText();
   await app.clock.advance(2000);
@@ -673,7 +675,8 @@ async function countCombos(app, ms, step = 200) {
     appEl.classList.contains("is-entering") && app.phase() === "Ready",
     `entering=${appEl.classList.contains("is-entering")} phase=${app.phase()}`);
   await app.clock.advance(250); // fade-out (160ms) + swap + class release (40ms)
-  check("countdown layout arrives behind the fade", app.phase() === "Get Ready" && app.clockText() === "5",
+  check("countdown layout arrives behind the fade",
+    app.doc.getElementById("stage").dataset.phase === "countdown" && app.clockText() === "5",
     `${app.phase()} / ${app.clockText()}`);
   check("fade released after the swap", !appEl.classList.contains("is-entering"), "still fading");
   check("Get ready is on screen", app.combo() === "Get ready...", app.combo());
@@ -1424,7 +1427,7 @@ async function collectSpokenVsShown(app, ms) {
   app.click("resetBtn");
   await app.clock.advance(500);
   check("restart mid-session starts over WITHOUT leaving fullscreen",
-    appEl.dataset.focus === "1" && app.phase() === "Get Ready",
+    appEl.dataset.focus === "1" && app.doc.getElementById("stage").dataset.phase === "countdown",
     `focus=${appEl.dataset.focus} phase=${app.phase()}`);
 
   await app.clock.advance(60000);

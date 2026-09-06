@@ -599,6 +599,64 @@ async function runInstallCard() {
   return { lines, pass, fail };
 }
 
+// The countdown's per-second beat. Its predecessor was a fixed 5-iteration CSS
+// animation that could drift out of step with the digits; this one is
+// retriggered from the clock, so what matters is that a beat actually fires on
+// each second and that nothing is left stranded when the countdown ends.
+async function runCountdownBeat() {
+  const lines = [];
+  let pass = 0, fail = 0;
+  const check = (name, cond, detail = "") => {
+    if (cond) { pass++; lines.push(`  ✅ ${name}`); }
+    else { fail++; lines.push(`  ❌ ${name}${detail ? `  → ${detail}` : ""}`); }
+  };
+  lines.push("\n── countdown beat ──");
+
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const escaped = await sealContext(ctx);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.addInitScript(() => { try { localStorage.setItem("combify.tour.v1", "1"); } catch (e) {} });
+  await page.goto(base, { waitUntil: "networkidle" });
+  await page.waitForTimeout(400);
+
+  // Count how many times each beat class is (re)applied across the countdown.
+  await page.evaluate(() => {
+    window.__beats = { slam: 0, shock: 0 };
+    const watch = (sel, key) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      new MutationObserver(() => {
+        if (el.classList.contains(key === "slam" ? "is-slam" : "is-shock")) window.__beats[key]++;
+      }).observe(el, { attributes: true, attributeFilter: ["class"] });
+    };
+    watch(".clock", "slam");
+    watch(".dial__pulse", "shock");
+  });
+
+  await page.click("#startBtn");
+  await page.waitForTimeout(6800);   // the whole 5s countdown, into work
+
+  const beats = await page.evaluate(() => window.__beats);
+  check(`the number beats on every countdown second (${beats.slam})`, beats.slam >= 5, JSON.stringify(beats));
+  check(`the shockwave fires with it (${beats.shock})`, beats.shock >= 5, JSON.stringify(beats));
+
+  const phase = (await page.textContent("#phase")).trim();
+  check("the countdown handed off into the round", phase === "Work", phase);
+  // Nothing may be left mid-animation once the round is running.
+  const stranded = await page.evaluate(() => {
+    const p = document.querySelector(".dial__pulse");
+    return { pulseOpacity: getComputedStyle(p).opacity, stage: document.getElementById("stage").dataset.phase };
+  });
+  check("the shockwave is not left sitting on screen during the round",
+    Number(stranded.pulseOpacity) < 0.02, JSON.stringify(stranded));
+  check("no JavaScript errors", errors.length === 0, errors.join("; "));
+  check("no telemetry escaped", escaped.length === 0, escaped.join(", "));
+  await ctx.close();
+  return { lines, pass, fail };
+}
+
 // The first-run walkthrough, which had no coverage at all until its spotlight
 // was found sliding off the page on scroll. jsdom cannot test it — every stop
 // is measured with getBoundingClientRect, and without a layout engine they all
@@ -678,13 +736,15 @@ const devices = DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONL
 const wantRotation = !ONLY || "rotating mid-session".includes(ONLY.toLowerCase());
 const wantInstall = !ONLY || "install card pointer".includes(ONLY.toLowerCase());
 const wantTour = !ONLY || "first-run walkthrough tour".includes(ONLY.toLowerCase());
-const [devResults, rotResult, insResult, tourResult] = await Promise.all([
+const wantBeat = !ONLY || "countdown beat".includes(ONLY.toLowerCase());
+const [devResults, rotResult, insResult, tourResult, beatResult] = await Promise.all([
   pool(devices, JOBS, runDevice),
   wantRotation ? runRotation() : null,
   wantInstall ? runInstallCard() : null,
   wantTour ? runTour() : null,
+  wantBeat ? runCountdownBeat() : null,
 ]);
-for (const r of [...devResults, rotResult, insResult, tourResult]) {
+for (const r of [...devResults, rotResult, insResult, tourResult, beatResult]) {
   if (!r) continue;
   lines.push(...r.lines); pass += r.pass; fail += r.fail;
 }

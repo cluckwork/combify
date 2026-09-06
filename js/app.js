@@ -817,7 +817,11 @@ function render() {
     : state.phase === "ready" ? format(totalSessionSeconds())
     : format(state.secondsLeft));
   setData(el.stage, "phase", state.phase);
-  setText(el.phase, state.phase === "work" ? "Work" : state.phase === "rest" ? "Rest" : state.phase === "done" ? "Done" : state.phase === "countdown" ? "Get Ready" : "Ready");
+  // Blank during the countdown: "Get ready..." is already on screen in display
+  // type below the dial, and saying it twice — small at the top of the ring,
+  // large underneath — read as a layout mistake rather than emphasis. The slam
+  // is what carries the moment now; the label was competing with it.
+  setText(el.phase, state.phase === "work" ? "Work" : state.phase === "rest" ? "Rest" : state.phase === "done" ? "Done" : state.phase === "countdown" ? "" : "Ready");
   setText(el.round, state.phase === "countdown" ? `Round 1 / ${getRounds()}` : `Round ${state.currentRound} / ${getRounds()}`);
   renderProgress();
   renderStats();
@@ -1121,7 +1125,7 @@ function tick() {
   const stepped = prev - remaining === 1;
 
   if (state.phase === "countdown") {
-    if (remaining > 0) { if (changed) playTick(); parkIdleSfx(); render(); return; }
+    if (remaining > 0) { if (changed) { playTick(); } parkIdleSfx(); render(); if (changed) slamBeat(); return; }
     state.currentRound = 1;
     enterWork();
     return;
@@ -1217,12 +1221,31 @@ const COUNTDOWN_SECONDS = 5;
 // Force-restart the pulse waves: a CSS animation only restarts on an
 // attribute CHANGE, so this guarantees the five waves fire every time
 // regardless of the attribute's history.
+// One countdown beat: the number lands, a ring shockwaves out from the dial.
+// Driven per second from the clock rather than left as a fixed 5-iteration CSS
+// animation, so pausing, re-anchoring after the fullscreen transition, or a
+// late frame can never leave the beats out of step with the digits.
+// Restarting a CSS animation needs the class off, a reflow, then on again.
+function slamBeat() {
+  if (!motionOK()) return;
+  const pulse = el.stage.querySelector(".dial__pulse");
+  if (pulse) {
+    pulse.classList.remove("is-shock");
+    void pulse.offsetWidth;
+    pulse.classList.add("is-shock");
+  }
+  if (el.clock) {
+    el.clock.classList.remove("is-slam");
+    void el.clock.offsetWidth;
+    el.clock.classList.add("is-slam");
+  }
+}
+// Kept under its old name for the call in resume(): leaving a countdown paused
+// mid-beat must not strand the animation classes on.
 function armPulse() {
   const pulse = el.stage.querySelector(".dial__pulse");
-  if (!pulse) return;
-  pulse.style.animation = "none";
-  void pulse.offsetWidth; // reflow — the next animation start is guaranteed fresh
-  pulse.style.removeProperty("animation");
+  if (pulse) pulse.classList.remove("is-shock");
+  if (el.clock) el.clock.classList.remove("is-slam");
 }
 
 // ---------- The entrance crossfade ----------
@@ -1267,7 +1290,12 @@ function clearEntrance() {
 function armCountdownStart() {
   state.phase = "countdown"; beginPhase(COUNTDOWN_SECONDS);
   audit("phase", "countdown");
-  parkIdleSfx(); // the settle tick must start from zero, not a leftover end position
+  // The settle tick must start from zero. parkIdleSfx only rewinds elements
+  // that ENDED — one left paused mid-file (iOS does this whenever it takes the
+  // app away) is skipped, and tick.wav is 90ms long, so playing it from its
+  // middle is silence. Nothing is sounding at this point in the entrance, so
+  // the whole pool gets parked, not just the tidy half of it.
+  parkAllIdle("countdown");
   el.combo.textContent = "Get ready...";
   if (el.comboName) el.comboName.textContent = "";
   render();
@@ -1279,6 +1307,7 @@ function armCountdownStart() {
     beginPhase(COUNTDOWN_SECONDS); // re-anchor: the 5 seconds start NOW, post-entrance
     playTick();
     render();
+    slamBeat();   // "5" lands with the first tick
     state.tickTimer = alignedTicker();
   }, motionOK() ? ENTRANCE_SETTLE_MS : 140);
 }

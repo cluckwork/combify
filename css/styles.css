@@ -169,27 +169,52 @@ body:has(.app[data-focus="1"]) { padding: 0; }
 .stage[data-phase="done"] .dial__track { stroke: rgba(255, 255, 255, 0.03); }
 .dial__center { text-align: center; z-index: 1; max-width: 84%; }
 
-/* Countdown pulse: a translucent wave that fills the dial from the centre out
-   to the ring, once per "get ready" second — three fast waves that say "it's
-   about to start" without a word. Sits under the centre text (z-index above). */
+/* THE SLAM — the countdown's per-second beat.
+   Replaces the old soft filling wave, which read as a spa timer in a boxing
+   app. Each second now LANDS: the number drops in oversized, overshoots past
+   its resting size and settles, while one thin ring shockwaves out from the
+   dial and dies. The gaps between beats are deliberately dead still, so every
+   number reads as contact rather than as a digit changing.
+   Both are transform + opacity only — the compositor does all of it, and
+   nothing here can relayout the stage mid-countdown. Retriggered per second
+   from slamBeat() in app.js rather than run as a fixed 5-iteration animation,
+   so a paused or re-anchored countdown always beats in time with the clock. */
 .dial__pulse {
   position: absolute;
   inset: 5%;                /* the ring circle is r=54 in a 120-unit viewBox */
   border-radius: 50%;
-  background: var(--accent);
+  background: none;
+  border: 2px solid var(--accent);
   opacity: 0;
-  transform: scale(0);
+  transform: scale(0.55);
   pointer-events: none;
+  will-change: transform, opacity;
 }
-.stage[data-phase="countdown"] .dial__pulse {
-  /* One 1s wave per countdown second (must match COUNTDOWN_SECONDS in app.js):
-     expansion fast (first ~45%), then it dissolves while the next second arms. */
-  animation: dialPulse 1s cubic-bezier(0.16, 0.8, 0.3, 1) 5;
+.dial__pulse.is-shock { animation: shockOut 620ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+@keyframes shockOut {
+  0%   { transform: scale(0.55); opacity: 0.55; }
+  100% { transform: scale(1.5);  opacity: 0; }
 }
-@keyframes dialPulse {
-  0%   { transform: scale(0); opacity: 0.34; }
-  45%  { transform: scale(1); opacity: 0.2; }
-  100% { transform: scale(1); opacity: 0; }
+/* The countdown digit runs larger than the running clock. It is a single
+   character for five seconds with the ring otherwise empty — the space is
+   there, and at running-clock size the slam had nothing to land with. The
+   label above it is blanked during the countdown (see render), which is what
+   frees the room. */
+/* Collapse the blanked label rather than leaving an empty line of it: kept in
+   flow it still holds its height and pushes the digit off the ring's centre. */
+.stage[data-phase="countdown"] .phase { display: none; }
+.stage[data-phase="countdown"] .clock { font-size: clamp(64px, 18vw, 128px); }
+.app[data-focus="1"] .stage[data-phase="countdown"] .clock { font-size: clamp(72px, 21vw, 150px); }
+.clock.is-slam { animation: slamIn 420ms cubic-bezier(0.16, 0.9, 0.3, 1.35) both; }
+@keyframes slamIn {
+  0%   { transform: scale(1.75); opacity: 0; }
+  55%  { transform: scale(0.94); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+/* Reduced motion keeps the countdown legible and simply drops the theatre. */
+@media (prefers-reduced-motion: reduce) {
+  .dial__pulse.is-shock { animation: none; }
+  .clock.is-slam { animation: none; }
 }
 
 /* ==========================================================================
@@ -377,6 +402,9 @@ body:has(.app[data-focus="1"]) { padding: 0; }
   /* Sized off height as well as width, so it fits the ~390px a phone gives you
      on its side rather than wrapping into the controls. */
   .app[data-focus="1"] .clock { font-size: clamp(26px, min(5.2vw, 15vh), 80px); }
+  /* Landscape on a short phone has no spare height, so the countdown digit
+     stays close to the running clock rather than taking the bigger treatment. */
+  .app[data-focus="1"] .stage[data-phase="countdown"] .clock { font-size: clamp(30px, min(6vw, 18vh), 92px); }
   .app[data-focus="1"] .combo { font-size: calc(clamp(26px, min(6.6vw, 16.5vh), 92px) * var(--fit, 1)); }
   .app[data-focus="1"] .combo-name { font-size: 10px; margin-bottom: 0; }
   .app[data-focus="1"] .round { font-size: 11px; }
