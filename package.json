@@ -2,7 +2,7 @@
   "name": "combify",
   "version": "2.0.1",
   "private": true,
-  "description": "Combify — round timer + boxing combo caller, by Boxing With Bakr",
+  "description": "Combify \u2014 round timer + boxing combo caller, by Boxing With Bakr",
   "type": "module",
   "scripts": {
     "test": "node tests/run.mjs",
@@ -10,7 +10,8 @@
     "test:layout": "node tests/layout.mjs",
     "test:layout:fast": "node tests/layout.mjs --fast",
     "test:layout:shots": "node tests/layout.mjs --fast --shots",
-    "test:all": "node tests/run.mjs && node tests/chaos.mjs && node tests/layout.mjs --fast"
+    "test:all": "node tests/regressions.mjs && node tests/run.mjs && node tests/chaos.mjs && node tests/layout.mjs --fast",
+    "test:regressions": "node tests/regressions.mjs"
   },
   "devDependencies": {
     "jsdom": "^29.1.1",

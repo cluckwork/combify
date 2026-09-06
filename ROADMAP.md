@@ -1129,6 +1129,34 @@ Captured so they're not lost; not planned yet.
 
 ---
 
+## 13b. Regression tripwires — `tests/regressions.mjs`
+
+**Why it exists.** The iOS silent-switch bug shipped three times (v1.5.0,
+v1.7.1, v2.0.0) and the third time the whole suite stayed green. The tests
+asserted the bell SOUNDS — it did, in jsdom — while nothing asserted the
+invariant underneath: that the silent keeper's media element stays attached. A
+new mechanism reached an old symptom through a door no test was watching.
+
+**What it is.** A fast source-level check, run before everything else, that
+guards INVARIANTS rather than behaviour. When it trips it names the bug, when
+it shipped, what a member heard, and why the line just written brings it back.
+
+**Why it can be trusted.** Every rule carries a `selfTest` — a snippet that
+must trip it. The runner applies each rule to its own snippet before checking
+the real source, and fails the build with `RULE IS BLIND` if a rule no longer
+catches its own bug. A rule that quietly stopped working cannot sit in the list
+looking like protection. (Verified: blinding a rule's pattern produces exactly
+that failure.)
+
+**It does not replace the tests.** Two nets, different weaves: behaviour tests
+catch what nobody predicted, tripwires catch what has already been paid for.
+
+**When a new bug is found:** fix it, write the behaviour test that fails
+without the fix, then add a rule here with its history and a selfTest. The list
+only ever grows. Ten rules at the time of writing.
+
+---
+
 ## 14. Versioning — how the number is chosen
 
 **The notation.** A version is three numbers, `MAJOR.MINOR.PATCH` — so `1.8.0`
