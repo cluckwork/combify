@@ -2379,6 +2379,60 @@ async function collectSpokenVsShown(app, ms) {
   clearStore();
 }
 
+// ------- 47. Silent sounds, and a lock screen that thinks this is a podcast
+{
+  section("47. The sfx pipeline, and releasing the lock-screen player");
+  // A. THE SILENT TICK. priming mutes an element, plays it, pauses it and
+  // unmutes it. playWord has always unmuted again at play time; playSfx never
+  // did. So one throw in the middle of priming — iOS rejects a pause racing an
+  // unresolved play — left a sound muted for the rest of the session, and
+  // nothing ever turned it back on. The voice recovered; the countdown tick
+  // did not. That asymmetry is exactly what was reported.
+  clearStore();
+  const app = await boot({ duration: 0.6 });
+  app.set("rounds", 1); app.set("workSec", 12); app.set("restSec", 5);
+  app.click("startBtn");
+  await app.clock.advance(300);
+
+  // Leave every tick element muted, as a half-failed prime would.
+  const ticks = () => app.stats.live.filter((a) => /tick/.test(a.key));
+  ticks().forEach((a) => { a.muted = true; });
+  check("the test really did mute the ticks", ticks().length > 0 && ticks().every((a) => a.muted),
+    `${ticks().length} tick elements`);
+
+  await app.clock.advance(5000);   // the countdown's ticks all fire
+  const audible = ticks().filter((a) => !a.muted);
+  check("a muted sound is unmuted before it is played",
+    audible.length > 0, "every tick element still muted — it would be silent on the phone");
+  app.restore();
+
+  // B. THE LOCK SCREEN. iOS builds a Now Playing card from any element that
+  // has played, and pausing one keeps it — so the phone showed Combify sitting
+  // at 0:00 with transport controls hours after training, like an abandoned
+  // podcast. Detaching the source is what actually retires it.
+  clearStore();
+  const app2 = await boot({ duration: 0.6 });
+  app2.set("rounds", 1); app2.set("workSec", 10); app2.set("restSec", 5);
+  app2.click("startBtn");
+  await app2.clock.advance(2000);
+  const keeper = () => app2.stats.live.find((a) => /silence/.test(a.key) || /silence/.test(a.src));
+  check("the keeper is holding the audio route during a session", !!keeper(), "no keeper element");
+
+  app2.click("exitBtn");
+  await app2.clock.advance(100);
+  const k = app2.stats.live.find((a) => a.src === "" || /silence/.test(a.src));
+  check("ending the session releases the keeper's source",
+    !!k && !k.src, `src still "${k && k.src}"`);
+
+  // ...and the next session must get it back, or there is no keeper at all.
+  app2.click("startBtn");
+  await app2.clock.advance(300);
+  const back = app2.stats.live.some((a) => /silence/.test(a.src));
+  check("and the next session gets it back", back, "keeper never returned");
+  app2.restore();
+  clearStore();
+}
+
 console.log(results.join("\n"));
 console.log(`\n${"=".repeat(50)}\n  ${pass} passed, ${fail} failed\n${"=".repeat(50)}`);
 process.exit(fail ? 1 : 0);

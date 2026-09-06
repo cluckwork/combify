@@ -21,6 +21,18 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.35.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "The shockwave actually shows, and the ticks come back",
+    notes: [
+      "The countdown\'s shockwave never ran — a leftover line from the old animation was holding it shut. Fixed.",
+      "Fixed sound effects going permanently silent. Combify briefly mutes each sound when it warms them up on your first tap; if that was interrupted, the sound stayed muted for the rest of the session. The voice always turned itself back on, but the ticks and bell didn\'t.",
+      "Combify no longer leaves a player sitting on your lock screen after you\'ve finished, like a podcast you never closed. It now releases it properly when a session ends.",
+      "The finish screen is smoother: the app was saving its diagnostic log and reporting the session in the same instant the numbers started climbing.",
+    ],
+  },
+  {
     v: "1.34.0",
     date: "2026-09-05",
     size: "minor",

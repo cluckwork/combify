@@ -226,6 +226,14 @@ function playSfx(key, fallback, rate = 1) {
   // stale/late event delivery seeked elements mid-use: ghost words.
   try { audit("sfx", `${key}${rate !== 1 ? " r=" + rate.toFixed(2) : ""} ct=${node.currentTime.toFixed(2)}${node.ended ? " ended" : ""}${node.paused ? "" : " PLAYING"}`); } catch (e) {}
   try { if (!node.ended && node.currentTime > 0.05) node.currentTime = 0; } catch (e) {}
+  // Never inherit priming's mute into playback. playWord has done this since
+  // it was written; playSfx never did, and that asymmetry is exactly what the
+  // founder heard — the voice recovering from a bad prime while the countdown
+  // tick stayed silent for the rest of the session. primeElement mutes an
+  // element, plays it, pauses it and unmutes it; if anything in the middle of
+  // that throws (iOS rejects a pause racing an unresolved play), the unmute is
+  // skipped and nothing else ever turns it back on.
+  node.muted = false;
   // playbackRate with preservesPitch off is a pitch bend — one blip file
   // becomes the whole rising scale of the count-up.
   try {
@@ -326,9 +334,15 @@ let silenceOk = false; // did the keeper actually start? gates the Web Audio rif
 function getSilence() {
   if (!silenceEl) {
     silenceEl = new Audio(SFX_DIR + "silence.wav");
-    silenceEl.loop = true;
     silenceEl.preload = "auto";
   }
+  // stopAudioSession detaches the source to retire the lock-screen Now Playing
+  // card; put it back before the next session needs the keeper.
+  if (!silenceEl.src) {
+    silenceEl.src = SFX_DIR + "silence.wav";
+    try { if (silenceEl.load) silenceEl.load(); } catch (e) {}
+  }
+  silenceEl.loop = true;
   return silenceEl;
 }
 export function startAudioSession() {
@@ -347,6 +361,24 @@ export function stopAudioSession() {
   silenceOk = false;
   if (!silenceEl) return;
   try { silenceEl.pause(); silenceEl.currentTime = 0; } catch (e) {}
+  // RETIRE THE LOCK-SCREEN CARD. iOS builds a Now Playing entry from any
+  // element that has played, and merely PAUSING one keeps it there — so the
+  // phone showed "Combify — Boxing With Bakr" sitting at 0:00 with transport
+  // controls on the lock screen, like an abandoned podcast, long after the
+  // member had finished training. Detaching the source is what actually
+  // retires it; getSilence puts the source back before the next session.
+  try {
+    silenceEl.loop = false;
+    if (silenceEl.removeAttribute) silenceEl.removeAttribute("src");
+    else silenceEl.src = "";
+    if (silenceEl.load) silenceEl.load();
+  } catch (e) {}
+  try {
+    if (typeof navigator !== "undefined" && navigator.mediaSession) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = "none";
+    }
+  } catch (e) {}
   audit("session", "keeper stop");
 }
 
@@ -546,9 +578,15 @@ function primeElement(a) {
   // 3-5 kept playing from end position ("the 5-4-3-2-1 drifts off tempo").
   if (!a || (a.paused === false && !a.ended)) return; // never pause something mid-sound
   a.muted = true;
-  const p = a.play();
-  if (p && p.catch) p.catch(() => {});
-  a.pause();
+  // Everything between the mute and the unmute is wrapped, because a throw in
+  // here used to escape to unlockAudioForMobile's catch with the element still
+  // muted — permanently silent, and taking the rest of that priming pass with
+  // it. iOS throws from pause() when it races a play() that has not resolved.
+  try {
+    const p = a.play();
+    if (p && p.catch) p.catch(() => {});
+    a.pause();
+  } catch (e) { /* the unmute below still runs */ }
   // Park at 0 — but only when displaced. An element left mid-word (a paused
   // round, a cut) MUST be rewound: currentTime assignment is an async seek on
   // iOS, and seeking lazily at play time raced playback — the start of the

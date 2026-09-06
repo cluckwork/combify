@@ -92,6 +92,11 @@ export function makeAudioFactory(clock, cfg) {
       }
     }
     get key() { const m = /([^/]+)\.(?:mp3|wav)$/.exec(this.src); return m ? m[1] : "?"; }
+    // Detaching the source is how a media element is released — it is what
+    // retires iOS's lock-screen Now Playing card, so the fake has to model it
+    // or that path ships untested.
+    getAttribute(n) { return n === "src" ? (this.src || null) : null; }
+    removeAttribute(n) { if (n === "src") { this.src = ""; this._sounding = false; this.paused = true; } }
     get isVoice() { return !this.src.includes("/sfx/"); }
     // currentTime is an accessor so chaos can model what iOS really does:
     // assignment is an ASYNC seek that completes later, while reads report

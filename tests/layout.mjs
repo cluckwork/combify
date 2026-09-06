@@ -635,12 +635,36 @@ async function runCountdownBeat() {
     watch(".dial__pulse", "shock");
   });
 
+  // getAnimations() reports what the browser is genuinely running, which an
+  // inline `animation: none` would leave empty however many classes were set.
+  await page.evaluate(() => {
+    window.__ran = { slamRan: 0, shockRan: 0, shockInline: null };
+    setInterval(() => {
+      const c = document.querySelector(".clock"), s = document.querySelector(".dial__pulse");
+      if (c && c.getAnimations && c.getAnimations().length) window.__ran.slamRan++;
+      if (s && s.getAnimations && s.getAnimations().length) window.__ran.shockRan++;
+      if (s) window.__ran.shockInline = s.style.animation;
+    }, 60);
+  });
   await page.click("#startBtn");
   await page.waitForTimeout(6800);   // the whole 5s countdown, into work
+  const ranAnim = await page.evaluate(() => window.__ran);
 
   const beats = await page.evaluate(() => window.__beats);
   check(`the number beats on every countdown second (${beats.slam})`, beats.slam >= 5, JSON.stringify(beats));
   check(`the shockwave fires with it (${beats.shock})`, beats.shock >= 5, JSON.stringify(beats));
+  // Counting class toggles is NOT enough, and this is why: the slam replaced a
+  // CSS animation that the entrance used to hold off with an inline
+  // `animation: none`. The class went on exactly as expected and the inline
+  // style silently outranked it, so the shockwave never once ran — and a test
+  // that only watched classes passed the whole time. These assert the browser
+  // actually animated something.
+  check("the shockwave is not pinned by an inline animation style",
+    ranAnim.shockInline === "" || ranAnim.shockInline === undefined,
+    `inline animation: "${ranAnim.shockInline}"`);
+  check("the browser really ran both animations",
+    ranAnim.slamRan > 0 && ranAnim.shockRan > 0,
+    `slam ran ${ranAnim.slamRan}, shockwave ran ${ranAnim.shockRan}`);
 
   const phase = (await page.textContent("#phase")).trim();
   check("the countdown handed off into the round", phase === "Work", phase);

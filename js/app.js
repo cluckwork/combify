@@ -1084,8 +1084,15 @@ function clearFinale() {
 function finish() {
   state.phase = "done"; state.running = false;
   audit("phase", "done");
-  auditPersist(); // the session's story survives a reload for problem reports
-  pingUsage("finish", { rounds: session.rounds, punches: session.punches, secs: session.seconds });
+  // BOTH DEFERRED, and this is the single worst-placed stall in the app.
+  // auditPersist stringifies up to 4000 ring-buffer entries and builds the
+  // uniformity report; pingUsage walks the history for a streak, builds JSON
+  // and opens a request. Running them here put ALL of that on the main thread
+  // in the same frame the finale starts — the exact moment the count-up needs
+  // every frame it can get. The session's story and the ping are both just as
+  // true a tick later.
+  deferIdle(auditPersist);
+  deferIdle(() => pingUsage("finish", { rounds: session.rounds, punches: session.punches, secs: session.seconds }));
   parkIdleSfx(); // blips and the landing hit start the finale parked at zero
   // Hand the audio session back (to Spotify etc.) once the celebration is
   // over. Guarded: a restart re-arms the keeper and must not lose it.
@@ -1244,7 +1251,10 @@ function slamBeat() {
 // mid-beat must not strand the animation classes on.
 function armPulse() {
   const pulse = el.stage.querySelector(".dial__pulse");
-  if (pulse) pulse.classList.remove("is-shock");
+  if (pulse) {
+    pulse.classList.remove("is-shock");
+    pulse.style.removeProperty("animation"); // clear any legacy inline hold
+  }
   if (el.clock) el.clock.classList.remove("is-slam");
 }
 
@@ -1299,8 +1309,11 @@ function armCountdownStart() {
   el.combo.textContent = "Get ready...";
   if (el.comboName) el.comboName.textContent = "";
   render();
-  const pulse = el.stage.querySelector(".dial__pulse");
-  if (pulse) pulse.style.animation = "none";
+  // The old filling wave was a fixed 5-iteration CSS animation held off with
+  // an inline `animation: none` until the entrance settled. The slam is class
+  // driven instead, and that leftover inline style silently outranked it — the
+  // shockwave could never run. Clear it rather than set it.
+  armPulse();
   clearTimeout(state.settleTimer);
   state.settleTimer = setTimeout(() => {
     armPulse();
@@ -1977,6 +1990,15 @@ initDev({
   // the genuine finish(), bell and all.
   replayFinish() {
     reset();
+    // Take the audio route the way a real session does. Without this the
+    // preview never called startAudioSession, so silenceOk stayed false, every
+    // Web Audio path was refused, and all 23 count-up blips fell back to
+    // individual element plays — stuttery, uneven, and nothing like the finale
+    // a member actually gets. A workbench that misrepresents the thing it is
+    // previewing is worse than no workbench.
+    armAudio();
+    unlockAudioForMobile();
+    startAudioSession();
     session.rounds = 3; session.punches = 84; session.seconds = 360;
     session.pendingPunches = 0; session.started = true;
     finish();
