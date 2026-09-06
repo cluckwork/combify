@@ -21,6 +21,15 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.36.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "Computers are left alone",
+    notes: [
+      "Combify no longer offers to install itself on a laptop or desktop. Chrome offers that on a Mac and the small reminder strip was taking it up, but there\'s no home screen there and the browser tab is already the right way to use it. Phones and tablets are unaffected.",
+    ],
+  },
+  {
     v: "1.35.1",
     date: "2026-09-05",
     size: "patch",

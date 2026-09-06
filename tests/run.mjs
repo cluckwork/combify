@@ -509,6 +509,10 @@ async function countCombos(app, ms, step = 200) {
   // A finished session is the price of admission. Asking on arrival was the
   // old behaviour and it burned the one ask on people who had never trained.
   const IOS = { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari", noVibrate: true };
+  // beforeinstallprompt fires on desktop Chrome too, but a computer has no
+  // home screen and is never offered any of this — so the one-tap prompt path
+  // is exercised where it actually matters.
+  const ANDROID = { userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/120.0 Mobile Safari/537.36", maxTouchPoints: 5 };
   const offerInstall = (app) => {
     const ev = new app.window.Event("beforeinstallprompt");
     ev.prompt = () => {};
@@ -525,7 +529,7 @@ async function countCombos(app, ms, step = 200) {
   };
 
   clearStore();
-  const app = await boot({ duration: 0.6 });
+  const app = await boot({ duration: 0.6, ...ANDROID });
   const nudge = () => app.doc.getElementById("installNudge");
   check("hidden at boot", nudge().hidden === true, "visible at boot");
   offerInstall(app);
@@ -540,7 +544,7 @@ async function countCombos(app, ms, step = 200) {
 
   // Tapping Install runs the browser's own prompt.
   clearStore();
-  const appP = await boot({ duration: 0.6 });
+  const appP = await boot({ duration: 0.6, ...ANDROID });
   let prompted = 0;
   const ev = new appP.window.Event("beforeinstallprompt");
   ev.prompt = () => { prompted++; };
@@ -606,9 +610,20 @@ async function countCombos(app, ms, step = 200) {
 
   // A session must fold the nudge away with the rest of the chrome (CSS is
   // asserted in the layout suite; here just confirm the row's still in flow).
-  const app4 = await boot({ duration: 0.6 });
+  const app4 = await boot({ duration: 0.6, ...ANDROID });
   check("nudge element exists for the layout to manage", !!app4.doc.querySelector(".install"), "missing");
   app4.restore();
+  clearStore();
+
+  // A computer is offered nothing at all — not the dialog, not the strip, not
+  // even when Chrome volunteers a real install prompt on a Mac.
+  const mac = await boot({ duration: 0.6 });
+  offerInstall(mac);
+  await trainAndExit(mac);
+  check("a computer is never offered the strip, prompt or not",
+    mac.doc.getElementById("installNudge").hidden === true, "a laptop was asked to install");
+  check("and no dialog either", mac.doc.getElementById("insModal").hidden === true, "dialog on a laptop");
+  mac.restore();
   clearStore();
 }
 

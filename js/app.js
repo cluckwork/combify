@@ -1583,6 +1583,13 @@ let installMode = null; // "prompt" = browser offers real install | "hint" = iOS
 // earlier, so a stale caller can never force it open.
 function refreshInstallNudge() {
   if (!el.installNudge) return;
+  // Computers get none of this, even when Chrome offers a real one-tap
+  // install. There is no home screen to add anything to, the browser tab is
+  // already a perfectly good way to use Combify, and a laptop does not need a
+  // second copy of it in the dock. The dialog has always skipped desktop; the
+  // quiet strip was still appearing there because Chrome fires
+  // beforeinstallprompt on a Mac and that alone used to be enough.
+  if (!canInstall()) { hideInstallNudge(); return; }
   if (!installMode || isStandalone() || installSilenced() || !(installEarned() || installBlocked())) {
     hideInstallNudge();
     return;

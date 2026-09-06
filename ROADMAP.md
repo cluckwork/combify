@@ -382,8 +382,10 @@ Directly serves the business goal.
   - ✅ **Install is platform-aware** (v1.21.0, `js/platform.js`). Detection
     separates iPhone Safari (Share is at the BOTTOM), iPad Safari (TOP), Chrome
     and friends on iOS (top right, beside the address), Android (real one-tap
-    prompt where offered, menu steps otherwise), and computers (never asked —
-    no home screen there). The ask is a dialog, earned by a finished session;
+    prompt where offered, menu steps otherwise), and computers (never asked at
+    all — not the dialog, not the strip, and not even when Chrome volunteers a
+    real beforeinstallprompt on a Mac; there is no home screen there and the
+    tab is already the right way to use it). The ask is a dialog, earned by a finished session;
     a quiet strip remains for anyone who says "not now", plus a footer link.
   - ⚠️ **A wrong turn worth remembering** (v1.21.0–1.24.0, reverted 1.25.0).
     Those builds told Chrome-on-iPhone users that only Safari could install a
