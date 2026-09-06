@@ -646,9 +646,38 @@ async function runCountdownBeat() {
       if (s) window.__ran.shockInline = s.style.animation;
     }, 60);
   });
+  // Sample the ring through the countdown's first second, where the wind-up
+  // would happen. Only while the countdown is actually the live phase — the
+  // ready screen legitimately sits at an empty ring.
+  await page.evaluate(() => {
+    window.__ring = [];
+    const fill = document.getElementById("dialFill");
+    const stage = document.getElementById("stage");
+    const id = setInterval(() => {
+      if (stage.dataset.phase !== "countdown") return;
+      const v = parseFloat(getComputedStyle(fill).strokeDashoffset) || 0;
+      window.__ring.push(v);
+      if (window.__ring.length > 400) clearInterval(id);
+    }, 16);
+  });
   await page.click("#startBtn");
   await page.waitForTimeout(6800);   // the whole 5s countdown, into work
   const ranAnim = await page.evaluate(() => window.__ran);
+
+  // The ring must START full. Sampled densely from the moment Start is tapped:
+  // if the easing ever catches the first write, the offset sweeps from empty
+  // (the full circumference) down to 0 and these samples record it.
+  // Offset 0 is a full ring and the circumference (~339) is an empty one, so a
+  // correct countdown starts near 0 and only ever RISES as it drains. Winding
+  // up shows as the opposite: starting near 339 and falling.
+  const ringPath = await page.evaluate(() => window.__ring || []);
+  check("the countdown ring starts full", ringPath.length > 0 && ringPath[0] < 40,
+    `first offset ${Math.round(ringPath[0])} of ~339 — the ring started empty`);
+  // Allow a little slack for the once-a-second eased step settling.
+  const backwards = ringPath.filter((o, i) => i > 0 && o < ringPath[i - 1] - 2);
+  check("and only ever drains, never draws itself in",
+    backwards.length === 0,
+    `${backwards.length} samples moved backwards, e.g. ${backwards.slice(0, 4).map((n) => Math.round(n)).join(", ")}`);
 
   const beats = await page.evaluate(() => window.__beats);
   check(`the number beats on every countdown second (${beats.slam})`, beats.slam >= 5, JSON.stringify(beats));

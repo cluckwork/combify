@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.35.1",
+    date: "2026-09-05",
+    size: "patch",
+    title: "The ring starts full, and the punch count grows as it climbs",
+    notes: [
+      "The countdown ring was drawing itself in from empty before it had anything to count down. It starts full now.",
+      "On the finish screen the punch total grows as it counts up, arriving at full size exactly as it arrives at your number — then the pop overshoots from there.",
+    ],
+  },
+  {
     v: "1.35.0",
     date: "2026-09-05",
     size: "minor",

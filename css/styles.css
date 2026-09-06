@@ -1148,6 +1148,16 @@ button.foot__link {
   display: inline-block;
   font-variant-numeric: tabular-nums;
   text-align: center;
+  /* The climb writes a scale per step; easing between them makes it read as
+     one continuous growth rather than 24 discrete jumps. The pop animation
+     outranks this transform (animations beat inline styles in the cascade),
+     so the overshoot still lands cleanly on top of it. */
+  transform-origin: center;
+  transition: transform 140ms linear;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stat-digits { transition: none; }
 }
 .stat-digits.is-pop { animation: numPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4); text-shadow: 0 0 20px rgba(73, 149, 146, 0.75); }
 .stat-halo {

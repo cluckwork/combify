@@ -555,7 +555,7 @@ function buzz(pattern) {
 // haptic on each change — because the changes naturally thin out as it
 // decelerates, that reads as the count "settling" rather than a buzz.
 function countUp(node, to, { ms = 0, pop = false, haptics = false, sound = false, glow = null } = {}) {
-  if (!motionOK() || to <= 0) { node.textContent = to.toLocaleString(); return; }
+  if (!motionOK() || to <= 0) { node.textContent = to.toLocaleString(); node.style.transform = ""; return; }
   // The riff scales with what was earned: one blip per punch up to two
   // dozen, uniform strides above that, and the whole climb lasts longer the
   // bigger the total — a 6-punch warm-down is a quick run up the scale, a
@@ -613,6 +613,12 @@ function countUp(node, to, { ms = 0, pop = false, haptics = false, sound = false
     const frac = (next + 1) / values.length;
     next++;
     node.textContent = value.toLocaleString();
+    // The number GROWS as it climbs, so the size is telling the same story as
+    // the digits and the rising blips — it arrives at full scale exactly as it
+    // arrives at the total, and the pop then overshoots from there. A transform
+    // is composited, so this costs nothing and, unlike a font-size ramp, cannot
+    // relayout the hero on any step.
+    node.style.transform = `scale(${(0.86 + 0.14 * frac).toFixed(3)})`;
     // The halo brightens with the climb. Its own layer, opacity only — the
     // GPU composites this; nothing about the glyphs repaints.
     if (glow) glow.style.opacity = String(0.85 * frac);
@@ -625,6 +631,7 @@ function countUp(node, to, { ms = 0, pop = false, haptics = false, sound = false
   };
   const land = () => {
     node.textContent = to.toLocaleString();
+    node.style.transform = "scale(1)";   // the pop overshoots from full size
     if (glow) glow.style.opacity = "1"; // crest exactly at the landing
     if (pop) {
       node.classList.add("is-pop");
@@ -848,6 +855,33 @@ function phaseFractionLeft() {
   return Math.max(0, Math.min(1, left));
 }
 let dialArraySet = false;
+// Write the ring's position with NO transition, then hand the transition back.
+//
+// The countdown is the one phase whose fill is eased (its value only changes
+// once a second, so without easing it teleports between fifths). That easing
+// also caught the very first write: arriving from the ready screen the ring is
+// empty, the countdown's first value is FULL, and the transition dutifully
+// animated the whole way round — the ring winding itself up before it had
+// anything to count down. It should simply start full.
+// Takes the work as a callback because the easing has to be off BEFORE the
+// phase attribute lands: render() applies data-phase and writes the new offset
+// in the same call, so switching the transition off afterwards is too late —
+// the browser is already animating and renderProgress's no-op guard then sees
+// the value it wanted and does nothing.
+function withoutRingEasing(fn) {
+  if (!el.dialFill) { fn(); return; }
+  el.dialFill.style.transition = "none";
+  fn();
+  // Force a style flush so the jump is COMMITTED before easing comes back.
+  // Reading offsetWidth is the usual trick, but that is an HTMLElement
+  // property and this is an SVG <circle> — it reads undefined, forces nothing,
+  // and the whole sequence collapses into one recalculation in which the
+  // browser sees only "transition on, value changed" and dutifully animates
+  // the ring in from empty. Reading the computed property itself does flush.
+  try { void getComputedStyle(el.dialFill).strokeDashoffset; } catch (e) {}
+  el.dialFill.style.removeProperty("transition");
+}
+
 function renderProgress() {
   if (!el.dialFill) return;
   if (!dialArraySet) { el.dialFill.style.strokeDasharray = String(DIAL_CIRCUMFERENCE); dialArraySet = true; }
@@ -1308,7 +1342,7 @@ function armCountdownStart() {
   parkAllIdle("countdown");
   el.combo.textContent = "Get ready...";
   if (el.comboName) el.comboName.textContent = "";
-  render();
+  withoutRingEasing(render);   // start full, rather than winding up to full
   // The old filling wave was a fixed 5-iteration CSS animation held off with
   // an inline `animation: none` until the entrance settled. The slam is class
   // driven instead, and that leftover inline style silently outranked it — the
@@ -1319,7 +1353,7 @@ function armCountdownStart() {
     armPulse();
     beginPhase(COUNTDOWN_SECONDS); // re-anchor: the 5 seconds start NOW, post-entrance
     playTick();
-    render();
+    withoutRingEasing(render);   // the re-anchor is a jump too, not a sweep
     slamBeat();   // "5" lands with the first tick
     state.tickTimer = alignedTicker();
   }, motionOK() ? ENTRANCE_SETTLE_MS : 140);
