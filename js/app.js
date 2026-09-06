@@ -8,7 +8,7 @@ import {
   configureVoice, speakCombo, stopVoice,
   armAudio, unlockAudioForMobile, markNeedsReprime, setClipSet,
   ringBell, playTick, playWarning, playBlip, playLand, parkIdleSfx, parkAllIdle,
-  startAudioSession, stopAudioSession, ensureAudioSession, scheduleBlipRiff, stopBlipRiff,
+  startAudioSession, stopAudioSession, ensureAudioSession, holdAudioSession, scheduleBlipRiff, stopBlipRiff,
 } from "./audio.js";
 import { audit, auditOn, setAudit, auditDump, auditPersist, auditReport } from "./audit.js";
 import { deviceOS, deviceClass, canInstall, isStandalone, installGuide, platformTag, devForcesPrompt } from "./platform.js";
@@ -1151,15 +1151,6 @@ let flameShownThisSession = false;
 
 export function shouldCelebrateStreak() {
   if (flameShownThisSession) return false;          // once per session, ever
-  // ---------------------------------------------------------------------
-  // DEV ONLY WHILE THE SEQUENCE IS UNFINISHED.
-  //
-  // The vortex gathers and then nothing catches — the flame is phase 3. A
-  // member on a real streak would get a build-up with no payoff, which is
-  // worse than no celebration at all. DELETE THIS LINE when the flame,
-  // audio and badge hand-off are in; the real trigger is the line below it.
-  // ---------------------------------------------------------------------
-  if (!devOn()) return false;
   return currentStreak(history) > streakAtStart;
 }
 
@@ -1171,9 +1162,31 @@ function runStreakFlame() {
   flameShownThisSession = true;
   if (el.app) el.app.dataset.flame = "1";
   audit("flame", `streak ${streakAtStart} -> ${currentStreak(history)}`);
+
+  // The badge is the thing the big flame turns into, so it waits offstage
+  // until the flame arrives on top of it. Hidden by opacity rather than
+  // display, so the stats row keeps its exact layout and nothing reflows at
+  // the hand-off frame.
+  const badge = el.stats && el.stats.querySelector(".flame");
+  if (badge) badge.classList.add("is-arriving");
+
+  // The audio session is normally handed back 8s after finish(); the
+  // celebration can still be burning then, and Web Audio without the keeper is
+  // silent on a phone with the ring switch off.
+  holdAudioSession();
+
   state.flameTimer = setTimeout(() => {
+    // Measure the badge NOW, not at build time: the stats row's position
+    // depends on the streak wording and the screen width.
+    if (badge) {
+      const r = badge.getBoundingClientRect();
+      if (r.width) flame.setTarget({ x: r.left + r.width / 2, y: r.top + r.height });
+    }
     flame.play({
-      onDone: () => { if (el.app) delete el.app.dataset.flame; },
+      onDone: () => {
+        if (el.app) delete el.app.dataset.flame;
+        if (badge) { badge.classList.remove("is-arriving"); badge.classList.add("is-lit"); }
+      },
     });
   }, flame.FLAME.t.lead * 1000);
 }
@@ -1182,6 +1195,8 @@ function stopStreakFlame() {
   clearTimeout(state.flameTimer);
   flame.stop();
   if (el.app) delete el.app.dataset.flame;
+  const badge = el.stats && el.stats.querySelector(".flame");
+  if (badge) badge.classList.remove("is-arriving", "is-lit");
 }
 
 // Tap anywhere to skip to the end state.

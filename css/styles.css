@@ -1537,6 +1537,19 @@ button.foot__link {
   transition: opacity .5s ease;
 }
 .app[data-flame="1"] .stats { position: relative; z-index: 42; }
+/* The badge waits offstage while the big flame is on screen, then takes over
+   at the moment it arrives. Opacity, not display: the stats row must keep its
+   exact layout so nothing reflows at the hand-off frame. */
+.flame.is-arriving { opacity: 0; }
+.flame.is-lit { animation: flicker 1.6s ease-in-out infinite alternate, badgeLand .45s ease-out; }
+@keyframes badgeLand {
+  from { opacity: 0; transform: scale(1.9); filter: drop-shadow(0 0 14px rgba(255, 170, 60, 0.95)); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flame.is-arriving { opacity: 1; }
+  .flame.is-lit { animation: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .flamefx, .flamefx__dim { display: none !important; }

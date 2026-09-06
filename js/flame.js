@@ -30,6 +30,7 @@
 // the catch and the flame (phase 3), audio (phase 4), badge handoff (phase 5).
 
 import { audit } from "./audit.js";
+import { fxContext, holdAudioSession } from "./audio.js";
 
 // ============================================================================
 // CONFIG — everything tunable, nothing tunable anywhere else.
@@ -780,10 +781,15 @@ function renderFlame(g, t, W, H, R) {
   const grow = 0.35 + 0.65 * span(t, FLAME.t.katch, FLAME.t.alive + 0.25);
   // The travel: the body shrinks and slides toward where the badge will sit.
   const tv = span(t, FLAME.t.travel, FLAME.t.done);
-  const shrinkAll = 1 - tv * 0.82;
+  // Ease toward the badge on a curve that starts slow — the flame gathers
+  // itself before it goes, rather than sliding off the moment travel begins.
+  const tve = tv * tv * (3 - 2 * tv);
+  const shrinkAll = 1 - tve * 0.93;
 
-  const cx = W * FLAME.vortex.cx * (1 - tv) + W * 0.5 * tv;
-  const by = H * F.baseY + (H * 0.30) * tv * tv;
+  const tx = target ? target.x : W * 0.5;
+  const ty = target ? target.y : H * 0.78;
+  const cx = W * FLAME.vortex.cx + (tx - W * FLAME.vortex.cx) * tve;
+  const by = H * F.baseY + (ty - H * F.baseY) * tve;
   const a = born * FLAME.flame.opacity;
 
   // --- Additive glow behind. The room reacting is what sells a light source
@@ -1096,10 +1102,223 @@ export function renderAt(t) {
 }
 
 // ============================================================================
-// The clock. One timeline drives everything — visuals now, audio in phase 4.
+// AUDIO — synthesised, not sampled.
+// ============================================================================
+// Every other sound in this app is synthesised (the bell is FM through a
+// convolver; tick, warning, blip and land are oscillator plus envelope), so a
+// bundle of sample files would be the one exception. Wind, whoosh, fwoomph and
+// crackle are also exactly what synthesis is best at — filtered noise with
+// moving filters — and doing it this way means no download weight on a phone
+// at the gym, no licences to track, and every layer tunable from the config
+// below rather than baked into a file.
+//
+// EVERYTHING IS SCHEDULED IN ONE PASS off a single t0 on the audio clock. No
+// setTimeouts: the whole point of scheduling ahead on ctx.currentTime is that
+// the fwoomph lands on the frame the flame forms even if the main thread
+// stalls, which is exactly where particle systems and their soundtracks
+// normally come apart.
+const AUDIO = {
+  bed:     { gain: 0.030, lp: 420 },
+  wind:    { gain: 0.085, f0: 260, f1: 1500, q: 3.2, panDepth: 0.92 },
+  suck:    { gain: 0.075 },
+  fwoomph: { low: 0.50, air: 0.30, attack: 0.055, sub0: 74, sub1: 34 },
+  fire:    { gain: 0.085, lp: 760, crackle: 0.030, crackles: 26 },
+  chime:   { gain: 0.16, f: 528 },
+};
+
+const MUTE_KEY = "combify.flame.mute";
+export function isMuted() {
+  try { return localStorage.getItem(MUTE_KEY) === "1"; } catch (e) { return false; }
+}
+export function setMuted(on) {
+  try { localStorage.setItem(MUTE_KEY, on ? "1" : "0"); } catch (e) {}
+  if (on) stopAudio();
+}
+
+let noiseBuf = null;
+function noise(ctx) {
+  if (noiseBuf) return noiseBuf;
+  const n = ctx.sampleRate * 2;
+  noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  return noiseBuf;
+}
+let voices = [];
+function keep(node) { voices.push(node); return node; }
+
+export function stopAudio() {
+  for (const v of voices) { try { v.stop ? v.stop() : v.disconnect(); } catch (e) {} }
+  voices = [];
+}
+
+// Schedule the whole soundtrack. t0 is "sequence time zero" on the audio clock.
+function playAudio() {
+  if (isMuted()) return false;
+  const ctx = fxContext();
+  if (!ctx) { audit("flame:audio", "no context"); return false; }
+  holdAudioSession();          // Web Audio is muted by the ring switch without this
+  const T = FLAME.t;
+  const t0 = ctx.currentTime + 0.02;
+  const master = ctx.createGain();
+  master.gain.value = 1;
+  master.connect(ctx.destination);
+  keep({ stop: () => master.disconnect() });
+
+  const src = (buf, loop) => {
+    const s = ctx.createBufferSource();
+    s.buffer = buf; s.loop = !!loop;
+    return keep(s);
+  };
+
+  // ---- 1. Airy bed, as the motes drift in ----
+  {
+    const n = src(noise(ctx), true);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = AUDIO.bed.lp;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0 + T.motes);
+    g.gain.exponentialRampToValueAtTime(AUDIO.bed.gain, t0 + T.current);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + T.katch);
+    n.connect(lp).connect(g).connect(master);
+    n.start(t0 + T.motes); n.stop(t0 + T.katch + 0.1);
+  }
+
+  // ---- 2. The circling wind ----
+  // The pan curve is computed from spinIntegral — the SAME function that
+  // places the particles — so the sound orbits with the picture and speeds up
+  // exactly as the spiral tightens, rather than merely at the same time.
+  {
+    const n = src(noise(ctx), true);
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass"; bp.Q.value = AUDIO.wind.q;
+    bp.frequency.setValueAtTime(AUDIO.wind.f0, t0 + T.current);
+    bp.frequency.exponentialRampToValueAtTime(AUDIO.wind.f1, t0 + T.katch);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0 + T.current);
+    g.gain.exponentialRampToValueAtTime(AUDIO.wind.gain, t0 + T.peak);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + T.katch + 0.14);
+
+    let out = g;
+    if (ctx.createStereoPanner) {
+      const pan = ctx.createStereoPanner();
+      const dur = T.katch - T.current;
+      const N = 256;
+      const curve = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        const tt = T.current + (i / (N - 1)) * dur;
+        const theta = shellOmega(0.72) * 1.093 * spinIntegral(tt) * Math.PI * 2;
+        curve[i] = Math.cos(theta) * AUDIO.wind.panDepth;
+      }
+      pan.pan.setValueCurveAtTime(curve, t0 + T.current, dur);
+      g.connect(pan); out = pan;
+    }
+    n.connect(bp).connect(g);
+    out.connect(master);
+    n.start(t0 + T.current); n.stop(t0 + T.katch + 0.2);
+  }
+
+  // ---- 3. The held breath at maximum compression ----
+  {
+    const n = src(noise(ctx), false);
+    const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 6;
+    bp.frequency.setValueAtTime(500, t0 + T.peak);
+    bp.frequency.exponentialRampToValueAtTime(2600, t0 + T.katch);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0 + T.peak);
+    g.gain.exponentialRampToValueAtTime(AUDIO.suck.gain, t0 + T.katch - 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + T.katch + 0.02);
+    n.connect(bp).connect(g).connect(master);
+    n.start(t0 + T.peak); n.stop(t0 + T.katch + 0.05);
+  }
+
+  // ---- 4. THE FWOOMPH ----
+  // A soft-attack whump plus a plume opening outward. Deliberately NOT a hit:
+  // the attack is ~55ms, which is far too slow to read as an impact, and there
+  // is no click, no crack and no transient spike anywhere in it. Gas igniting.
+  {
+    const sub = ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(AUDIO.fwoomph.sub0, t0 + T.katch);
+    sub.frequency.exponentialRampToValueAtTime(AUDIO.fwoomph.sub1, t0 + T.katch + 0.55);
+    const sg = ctx.createGain();
+    sg.gain.setValueAtTime(0.0001, t0 + T.katch);
+    sg.gain.linearRampToValueAtTime(AUDIO.fwoomph.low, t0 + T.katch + AUDIO.fwoomph.attack);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t0 + T.katch + 0.85);
+    sub.connect(sg).connect(master);
+    keep(sub); sub.start(t0 + T.katch); sub.stop(t0 + T.katch + 0.9);
+
+    const n = src(noise(ctx), false);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass";
+    lp.frequency.setValueAtTime(300, t0 + T.katch);
+    lp.frequency.exponentialRampToValueAtTime(3000, t0 + T.katch + 0.16);
+    lp.frequency.exponentialRampToValueAtTime(500, t0 + T.katch + 0.9);
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.0001, t0 + T.katch);
+    ng.gain.linearRampToValueAtTime(AUDIO.fwoomph.air, t0 + T.katch + AUDIO.fwoomph.attack * 1.4);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t0 + T.katch + 1.0);
+    n.connect(lp).connect(ng).connect(master);
+    n.start(t0 + T.katch); n.stop(t0 + T.katch + 1.05);
+  }
+
+  // ---- 5. The burn: warm pad plus sparse crackle ----
+  {
+    const n = src(noise(ctx), true);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = AUDIO.fire.lp; lp.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0 + T.alive - 0.1);
+    g.gain.exponentialRampToValueAtTime(AUDIO.fire.gain, t0 + T.alive + 0.25);
+    g.gain.setValueAtTime(AUDIO.fire.gain, t0 + T.travel);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + T.done);
+    // Slow breathing on the pad so it never sits still.
+    const lfo = ctx.createOscillator(); lfo.type = "sine"; lfo.frequency.value = 0.7;
+    const lg = ctx.createGain(); lg.gain.value = AUDIO.fire.gain * 0.35;
+    lfo.connect(lg).connect(g.gain);
+    keep(lfo); lfo.start(t0 + T.alive); lfo.stop(t0 + T.done);
+    n.connect(lp).connect(g).connect(master);
+    n.start(t0 + T.alive - 0.1); n.stop(t0 + T.done + 0.05);
+
+    for (let i = 0; i < AUDIO.fire.crackles; i++) {
+      const at = T.alive + Math.random() * (T.done - T.alive - 0.1);
+      const c = src(noise(ctx), false);
+      const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 1800 + Math.random() * 2200;
+      const cg = ctx.createGain();
+      cg.gain.setValueAtTime(0.0001, t0 + at);
+      cg.gain.linearRampToValueAtTime(AUDIO.fire.crackle * (0.4 + Math.random()), t0 + at + 0.004);
+      cg.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.05);
+      c.connect(hp).connect(cg).connect(master);
+      c.start(t0 + at); c.stop(t0 + at + 0.06);
+    }
+  }
+
+  // ---- 6. The resolving chime, as the badge lands ----
+  {
+    const at = t0 + T.travel + 0.45;
+    for (const [mul, lvl] of [[1, 1], [1.5, 0.42], [2, 0.22]]) {
+      const o = ctx.createOscillator();
+      o.type = "sine"; o.frequency.value = AUDIO.chime.f * mul;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(AUDIO.chime.gain * lvl, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 1.5);
+      o.connect(g).connect(master);
+      keep(o); o.start(at); o.stop(at + 1.55);
+    }
+  }
+  audit("flame:audio", "scheduled");
+  return true;
+}
+
+// ============================================================================
+// The clock. One timeline drives everything.
 // ============================================================================
 let raf = 0, startedAt = 0, playing = false, scrubbed = null;
 let onDone = null;
+// Where the flame shrinks to: the badge's real position on screen, measured by
+// app.js just before the sequence runs. Guessing this put the hand-off in the
+// wrong place on every screen size; the badge sits in a text row whose position
+// depends on the streak wording and the phone's width.
+let target = null;
+export function setTarget(pt) { target = pt; }
 
 function loop(now) {
   if (!playing) return;
@@ -1120,12 +1339,14 @@ export function play(opts = {}) {
   playing = true;
   startedAt = (typeof performance !== "undefined" ? performance.now() : Date.now());
   audit("flame", "play");
+  try { playAudio(); } catch (e) { audit("flame:audio", "failed"); }   // visual-only is a fine outcome
   raf = requestAnimationFrame(loop);
   return true;
 }
 
 export function stop() {
   playing = false;
+  stopAudio();
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
   if (ctx2d) { ctx2d.setTransform(1, 0, 0, 1, 0, 0); ctx2d.clearRect(0, 0, canvas.width, canvas.height); }
