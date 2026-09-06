@@ -1497,69 +1497,6 @@ button.foot__link {
 
 
 /* ==========================================================================
-   Streak celebration (js/flame.js)
-
-   Two layers, and the split matters. The DIM is a plain element: it darkens
-   the room. The CANVAS only ever ADDS light — it composites with 'lighter'
-   throughout — so it can never darken the stats underneath it, and the
-   additive compositing the effect depends on stays honest.
-
-   Both live outside .app, like .tour: focus mode hides its own chrome by
-   selector, and neither of these may be caught by that.
-   ========================================================================== */
-.flamefx__dim {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  pointer-events: none;
-  opacity: 0;
-  /* Darkest at the edges, clearest over the middle where the stats sit — the
-     vignette closing in, rather than a flat sheet of black. */
-  background:
-    radial-gradient(120% 78% at 50% 46%, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.72) 58%, rgba(0,0,0,0.97) 100%);
-  transition: opacity .12s linear;
-}
-.flamefx {
-  position: fixed;
-  inset: 0;
-  z-index: 41;
-  pointer-events: none;   /* never steals a tap; the skip listener is on document */
-}
-/* While the sequence runs, everything except the stats drops back. Not to
-   zero: the shapes staying faintly present is what reads as "the lights went
-   down" instead of "the screen changed". The stats are deliberately absent
-   from this list — they are what the moment is about. */
-.app[data-flame="1"] .dial,
-.app[data-flame="1"] .combo,
-.app[data-flame="1"] .combo-name,
-.app[data-flame="1"] .controls {
-  opacity: 0.10;
-  transition: opacity .5s ease;
-}
-.app[data-flame="1"] .stats { position: relative; z-index: 42; }
-/* The badge waits offstage while the big flame is on screen, then takes over
-   at the moment it arrives. Opacity, not display: the stats row must keep its
-   exact layout so nothing reflows at the hand-off frame. */
-.flame.is-arriving { opacity: 0; }
-.flame.is-lit { animation: flicker 1.6s ease-in-out infinite alternate, badgeLand .45s ease-out; }
-@keyframes badgeLand {
-  from { opacity: 0; transform: scale(1.9); filter: drop-shadow(0 0 14px rgba(255, 170, 60, 0.95)); }
-  to   { opacity: 1; transform: scale(1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .flame.is-arriving { opacity: 1; }
-  .flame.is-lit { animation: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .flamefx, .flamefx__dim { display: none !important; }
-  .app[data-flame="1"] .dial,
-  .app[data-flame="1"] .combo,
-  .app[data-flame="1"] .combo-name,
-  .app[data-flame="1"] .controls { opacity: 1; transition: none; }
-}
-
-/* ==========================================================================
    Developer badge + panel (.devbadge / .devpanel, js/dev.js)
    Deliberately NOT in the app's design language. This is the one surface that
    must never be mistaken for something a member is meant to see, so it is
@@ -1640,14 +1577,6 @@ button.foot__link {
   border-radius: 6px;
 }
 .devpanel__check { display: inline-flex; align-items: center; gap: 5px; color: #8d7fc4; }
-.devpanel__range { flex: 1 1 110px; min-width: 100px; accent-color: #7c6ae0; }
-.devpanel__time { font-variant-numeric: tabular-nums; color: #8d7fc4; min-width: 40px; text-align: right; }
-/* On/off chips for the primitive layers — one tap to see what each contributes. */
-.devpanel__chip {
-  border: 1px solid #3a3170; background: #1a1638; color: #6f63a8;
-  border-radius: 999px; padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer;
-}
-.devpanel__chip[aria-pressed="true"] { background: #2f2668; color: #d7cffb; border-color: #5b4fae; }
 .devpanel__note { margin: 0; color: #6f639e; line-height: 1.5; }
 
 

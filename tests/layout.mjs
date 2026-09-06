@@ -827,15 +827,7 @@ async function runSegRamp() {
     const out = [];
     for (let i = 0; i < n; i++) {
       await page.locator(`#${id} .seg__opt`).nth(i).click();
-      // WAIT FOR THE STATE, don't just sleep. A fixed delay made this test
-      // flaky under load: a click occasionally landed while the previous
-      // transition was still settling and the read came back stale, so the
-      // ramp looked like it stopped halfway. Poll --i until the control has
-      // actually moved, then let the tint finish easing.
-      await page.waitForFunction(
-        ([segId, want]) => Number(getComputedStyle(document.getElementById(segId)).getPropertyValue("--i")) === want,
-        [id, i], { timeout: 4000 });
-      await page.waitForTimeout(420);
+      await page.waitForTimeout(420);                 // let the tint finish easing
       const meta = await page.evaluate((segId) => {
         const seg = document.getElementById(segId);
         return {
@@ -889,98 +881,6 @@ async function runSegRamp() {
   return { lines, pass, fail };
 }
 
-// The streak celebration, end to end, in a real browser: a real session run to
-// its finish with a streak that increments. jsdom cannot reach any of this —
-// no canvas, no requestAnimationFrame — so without this section the whole
-// feature is only covered by unit tests of the paths that DON'T run it.
-async function runStreakFlame() {
-  const lines = [];
-  let pass = 0, fail = 0;
-  const check = (name, cond, detail = "") => {
-    if (cond) { pass++; lines.push(`  ✅ ${name}`); }
-    else { fail++; lines.push(`  ❌ ${name}${detail ? `  → ${detail}` : ""}`); }
-  };
-  lines.push("\n── streak celebration ──");
-
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-  await sealContext(ctx);
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  // Yesterday trained, today not yet: finishing a round today takes the streak
-  // from 1 to 2, which is the trigger.
-  await page.addInitScript(() => {
-    localStorage.setItem("combify.tour.v1", "1");
-    localStorage.setItem("combify.ath.v1", "never");
-    const y = new Date(Date.now() - 86400000);
-    const k = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
-    localStorage.setItem("combify.history.v1", JSON.stringify({
-      days: { [k]: { sessions: 1, rounds: 3, punches: 90, seconds: 300 } },
-      totals: { sessions: 1, rounds: 3, punches: 90, seconds: 300 },
-    }));
-  });
-  await page.goto(base, { waitUntil: "load" });
-  await page.waitForTimeout(300);
-  await page.evaluate(() => {
-    document.getElementById("rounds").dataset.value = "1";
-    document.getElementById("workSec").dataset.value = "10";
-  });
-  await tap(page, "startBtn");
-
-  // Countdown + the round + the finale glide + the count-up + the lead.
-  await page.waitForFunction(() => document.getElementById("phase").textContent.trim() === "Done", null, { timeout: 40000 });
-  check("the session reached the finish screen", true);
-
-  const canvasUp = await page.waitForFunction(
-    () => !!document.querySelector("canvas.flamefx") && document.querySelector(".app").dataset.flame === "1",
-    null, { timeout: 12000 }).then(() => true).catch(() => false);
-  check("the celebration started on an incremented streak", canvasUp, "no canvas / no dim after finish");
-
-  if (canvasUp) {
-    // Sample MID-SEQUENCE. The first version checked the instant the canvas
-    // appeared, which is t=0 — the dim has not begun to fade in and the first
-    // motes are still half a second away, so it was asserting against an
-    // empty frame and calling correct behaviour a failure.
-    await page.waitForTimeout(1800);
-    check("the surrounding UI dimmed", Number(await page.evaluate(
-      () => getComputedStyle(document.querySelector(".flamefx__dim")).opacity)) > 0.2);
-    check("the badge waits offstage while the flame is up",
-      await page.evaluate(() => {
-        const f = document.querySelector(".stats .flame");
-        return !f || f.classList.contains("is-arriving");
-      }));
-    // Something must actually be drawn.
-    const lit = await page.evaluate(() => {
-      const c = document.querySelector("canvas.flamefx");
-      const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
-      let n = 0;
-      for (let i = 0; i < d.length; i += 4 * 97) if (d[i + 3] > 4) n++;
-      return n;
-    });
-    check("light is actually on the canvas", lit > 20, `${lit} lit samples`);
-  }
-
-  // And it must clean itself up: no canvas burning CPU, no dim left on, badge lit.
-  const landed = await page.waitForFunction(
-    () => document.querySelector(".app").dataset.flame === undefined,
-    null, { timeout: 15000 }).then(() => true).catch(() => false);
-  check("the sequence finished and released the screen", landed);
-  if (landed) {
-    check("the badge is lit and in place",
-      await page.evaluate(() => {
-        const f = document.querySelector(".stats .flame");
-        return !!f && f.classList.contains("is-lit") && !f.classList.contains("is-arriving");
-      }), "badge never took over");
-    await page.waitForTimeout(250);   // the dim has a 120ms transition out
-    check("the darkening is fully gone", Number(await page.evaluate(
-      () => getComputedStyle(document.querySelector(".flamefx__dim")).opacity)) < 0.02);
-  }
-  check("no JavaScript errors", errors.length === 0, errors.slice(0, 2).join(" | "));
-
-  await ctx.close();
-  return { lines, pass, fail };
-}
-
 // Devices run through the pool; the rotation section owns a separate browser
 // and runs alongside them, so it is never the thing everything else waits on.
 const devices = DEVICES.filter((d) => !ONLY || d.name.toLowerCase().includes(ONLY.toLowerCase()));
@@ -989,17 +889,15 @@ const wantInstall = !ONLY || "install card pointer".includes(ONLY.toLowerCase())
 const wantTour = !ONLY || "first-run walkthrough tour".includes(ONLY.toLowerCase());
 const wantBeat = !ONLY || "countdown beat".includes(ONLY.toLowerCase());
 const wantSeg = !ONLY || "segmented controls warm as they step up".includes(ONLY.toLowerCase());
-const wantFlame = !ONLY || "streak celebration".includes(ONLY.toLowerCase());
-const [devResults, rotResult, insResult, tourResult, beatResult, segResult, flameResult] = await Promise.all([
+const [devResults, rotResult, insResult, tourResult, beatResult, segResult] = await Promise.all([
   pool(devices, JOBS, runDevice),
   wantRotation ? runRotation() : null,
   wantInstall ? runInstallCard() : null,
   wantTour ? runTour() : null,
   wantBeat ? runCountdownBeat() : null,
   wantSeg ? runSegRamp() : null,
-  wantFlame ? runStreakFlame() : null,
 ]);
-for (const r of [...devResults, rotResult, insResult, tourResult, beatResult, segResult, flameResult]) {
+for (const r of [...devResults, rotResult, insResult, tourResult, beatResult, segResult]) {
   if (!r) continue;
   lines.push(...r.lines); pass += r.pass; fail += r.fail;
 }

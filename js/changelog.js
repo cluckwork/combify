@@ -48,17 +48,6 @@
 // Newest first.
 export const CHANGELOG = [
   {
-    v: "2.4.0",
-    date: "2026-09-06",
-    size: "minor",
-    title: "Keep your streak and the screen catches fire",
-    notes: [
-      "Extend a streak and the finish screen darkens, light gathers into a vortex, and it catches into flame.",
-      "The flame settles into the streak badge next to your numbers.",
-      "Tap anywhere to skip it. Off entirely if your phone is set to reduce motion.",
-    ],
-  },
-  {
     v: "2.3.1",
     date: "2026-09-06",
     size: "patch",

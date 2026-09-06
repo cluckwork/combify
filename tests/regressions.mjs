@@ -109,42 +109,6 @@ const REGRESSIONS = [
     selfTest: `function playSfxBuffer(key, rate){\n  if (!silenceOk || !sfxBuffers[key]) return false;\n  return true;\n}`,
   },
   {
-    id: "flame-body-not-additive",
-    file: "js/flame.js",
-    shipped: "never — caught in development, recorded so it cannot come back",
-    symptom: "The middle of the flame is a featureless white blob however the bands are tuned.",
-    why:
-      "The celebration canvas composites with 'lighter' throughout, which is right for motes,\n" +
-      "  glow and embers. It is catastrophic for the cel bands: fifteen tongues times four\n" +
-      "  bands saturate to flat white wherever they cross, so the body loses all its colour\n" +
-      "  structure. renderFlame MUST switch to source-over before painting shapes. Painted\n" +
-      "  shapes occlude; only light adds.",
-    test: (src) => {
-      const body = fnBody(src, "renderFlame");
-      if (body == null) return "renderFlame not found — this rule needs updating";
-      return /globalCompositeOperation\s*=\s*["\`']source-over/.test(body)
-        ? null : "renderFlame never leaves additive compositing";
-    },
-    selfTest: `function renderFlame(g, t){ g.globalAlpha = 1; g.fill(); }`,
-  },
-  {
-    id: "flame-loop-released",
-    file: "js/flame.js",
-    shipped: "never — a battery leak, not a visual bug, so nothing would report it",
-    symptom: "The phone keeps drawing frames after the celebration ends.",
-    why:
-      "This is a full-screen canvas running an animation loop. If stop() ever stops calling\n" +
-      "  cancelAnimationFrame, the loop survives the sequence and burns battery for the rest\n" +
-      "  of the page's life. Nobody would report it — the screen looks finished — so the only\n" +
-      "  thing that can catch it is this rule.",
-    test: (src) => {
-      const body = fnBody(src, "stop");
-      if (body == null) return "stop() not found — this rule needs updating";
-      return /cancelAnimationFrame/.test(body) ? null : "stop() never cancels the animation frame";
-    },
-    selfTest: `function stop(){ playing = false; raf = 0; }`,
-  },
-  {
     id: "sfx-unmute",
     file: "js/audio.js",
     shipped: "v2.0.1",

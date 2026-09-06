@@ -364,23 +364,6 @@ export function startAudioSession() {
   audit("session", "keeper start");
 }
 
-// The shared context, for the streak celebration's own synthesis (js/flame.js).
-// Handed out rather than letting that module create a second AudioContext:
-// iOS counts them, a second one competes for the same output, and only this
-// one is covered by the keeper below — which is the ONLY reason any Web Audio
-// in this app survives the hardware silent switch.
-export function fxContext() {
-  const ctx = armAudio();
-  return ctx && ctx.state === "running" ? ctx : null;
-}
-// Hold the media-channel keeper open for a caller that is about to make Web
-// Audio noise. Without this the celebration is silent on a phone with the
-// ring switch off — the failure this project has shipped three times.
-export function holdAudioSession() {
-  startAudioSession();
-  return keeperLive();
-}
-
 // Is the keeper SOUNDING, right now?
 //
 // silenceOk on its own is a latch: it records that play() resolved once, and

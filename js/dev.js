@@ -137,48 +137,6 @@ function buildPanel() {
   jump.appendChild(button("Full first run", () => { hide(); actions.firstRun && actions.firstRun(); }));
   p.appendChild(jump);
 
-  // --- Streak celebration (js/flame.js) ---
-  //
-  // Deliberately three controls, not a control surface. Play it, drag it, and
-  // switch layers off one at a time — that is everything needed to tune
-  // rotation by eye, and rotation is the only thing here that can't be judged
-  // from a number.
-  const fx = row("Streak flame");
-  fx.appendChild(button("Play", () => { hide(); actions.flamePlay && actions.flamePlay(); }));
-
-  const scrub = document.createElement("input");
-  scrub.type = "range";
-  scrub.className = "devpanel__range";
-  scrub.min = "0"; scrub.step = "0.01";
-  scrub.max = String((actions.flameDuration && actions.flameDuration()) || 4.6);
-  scrub.value = "0";
-  const readout = document.createElement("span");
-  readout.className = "devpanel__time";
-  readout.textContent = "0.00s";
-  scrub.addEventListener("input", () => {
-    readout.textContent = Number(scrub.value).toFixed(2) + "s";
-    actions.flameScrub && actions.flameScrub(Number(scrub.value));
-  });
-  fx.appendChild(scrub);
-  fx.appendChild(readout);
-  p.appendChild(fx);
-
-  const layers = row("Layers");
-  for (const name of ["motes", "filaments", "sheets", "glints", "flame"]) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "devpanel__chip";
-    chip.textContent = name;
-    chip.setAttribute("aria-pressed", "true");
-    chip.addEventListener("click", () => {
-      const on = chip.getAttribute("aria-pressed") !== "true";
-      chip.setAttribute("aria-pressed", String(on));
-      actions.flameLayer && actions.flameLayer(name, on);
-    });
-    layers.appendChild(chip);
-  }
-  p.appendChild(layers);
-
   // --- Every install card, from whatever device is in your hand ---
   const inst = row("Install card as");
   const sel = document.createElement("select");

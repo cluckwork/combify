@@ -8,5 +8,5 @@
 //   2. CACHE in sw.js        → "combify-v<VERSION>"  (forces old installs to refresh)
 //   3. "version" in package.json
 // tests/run.mjs fails the build if they ever disagree.
-export const VERSION = "2.4.0";
+export const VERSION = "2.3.1";
 export const RELEASED = "2026-09-06";
