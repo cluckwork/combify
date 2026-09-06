@@ -6,7 +6,7 @@ import { VERSION, RELEASED } from "./version.js";
 import { loadHistory, saveHistory, recordRound, currentStreak, trainedToday, formatDuration, dayKey } from "./stats.js";
 import {
   configureVoice, speakCombo, stopVoice,
-  armAudio, unlockAudioForMobile, markNeedsReprime,
+  armAudio, unlockAudioForMobile, markNeedsReprime, setClipSet,
   ringBell, playTick, playWarning, playBlip, playLand, parkIdleSfx, parkAllIdle,
   startAudioSession, stopAudioSession, ensureAudioSession, scheduleBlipRiff, stopBlipRiff,
 } from "./audio.js";
@@ -541,6 +541,9 @@ document.addEventListener("visibilitychange", () => {
 // keeps consecutive words from being scheduled on top of one another when the
 // chain is already running back-to-back.
 const getWordGap = () => Math.max(40, Math.min(300, getPace() * 0.09));
+// The pace whose value also selects the trimmed clip set. Kept next to the
+// pace helpers so the two can never drift apart.
+const BLITZ_PACE = 150;
 
 // ---------- Helpers ----------
 const format = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -1383,8 +1386,15 @@ function deferIdle(fn) {
   try { setTimeout(fn, 0); } catch (e) { try { fn(); } catch (e2) {} }
 }
 
+// Blitz speaks with the trimmed recordings (see BLITZ_DIR in audio.js); every
+// other pace keeps the originals exactly as they have always sounded. Must run
+// BEFORE the unlock, because switching sets replaces the elements the unlock
+// is about to prime, and iOS only blesses them inside this tap.
+function chooseClipSet() { setClipSet(getPace() === BLITZ_PACE ? "blitz" : "std"); }
+
 function start() {
   armAudio();
+  chooseClipSet();
   unlockAudioForMobile(); // must run synchronously inside this tap — see note above clipPool
   startAudioSession(); // the silent keeper: warms the route, holds the session — see audio.js
   deferIdle(() => pingUsage("start"));
@@ -1438,6 +1448,7 @@ function restartSession() {
   clearFinale();
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   armAudio();
+  chooseClipSet();
   unlockAudioForMobile(); // free unless a background revoked the unlock
   startAudioSession();
   deferIdle(() => pingUsage("start")); // a restart is a fresh session for the daily numbers

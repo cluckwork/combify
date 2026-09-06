@@ -2559,6 +2559,104 @@ async function collectSpokenVsShown(app, ms) {
     lostToWa === 0, `${lostToWa} cues went out over Web Audio with the keeper down`);
   wa.restore();
   clearStore();
+
+  section("50. Blitz speaks with the trimmed clips; every other pace does not");
+  // The originals have shipped and been trained to. A fourth pace must not
+  // move the cadence of the three that were already there, so Blitz gets its
+  // own trimmed copies in audio/blitz/ and the rest keep audio/ untouched.
+  const srcsFor = async (pace) => {
+    clearStore();
+    const a = await boot({ duration: 0.5 });
+    a.set("pace", pace);
+    a.set("rounds", 1); a.set("workSec", 20); a.set("restSec", 5);
+    a.click("startBtn");
+    await a.clock.advance(20000);
+    // What was actually SPOKEN, not what was constructed: preloadClips builds a
+    // cache at module load, before any pace is known, and those elements linger.
+    const voices = a.stats.audible.filter((x) => x.voice && !x.muted);
+    a.restore();
+    return voices.map((x) => x.src);
+  };
+
+  const blitzSrcs = await srcsFor("150");
+  check("Blitz pulls its words from the trimmed set",
+    blitzSrcs.length > 0 && blitzSrcs.every((s) => s.includes("audio/blitz/")),
+    `${blitzSrcs.filter((s) => !s.includes("audio/blitz/")).length} of ${blitzSrcs.length} came from the untrimmed set`);
+
+  for (const [name, pace] of [["Relaxed", "3000"], ["Steady", "1500"], ["Fast", "500"]]) {
+    const srcs = await srcsFor(pace);
+    check(`${name} still speaks with the original recordings`,
+      srcs.length > 0 && srcs.every((s) => !s.includes("audio/blitz/")),
+      `${srcs.filter((s) => s.includes("audio/blitz/")).length} of ${srcs.length} came from the trimmed set`);
+  }
+
+  // Switching away from Blitz must put the originals back — the sets share one
+  // pool, so a stale element here would leave a member on Fast hearing the
+  // trimmed clips for the rest of the page's life.
+  clearStore();
+  const swap = await boot({ duration: 0.5 });
+  swap.set("rounds", 1); swap.set("workSec", 12); swap.set("restSec", 5);
+  swap.set("pace", "150");
+  swap.click("startBtn");
+  await swap.clock.advance(25000);              // all the way to the finish screen
+  swap.set("pace", "500");
+  const mark = swap.stats.audible.length;
+  swap.click("startBtn");                       // on the finish screen Start means reset + start
+  await swap.clock.advance(20000);
+  const after = swap.stats.audible.slice(mark).filter((x) => x.voice && !x.muted);
+  check("switching back off Blitz restores the originals",
+    after.length > 0 && after.every((x) => !x.src.includes("audio/blitz/")),
+    `${after.filter((x) => x.src.includes("audio/blitz/")).length} of ${after.length} stayed trimmed`);
+  swap.restore();
+  clearStore();
+
+  // The assets themselves. A regenerated set that quietly came out longer, or
+  // lost a word, would leave Blitz sounding exactly like Fast again.
+  const afs = await import("node:fs");
+  const apath = await import("node:path");
+  const aurl = await import("node:url");
+  const aroot = apath.resolve(apath.dirname(aurl.fileURLToPath(import.meta.url)), "..");
+  const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "slip", "roll", "block", "pivot"];
+  const missing = KEYS.filter((k) => !afs.existsSync(apath.join(aroot, `audio/blitz/${k}.mp3`)));
+  check("the trimmed set has all twelve words", missing.length === 0, `missing: ${missing.join(", ")}`);
+  // Length, not file size: the trimmed set is 192k against the originals' 128k,
+  // so it is BIGGER on disk while being shorter in time. Counting mp3 frames
+  // gives the real duration and needs no ffprobe on the machine running this —
+  // every MPEG1 Layer III frame is 1152 samples whatever the bitrate.
+  const BITRATES = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0];
+  const RATES = [44100, 48000, 32000, 0];
+  const mp3Seconds = (file) => {
+    const b = afs.readFileSync(file);
+    let i = 0;
+    if (b.length > 10 && b.toString("latin1", 0, 3) === "ID3") {     // skip an ID3v2 tag
+      i = 10 + ((b[6] & 0x7f) << 21 | (b[7] & 0x7f) << 14 | (b[8] & 0x7f) << 7 | (b[9] & 0x7f));
+    }
+    let frames = 0, rate = 44100;
+    while (i + 4 <= b.length) {
+      if (b[i] !== 0xff || (b[i + 1] & 0xe0) !== 0xe0) { i++; continue; }  // resync
+      const ver = (b[i + 1] >> 3) & 3, layer = (b[i + 1] >> 1) & 3;
+      const br = BITRATES[(b[i + 2] >> 4) & 15], sr = RATES[(b[i + 2] >> 2) & 3];
+      if (ver !== 3 || layer !== 1 || !br || !sr) { i++; continue; }       // MPEG1 Layer III only
+      rate = sr;
+      const len = Math.floor((144000 * br) / sr) + ((b[i + 2] >> 1) & 1);
+      if (len <= 4) { i++; continue; }
+      frames++; i += len;
+    }
+    return (frames * 1152) / rate;
+  };
+  const lengths = KEYS.map((k) => ({
+    k,
+    was: mp3Seconds(apath.join(aroot, `audio/${k}.mp3`)),
+    now: mp3Seconds(apath.join(aroot, `audio/blitz/${k}.mp3`)),
+  }));
+  const notShorter = lengths.filter((r) => !(r.now < r.was - 0.015));
+  check("every trimmed word is genuinely shorter", notShorter.length === 0,
+    notShorter.map((r) => `${r.k} ${r.was.toFixed(3)}→${r.now.toFixed(3)}`).join(", "));
+  // Blitz only feels different from Fast if the SET is meaningfully tighter.
+  const wasAvg = lengths.reduce((s, r) => s + r.was, 0) / lengths.length;
+  const nowAvg = lengths.reduce((s, r) => s + r.now, 0) / lengths.length;
+  check("the trimmed set is at least 10% shorter overall", nowAvg < wasAvg * 0.9,
+    `${wasAvg.toFixed(3)}s → ${nowAvg.toFixed(3)}s (${(100 * (wasAvg - nowAvg) / wasAvg).toFixed(0)}%)`);
 }
 
 console.log(results.join("\n"));

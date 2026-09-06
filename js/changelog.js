@@ -48,6 +48,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "2.3.0",
+    date: "2026-09-06",
+    size: "minor",
+    title: "Blitz actually hits harder now",
+    notes: [
+      "Blitz speaks from a tighter set of the same recordings, so it is properly faster than Fast.",
+      "Relaxed, Steady and Fast sound exactly as before.",
+    ],
+  },
+  {
     v: "2.2.0",
     date: "2026-09-06",
     size: "minor",

@@ -196,7 +196,7 @@ export function makeAudioFactory(clock, cfg) {
         this._endTimer = clock.setTimeout(() => { this._endTimer = null; this._emit("ended"); }, 10);
         return Promise.resolve();
       }
-      stats.audible.push({ t: clock.now, key: this.key, voice: this.isVoice, muted: this.muted });
+      stats.audible.push({ t: clock.now, key: this.key, voice: this.isVoice, muted: this.muted, src: this.src });
       if (!this._sounding) {
         this._sounding = true; stats.playing++;
         stats.maxConcurrent = Math.max(stats.maxConcurrent, stats.playing);

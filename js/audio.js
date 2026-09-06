@@ -533,6 +533,46 @@ export function playLand() { playSfx("land", synthLand); }
 // both tried and broke playback, so we're back to this.)
 const CLIP_DIR = "audio/";
 const CLIP_EXT = ".mp3"; // match whatever your voice tool exports
+
+// A SECOND copy of the same twelve recordings, trimmed, used only by Blitz.
+//
+// Every clip carries dead air: ~85ms before the word and ~110-180ms after it,
+// 28% of the set by length. That padding is silence the app plays as though it
+// were speech, and it dwarfs the pace setting — at Fast the REAL gap between
+// words is ~290ms, not the 45ms getWordGap thinks it is setting. Which is why
+// Fast and Blitz sounded nearly the same: shortening the pause between combos
+// moves ~12% of a combo's length, and the padding was never touched.
+//
+// The trimmed set removes only silence. Every file was cut in PCM at exact
+// sample boundaries, keeping 25ms of true silence before the attack and a 6ms
+// fade at the tail so a cut can never click, then encoded once at 192k. The
+// build was verified by aligning each result against its original: correlation
+// >= 0.99998 on all twelve, i.e. the same waveform with the padding gone.
+//
+// THE ORIGINALS ARE UNTOUCHED AND STILL SERVE RELAXED, STEADY AND FAST. Those
+// three have shipped and been trained to; their cadence must not move because
+// a fourth pace was added.
+const BLITZ_DIR = "audio/blitz/";
+let clipSet = "std";
+const clipDir = () => (clipSet === "blitz" ? BLITZ_DIR : CLIP_DIR);
+
+// Swap which recordings the voice uses. Only ever called from the Start tap,
+// BEFORE unlockAudioForMobile — switching sets discards the primed elements
+// for brand new ones, and on iOS those need a gesture to be blessed, so the
+// reprime flag makes the very next unlock do a full pass instead of the usual
+// early return.
+export function setClipSet(name) {
+  const want = name === "blitz" ? "blitz" : "std";
+  if (want === clipSet) return;
+  clipSet = want;
+  audit("audio:clipset", want);
+  for (const k in clipCache) delete clipCache[k];
+  for (const k in clipPool) delete clipPool[k];
+  failedClips.clear();
+  voice.useClips = true;   // a set that failed before gets a clean slate
+  needsReprime = true;
+  preloadClips();
+}
 const CLIP_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "slip", "roll", "block", "pivot"];
 const clipCache = {};
 // Assume the clip set is present (it's committed to the repo) and only fall
@@ -554,7 +594,7 @@ const failedClips = new Set();
 const CLIPS_GIVE_UP_AT = 4;
 function preloadClips() {
   CLIP_KEYS.forEach((key) => {
-    const a = new Audio(CLIP_DIR + key + CLIP_EXT);
+    const a = new Audio(clipDir() + key + CLIP_EXT);
     a.preload = "auto";
     clipCache[key] = a;
     a.addEventListener("error", () => {
@@ -567,7 +607,7 @@ function preloadClips() {
       if (!a.__retried) {
         a.__retried = true;
         audit("clip:refetch", key);
-        try { a.src = CLIP_DIR + key + CLIP_EXT + "?r=" + Date.now(); a.load(); return; } catch (e) {}
+        try { a.src = clipDir() + key + CLIP_EXT + "?r=" + Date.now(); a.load(); return; } catch (e) {}
       }
       failedClips.add(key);
       if (failedClips.size >= CLIPS_GIVE_UP_AT) voice.useClips = false;
@@ -661,7 +701,7 @@ function eachPool(fn) {
     const pool = clipPool[key] && clipPool[key].length
       ? clipPool[key]
       : (clipCache[key] ? [clipCache[key]] : []);
-    while (pool.length < UNLOCK_POOL_SIZE) pool.push(new Audio(CLIP_DIR + key + CLIP_EXT));
+    while (pool.length < UNLOCK_POOL_SIZE) pool.push(new Audio(clipDir() + key + CLIP_EXT));
     clipPool[key] = pool;
     fn(pool);
   });
