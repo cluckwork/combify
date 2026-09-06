@@ -21,6 +21,16 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.32.1",
+    date: "2026-09-05",
+    size: "patch",
+    title: "Smoother count-up on big punch totals",
+    notes: [
+      "The climbing punch number no longer makes the screen re-measure itself on every step. Big totals were the worst affected, because the number changes width more often as it grows — which is why long sessions felt laggier than short ones.",
+      "The countdown ring also does far less work per second while a round runs. It looks exactly the same.",
+    ],
+  },
+  {
     v: "1.32.0",
     date: "2026-09-05",
     size: "minor",

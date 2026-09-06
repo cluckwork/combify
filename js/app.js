@@ -591,6 +591,15 @@ function countUp(node, to, { ms = 0, pop = false, haptics = false, sound = false
   const riffOn = sound && scheduleBlipRiff(
     times.slice(0, -1),
     values.map((_, i) => 0.7 + ((i + 1) / values.length) * 1.1).slice(0, -1));
+  // Reserve the width the FINAL number will need, so no step can resize the
+  // box. Paired with tabular-nums (see .stat-digits), this makes every one of
+  // the steps below a pure text swap: no reflow of the hero, the halo, or the
+  // row beneath it. `ch` is exactly one digit wide once the digits are
+  // tabular, and the separators are counted too.
+  try {
+    node.style.minWidth = `${to.toLocaleString().length}ch`;
+  } catch (e) {}
+
   const started = Date.now();
   let next = 0;
   let lastBuzz = 0;
@@ -833,7 +842,17 @@ let dialArraySet = false;
 function renderProgress() {
   if (!el.dialFill) return;
   if (!dialArraySet) { el.dialFill.style.strokeDasharray = String(DIAL_CIRCUMFERENCE); dialArraySet = true; }
-  const offset = String(DIAL_CIRCUMFERENCE * (1 - phaseFractionLeft()));
+  // Quantised to a quarter unit before stringifying. The raw value is a long
+  // float that changes every single frame, so the no-op guard below never
+  // fired and the browser re-rasterised the arc 60 times a second. On a
+  // two-minute round the ring only travels ~0.05 units per frame — far below
+  // anything an eye can see — so rounding lets most frames skip the write
+  // entirely while long strings stop being built and discarded. A quarter of
+  // an SVG unit is well under a device pixel along this arc, so the sweep
+  // looks identical; short phases move faster per frame and simply keep
+  // updating every frame, which is exactly when the smoothness is needed.
+  const raw = DIAL_CIRCUMFERENCE * (1 - phaseFractionLeft());
+  const offset = String(Math.round(raw * 4) / 4);
   // Written every frame by dialLoop; skip the no-op frames (paused, ready).
   if (el.dialFill.style.strokeDashoffset !== offset) el.dialFill.style.strokeDashoffset = offset;
 }

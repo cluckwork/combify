@@ -1105,7 +1105,22 @@ button.foot__link {
    out afterwards. Opacity is GPU-composited — the glyphs never repaint, which
    is what made the old text-shadow glow janky. */
 .finish__hero .stat-num { position: relative; z-index: 0; }
-.stat-digits { position: relative; z-index: 1; display: inline-block; }
+/* tabular-nums is a PERFORMANCE fix here, not a typographic nicety. With
+   proportional digits every step of the count-up changes the text's width —
+   "1" is narrower than "8" — so each of the 24 steps relayouts a hero span
+   that is up to 132px tall, plus the halo sized off it, plus the row below.
+   Fixed-width digits make same-length values cost nothing to swap, and
+   countUp reserves the FINAL width up front (min-width, in ch) so the jumps
+   from 1 to 2 to 3 digits do not resize the box either. That is why big punch
+   totals felt worse than small ones: more digit-count changes, more reflows.
+   Centred so the reserved box does not shift the number off-axis. */
+.stat-digits {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
 .stat-digits.is-pop { animation: numPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4); text-shadow: 0 0 20px rgba(73, 149, 146, 0.75); }
 .stat-halo {
   position: absolute;
