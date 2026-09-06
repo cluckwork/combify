@@ -48,12 +48,14 @@
 // Newest first.
 export const CHANGELOG = [
   {
-    v: "2.1.2",
+    v: "2.1.3",
+    from: "2.1.2",
     date: "2026-09-06",
     size: "patch",
     title: "No more scrolling into nothing",
     notes: [
-      "Fixed a screen of empty space below the footer in a browser tab. The page was being sized to the height your phone has with the toolbars hidden, while you were looking at it with them showing.",
+      "Fixed a screen of empty space below the footer in a browser tab.",
+      "The page no longer rubber-bands past its end.",
     ],
   },
   {
