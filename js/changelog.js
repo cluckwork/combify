@@ -5,9 +5,31 @@
 // not how it was built. The engineering detail belongs in the git log, and the
 // planning detail in ROADMAP.md.
 //
-// WHEN YOU SHIP A VERSION, add an entry here with the same number you put in
-// js/version.js — the test suite fails the build if the newest entry and
-// VERSION disagree, so this can't silently fall behind.
+// HOUSE STYLE — every line is a claim, not a paragraph.
+//
+// Short phrases. Say WHAT changed, never how or why; the mechanism belongs in
+// the git log. A note over ~25 words is doing too much and should be split or
+// cut. Read the list back and ask whether a member skimming it would learn
+// anything from each line — if not, delete the line.
+//
+// ONE ENTRY IS ONE THEME, NOT ONE DEPLOY.
+//
+// The version number still moves on EVERY deploy — that is how the founder
+// confirms a build actually reached his phone, and sw.js keys its cache on it,
+// so it can never be skipped. But a run of deploys refining the same thing is
+// ONE entry, carrying the highest version of that run. Sixteen deploys in one
+// day became seven entries; the whole history collapsed from 59 to 21. A
+// version with no entry is not an error, it is a deploy that had nothing worth
+// telling a member.
+//
+// A four-part version was considered for the noise and rejected: it would just
+// move the same problem down a digit. The fix is not a finer number, it is
+// fewer entries.
+//
+// THE NEWEST ENTRY MUST MATCH js/version.js — the test suite fails the build if
+// they disagree, so this can't silently fall behind. When a deploy joins the
+// theme above it, move that entry's `v` up to the new version rather than
+// adding another.
 //
 // Fields:
 //   v     version, or null for the work done before version numbers existed
@@ -21,286 +43,108 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.36.1",
+    date: "2026-09-05",
+    size: "patch",
+    title: "This page, rewritten",
+    notes: [
+      "Every entry is short now. One line per change, no paragraphs.",
+      "Releases that were really the same work are merged, so 59 entries became 21.",
+      "Dropped the boxes. It reads as a list.",
+    ],
+  },
+  {
     v: "1.36.0",
     date: "2026-09-05",
     size: "minor",
-    title: "Computers are left alone",
+    title: "Putting Combify on your home screen",
     notes: [
-      "Combify no longer offers to install itself on a laptop or desktop. Chrome offers that on a Mac and the small reminder strip was taking it up, but there\'s no home screen there and the browser tab is already the right way to use it. Phones and tablets are unaffected.",
+      "Install steps now match your phone and your browser. iPhone, iPad and Android all differ, and so does where each browser hides its Share button.",
+      "Steps draw the icons you are looking for instead of naming them.",
+      "An arrow points at the button you need. No arrow where we cannot be sure.",
+      "Fixed impossible steps in Chrome on iPhone. Any browser can do this, not just Safari.",
+      "Saying no is remembered, but the card returns after a few more sessions, less often each time. Added Don't ask again.",
+      "Computers are never asked. There is no home screen there.",
+      "Added Add to home screen to the footer.",
     ],
   },
   {
     v: "1.35.1",
     date: "2026-09-05",
-    size: "patch",
-    title: "The ring starts full, and the punch count grows as it climbs",
+    size: "minor",
+    title: "The countdown hits, the finish lands",
     notes: [
-      "The countdown ring was drawing itself in from empty before it had anything to count down. It starts full now.",
-      "On the finish screen the punch total grows as it counts up, arriving at full size exactly as it arrives at your number — then the pop overshoots from there.",
+      "New countdown: each second drops in hard and throws a ring across the dial.",
+      "Bigger countdown number. Get ready no longer appears twice.",
+      "Countdown ring starts full instead of drawing itself in.",
+      "Punch total grows as it counts up, then pops.",
+      "Fixed lag on the climbing count, worst on big totals.",
     ],
   },
   {
     v: "1.35.0",
     date: "2026-09-05",
     size: "minor",
-    title: "The shockwave actually shows, and the ticks come back",
+    title: "Sound fixes",
     notes: [
-      "The countdown\'s shockwave never ran — a leftover line from the old animation was holding it shut. Fixed.",
-      "Fixed sound effects going permanently silent. Combify briefly mutes each sound when it warms them up on your first tap; if that was interrupted, the sound stayed muted for the rest of the session. The voice always turned itself back on, but the ticks and bell didn\'t.",
-      "Combify no longer leaves a player sitting on your lock screen after you\'ve finished, like a podcast you never closed. It now releases it properly when a session ends.",
-      "The finish screen is smoother: the app was saving its diagnostic log and reporting the session in the same instant the numbers started climbing.",
-    ],
-  },
-  {
-    v: "1.34.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "The countdown hits",
-    notes: [
-      "New countdown. Each second now lands instead of fading in — the number drops in oversized, overshoots, and throws a ring out across the dial. The old soft wave read like a spa timer; this reads like a boxing gym.",
-      "The countdown number is bigger, and \"Get ready\" no longer appears twice — the small copy inside the ring is gone, leaving the big one.",
-      "Fixed the countdown tick going silent. A sound left paused part-way through by iOS was being played from its middle, and the tick is only 90 milliseconds long, so there was nothing left to hear.",
+      "Fixed words starting mid-syllable after locking your phone. Pivot as vot, slip as lip.",
+      "Fixed the countdown tick going silent.",
+      "Fixed sound effects staying muted for the rest of a session.",
+      "Fixed the countdown shockwave never appearing.",
+      "No more player left sitting on your lock screen after you finish.",
     ],
   },
   {
     v: "1.33.0",
     date: "2026-09-05",
     size: "minor",
-    title: "Words no longer start mid-syllable after a lock screen",
+    title: "Nothing waits on the app",
     notes: [
-      "Fixed the big one: after locking your phone and coming back, \"pivot\" could come out as \"vot\", \"six\" as \"s\", \"slip\" as \"lip\" — and sometimes a word made no sound at all. When iOS takes the app away it pauses the sounds part-way through, and Combify wasn\'t rewinding all of them on the way back. It does now, both when you return to the app and when a session ends.",
-      "Pausing no longer costs you time. The clock was rounding up when you resumed, so every pause quietly added up to a second to your round — and the timer then sat frozen for a beat before ticking. Both gone.",
-      "Start, pause, exit and restart all respond immediately now. They were doing slow bookkeeping inside the button press itself, which is time the button spends looking dead.",
-      "On a phone, the walkthrough now mentions that turning sideways gives you a bigger view.",
-    ],
-  },
-  {
-    v: "1.32.1",
-    date: "2026-09-05",
-    size: "patch",
-    title: "Smoother count-up on big punch totals",
-    notes: [
-      "The climbing punch number no longer makes the screen re-measure itself on every step. Big totals were the worst affected, because the number changes width more often as it grows — which is why long sessions felt laggier than short ones.",
-      "The countdown ring also does far less work per second while a round runs. It looks exactly the same.",
-    ],
-  },
-  {
-    v: "1.32.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "The home-screen card asks again, and asks in plain words",
-    notes: [
-      "\"Opens fullscreen, no address bar, works offline\" is gone. It now just says it runs better and works without signal, which is the part that matters in a gym with bad reception.",
-      "Saying \"not now\" no longer ends the conversation for good. It comes back after a few more sessions, and the gap gets longer each time — three sessions, then six, then twelve — so it gets quieter the longer you decline, never louder.",
-      "And there's a proper \"Don't ask again\" tucked in the far corner, away from everything else, for anyone who truly means it. It silences the small reminder strip too.",
-      "The example text in Report a problem is now grey and italic, so it reads as a suggestion instead of looking like something already typed.",
-    ],
-  },
-  {
-    v: "1.31.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "The home-screen card asks properly",
-    notes: [
-      "Tapping outside the add-to-home-screen card no longer dismisses it. Putting Combify on your home screen is the one thing the app actually asks for, and a stray tap shouldn't count as an answer — \"Not now\" is there, and it's still one tap.",
-      "\"Not now\" stays quiet but is now a proper thumb-sized target, since it's the only way out.",
-    ],
-  },
-  {
-    v: "1.30.4",
-    date: "2026-09-05",
-    size: "patch",
-    title: "Developer badge tells the installed app apart from the browser",
-    notes: [
-      "Adding Combify to your home screen creates a copy with its own separate storage, so developer mode doesn't carry across — it starts off in there, with its own id. The badge now says which of the two you're looking at, and the panel spells out that the installed copy needs turning on separately.",
-      "Usage tracking is unaffected either way: the installed app has always been counted, and reports itself distinctly so home-screen training can be told from browser training.",
-    ],
-  },
-  {
-    v: "1.30.3",
-    date: "2026-09-05",
-    size: "patch",
-    title: "The developer badge shows which device it is",
-    notes: [
-      "A device in developer mode now shows its own anonymous id on the badge. Nothing changes for anyone using the app — this just makes it possible to tell which rows in the team's usage sheet came from a developer's own phone.",
+      "Pausing no longer adds up to a second to your round.",
+      "Start, pause, exit and restart respond immediately.",
+      "New versions arrive on their own, and never mid-session.",
     ],
   },
   {
     v: "1.30.2",
     date: "2026-09-05",
-    size: "patch",
-    title: "The walkthrough points out More options, and talks less",
-    notes: [
-      "The first-time walkthrough now has a step for More options, so people find out they can change the number of rounds and the work and rest times. It's collapsed by default, and most people were never opening it.",
-      "Every step is shorter. It's read standing in a gym over a dimmed screen, so each one is now a single line.",
-    ],
-  },
-  {
-    v: "1.30.1",
-    date: "2026-09-05",
-    size: "patch",
-    title: "\"View more\" is its own step",
-    notes: [
-      "The share sheet opens on a short list, and Add to Home Screen isn't on it. You tap View more to open the full list, and then scroll to find it. That's now two clearly separate steps instead of a vague aside — on both Safari and Chrome.",
-    ],
-  },
-  {
-    v: "1.30.0",
-    date: "2026-09-05",
     size: "minor",
-    title: "New versions arrive on their own",
+    title: "A walkthrough on your first visit",
     notes: [
-      "Combify now checks for a new build when you open it and each time you come back to it, and quietly refreshes itself when one is there. Until now it only checked whenever the browser felt like it, which meant a phone could insist it had the latest version hours after a new one shipped — with nothing you could tap to fix it.",
-      "It will never do this in the middle of a session. If an update lands while you're training, it waits until the round is over and you're back on the ready screen.",
-    ],
-  },
-  {
-    v: "1.29.1",
-    date: "2026-09-05",
-    size: "patch",
-    title: "\"Scroll down\" was a guess too",
-    notes: [
-      "The share sheet opens on a short list with the rest tucked behind a ⌄ or a More item, so \"scroll down to find Add to Home Screen\" wasn't how you actually get there. The step now names Add to Home Screen first and mentions the reveal only as a fallback — which is right whichever way that sheet happens to be drawn.",
-    ],
-  },
-  {
-    v: "1.29.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "The Safari steps had a tap missing",
-    notes: [
-      "On iPhone, Share isn't sitting on Safari's toolbar any more — you tap the bar at the bottom, then the ••• button that appears, and Share is in there. The steps skipped that middle tap entirely, so they sent people hunting for a button that wasn't on screen. Fixed, with the arrow now pointing at the bar rather than at Share.",
-      "Every browser's steps now name what you're looking for — Share, then Add to Home Screen — and only describe where to find it when we actually know. Firefox, Edge and Opera on iPhone are told what to look for rather than being sent to a corner we'd be guessing at.",
-      "Android gained the final confirm tap, which was missing.",
+      "Five stops: the timer, the combos, your level, More options, and start.",
+      "Points out that More options holds rounds and work and rest times.",
+      "Mentions that turning your phone sideways gives a bigger view.",
+      "Shown once. Skippable.",
     ],
   },
   {
     v: "1.28.1",
     date: "2026-09-05",
     size: "patch",
-    title: "Development traffic stops counting as members",
+    title: "Honest usage numbers",
     notes: [
-      "Combify no longer reports anonymous usage when it's running on a developer's own machine. The automated tests drive a real browser and run real sessions, so every test run was quietly filing itself into the team's usage numbers as if it were members training — one afternoon of work showed up as 94 people.",
-      "Nothing changes for anyone using the real app. This only silences the copy running on localhost.",
-    ],
-  },
-  {
-    v: "1.28.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "The instructions move to the arrow",
-    notes: [
-      "The home-screen card now sits right beside its arrow instead of floating in the middle of the screen, so the arrow and the words read as one instruction rather than two separate things.",
-      "The arrow is bigger and glows, the card has lost its outline, and the background behind it is darker — the arrow is the actual instruction, so it's the loudest thing on screen now.",
-      "The arrow also lines up properly with the button it's pointing at. In Chrome it was landing beside the Share icon rather than under it, because the address bar is inset from the edge of the screen and the arrow wasn't.",
-    ],
-  },
-  {
-    v: "1.27.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "An arrow pointing at your Share button",
-    notes: [
-      "The home-screen card now shows a gently pulsing arrow at the edge of the screen nearest your browser's Share or menu button, carrying the same icon the steps name — down at the toolbar in Safari on iPhone, up at the address bar in Chrome, down at the bottom bar in Samsung Internet.",
-      "It only appears where we actually know where that button lives. In browsers where the menu moves around, you get the steps without an arrow rather than an arrow pointing at the wrong corner.",
-      "Computers don't get any of it. There's no home screen there and nothing outside the page worth pointing at.",
-    ],
-  },
-  {
-    v: "1.26.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "The home-screen steps show you the buttons",
-    notes: [
-      "The install steps now draw the actual icons you're looking for instead of only naming them — the Share arrow, the square-with-a-plus that sits beside \"Add to Home Screen\" in the share sheet, your browser's menu button, and Android's install icon.",
-      "And the menu button is the right one for your browser: three vertical dots at the top in Chrome and Firefox, three stacked lines at the bottom in Samsung Internet, three horizontal dots along the bottom in Edge. Being sent to the wrong corner of your own screen is the fastest way to give up.",
-    ],
-  },
-  {
-    v: "1.25.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "You can add Combify from any browser — we were wrong",
-    notes: [
-      "Combify has been telling people in Chrome on an iPhone that only Safari can add apps to a home screen, and walking them through switching browsers. That hasn't been true since 2023: Chrome, Edge and Firefox on iPhone can all do it from their own Share menu, and the result works exactly the same.",
-      "So the detour is gone. Every browser now gets the same three steps, and each one is told where its own Share button is — the bottom of the screen in Safari on iPhone, the top in Safari on iPad, top right beside the address in Chrome.",
-      "Sorry to anyone who switched browsers on our say-so. You didn't need to.",
-    ],
-  },
-  {
-    v: "1.24.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "One thing at a time when you're in the wrong browser",
-    notes: [
-      "If you're in Chrome on an iPhone, the card now asks for one thing only: open it in Safari. The home-screen steps used to be printed there too, which meant reading a list you couldn't follow until you'd already left. They now appear once you're actually in Safari, where they can be done.",
-      "Combify carries the handoff across, so landing in Safari picks up where you left off instead of starting the explanation over. The card is labelled step 1 of 2 and step 2 of 2, so you can see how short it is before you commit.",
-      "The card also sits in the middle of the screen now instead of near the top, where Chrome's address bar was covering the instructions.",
-    ],
-  },
-  {
-    v: "1.23.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "The Safari card comes back if you never answered it",
-    notes: [
-      "Fixed: tapping \"Open in Safari\" sends you out of the app, and if that tab never came back, Combify counted it as though you'd said no. Reopening the link only showed a small strip buried below the settings. Closing a tab is no longer treated as an answer — the card returns until you actually skip it, up to three times.",
-      "In a browser that can't add apps to your home screen, that strip now sits at the top of the page under the logo instead of below the settings, where nobody would scroll to find it.",
-    ],
-  },
-  {
-    v: "1.22.2",
-    date: "2026-09-05",
-    size: "patch",
-    title: "Home-screen steps, said in fewer words",
-    notes: [
-      "The add-to-home-screen card was explaining itself twice — once in a paragraph and again in the steps. The paragraph is now one line and the steps carry the instructions, so the whole card is shorter and faster to follow.",
-    ],
-  },
-  {
-    v: "1.22.1",
-    date: "2026-09-05",
-    size: "patch",
-    title: "The walkthrough keeps up, and Chrome gets told sooner",
-    notes: [
-      "Fixed: scrolling during the first-time walkthrough left the highlight behind, pointing at empty space. It now follows the page exactly, and each step scrolls itself into view so nothing gets explained off screen.",
-      "If you open Combify in Chrome on an iPhone, it now says so the moment you arrive instead of waiting until you've trained. Only Safari can put an app on an iPhone home screen, so the sooner you move across the better — and the button now tries to hand you straight to Safari, copying the link as a backup.",
-      "Safari and Android are unchanged: they're still only asked after you've finished a session.",
+      "Development traffic no longer counts as members.",
     ],
   },
   {
     v: "1.22.0",
     date: "2026-09-05",
     size: "minor",
-    title: "A workbench for whoever's building the app",
+    title: "Developer tools",
     notes: [
-      "Nothing changes for members. This adds a hidden developer panel so the app can be checked properly without sitting through it: jump straight to the finish screen, run a thirty-second session, replay the walkthrough, preview a seven-day streak, or see the home-screen card exactly as an iPhone, an iPad or an Android phone would show it — all from one device.",
-      "Turned on by visiting with ?dev=1, or by tapping \"by Boxing With Bakr\" in the header five times. That gesture matters: once Combify is installed to a home screen it keeps its own separate storage, and there's no address bar in there to type a web address into.",
-      "A device in developer mode wears a badge saying so, and its training is tagged and left out of the daily numbers — so testing the app never gets counted as somebody using it.",
-    ],
-  },
-  {
-    v: "1.21.0",
-    date: "2026-09-05",
-    size: "minor",
-    title: "A proper welcome, and home-screen steps that actually work",
-    notes: [
-      "First time you open Combify, a quick four-step walkthrough points out the timer, the combo display, the level settings and the start button. Tap to move through it, or skip it — either way you only ever see it once.",
-      "The \"add to home screen\" tip is now a proper card with the real steps for your phone, and it knows which phone you're on: iPhone, iPad and Android all get different instructions instead of one set that only worked for some people.",
-      "Fixed the big one: if you opened Combify in Chrome on an iPhone, the old steps were impossible to follow — only Safari can add apps to an iPhone home screen. Combify now says so and copies the link for you so you can open it there.",
-      "Computers don't get asked at all any more. There's no home screen to add anything to.",
-      "If you skipped it, \"Add to home screen\" now sits in the footer next to \"Report a problem\", so you can do it whenever you like.",
+      "Hidden panel: jump to the finish screen, replay the walkthrough, preview a streak, or see any platform's install card.",
+      "Nothing changes for members.",
     ],
   },
   {
     v: "1.20.0",
     date: "2026-08-30",
     size: "minor",
-    title: "The home-screen tip waits until you've trained",
+    title: "The home-screen tip waits until you have trained",
     notes: [
-      "Combify no longer asks you to add it to your home screen the second you arrive. It waits until you've finished a session, then mentions it once on the way out — when you've actually seen what it does.",
-      "On iPhone the tip now shows the two steps with Safari's Share icon drawn in, instead of a sentence describing where to look.",
-      "Tapping the x now hides the tip for a week rather than forever, so people who dismissed it early aren't locked out of installing later.",
+      "Waits until you have finished a session before mentioning the home screen.",
+      "On iPhone the tip shows the steps with Safari's Share icon drawn in.",
+      "Dismissing hides it for a week rather than forever.",
     ],
   },
   {
@@ -309,163 +153,53 @@ export const CHANGELOG = [
     size: "minor",
     title: "The app counts its own training days",
     notes: [
-      "Combify now keeps an anonymous tally of how much it's being used — sessions started and finished, punches thrown — so the team can see the app earning its keep day by day. Fully anonymous: a random device number, never a name or anything personal.",
-    ],
-  },
-  {
-    v: "1.18.0",
-    date: "2026-07-24",
-    size: "minor",
-    title: "Problem reports triage themselves",
-    notes: [
-      "Behind the scenes, every problem report now also files itself into the team's tracking sheet, where an automated daily check reads new reports, diagnoses the attached logs, and notifies the developer — so issues get looked at even before anyone opens their inbox.",
+      "Anonymous tally of sessions and punches, so the team can see the app being used. A random device number, never a name.",
+      "Problem reports also file into the team sheet, where a daily check reads and diagnoses them.",
     ],
   },
   {
     v: "1.17.3",
     date: "2026-07-24",
-    size: "patch",
-    title: "Report card clears the keyboard",
-    notes: [
-      "The report card now sits in the upper part of the screen, so the phone keyboard no longer covers it while you type.",
-    ],
-  },
-  {
-    v: "1.17.2",
-    date: "2026-07-24",
-    size: "patch",
-    title: "Report card, properly dressed",
-    notes: [
-      "The report card now looks like Combify: the app's own title style, a quiet Cancel, a compact teal Send, and a smooth entrance — instead of two oversized buttons filling the card.",
-    ],
-  },
-  {
-    v: "1.17.1",
-    date: "2026-07-24",
-    size: "patch",
-    title: "Count-up locked to the sound, report card polished",
-    notes: [
-      "The climbing numbers now track the rising blips exactly: the sound keeps the beat (it can't lag), and the screen follows it frame by frame instead of falling behind when the phone is busy.",
-      "The report card now sits properly above the app — blurred, dimmed background and a real shadow — and sending a report no longer leaves the app slightly zoomed in.",
-    ],
-  },
-  {
-    v: "1.17.0",
-    date: "2026-07-24",
     size: "minor",
-    title: "One-tap problem reports",
+    title: "Report a problem, from inside the app",
     notes: [
-      "Reporting a problem is now one clean step: a proper in-app card (matching the rest of the app, not a browser popup) where you describe what went wrong and hit Send — it goes straight through, and you just get a thank-you. No copying, no share sheets.",
-      "If there's no connection, the app falls back to letting you send the report manually, so nothing gets lost at the gym.",
-    ],
-  },
-  {
-    v: "1.16.2",
-    date: "2026-07-24",
-    size: "patch",
-    title: "The count-up scales with your session",
-    notes: [
-      "The rising blips now match what you actually did: up to two dozen punches, every single one gets its own note — the riff IS your count. Bigger totals climb longer (a 100-punch session earns a proper drumroll, ~2 seconds), small ones stay quick, and the sound still runs on its own clock so nothing on screen can glitch it.",
-    ],
-  },
-  {
-    v: "1.16.1",
-    date: "2026-07-24",
-    size: "patch",
-    title: "Footer breathing room",
-    notes: [
-      "\"Report a problem\" gets its own centred line under the version info instead of squeezing into the corner on phones.",
-    ],
-  },
-  {
-    v: "1.16.0",
-    date: "2026-07-24",
-    size: "minor",
-    title: "Report a problem, straight from the app",
-    notes: [
-      "New \"Report a problem\" link in the footer: describe what went wrong in a sentence, and the report — including a technical log of your last session's sounds — goes out through your phone's share sheet. That log is what lets problems get diagnosed and fixed fast, exactly, instead of guessed at.",
-      "The log records automatically in the background (it's tiny and costs nothing), so a problem can be reported after it happens — no setup needed. It also survives closing the app.",
+      "New Report a problem link in the footer. Sends a sentence plus a technical sound log.",
+      "One step: describe it, hit Send, get a thank-you. No copying, no share sheets.",
+      "The log records in the background and survives closing the app, so problems can be reported after they happen.",
+      "Falls back to sending manually if there is no connection, so nothing is lost at the gym.",
+      "Card restyled to match the app, and it clears the keyboard while you type.",
+      "Rising blips match your count: one note per punch up to two dozen. Bigger totals climb longer.",
+      "Climbing numbers track the rising blips exactly, even when the phone is busy.",
     ],
   },
   {
     v: "1.15.0",
     date: "2026-07-24",
     size: "minor",
-    title: "A new sound engine — precise, warm, self-healing",
+    title: "A new sound engine",
     notes: [
-      "Every bell, tick, warning and blip now plays through a precision audio engine that starts sounds within a couple of milliseconds, no matter how busy the phone is — and it still works with the silent switch on. The count-up riff is scheduled as one piece of music, so it physically cannot stutter.",
-      "The phone's speaker is warmed up the moment you tap Start, so the first countdown ticks land on tempo instead of the \"5\" arriving late (the speaker used to wake up ~100ms slow).",
-      "Fixed the vanishing \"slip\": one of its players got permanently stuck and silently swallowed the word — with a 2-second dead pause — every other time it appeared, eventually leaving only a robot voice. Stuck players are now detected, reset, and the word retries instantly on its twin.",
-      "A corrupted cached sound can no longer blacklist a word for the day — the app now re-downloads a failing file fresh from the network, and this update refreshes every cached sound anyway.",
-      "Combo cadence tightened: each word is rewound the moment it finishes, removing the occasional 50-80ms late start that made combos feel loose.",
-      "Music apps get their audio back a few seconds after the finish celebration ends.",
+      "Sounds now start within a couple of milliseconds however busy the phone is, and work with the silent switch on.",
+      "Speaker warmed up on Start, so the first countdown ticks land on tempo.",
+      "Fixed slip vanishing: a stuck player silently swallowed the word. Stuck players are detected and reset.",
+      "A corrupted cached sound no longer blacklists a word for the day.",
+      "Combo cadence tightened. Music apps get their audio back after the finish.",
     ],
   },
   {
     v: "1.14.1",
     date: "2026-07-23",
-    size: "patch",
-    title: "Smooth blips, steady ticks, no words into the bell",
-    notes: [
-      "The rising blips at the finish no longer glitch: their rhythm ran on the screen's drawing cycle, and a phone dropping frames mid-celebration dragged the sound with it. The riff now keeps its own time, and every blip starts from a freshly rewound sound.",
-      "The 5-4-3-2-1 countdown clicks keep an even tempo — reused click sounds are rewound during quiet moments instead of at the instant they play.",
-      "A combo can no longer start talking right before the bell: if there isn't room for at least its first word, the caller stays quiet and the bell lands clean.",
-      "Sounds repaired after switching apps now include every sound, not just unused ones — found by matching the first real-phone audit log against how iPhones actually report a finished sound.",
-      "The audit log now also records when each sound actually reached the speaker, and ends with a per-sound uniformity report — glitchy rhythm shows up as numbers now.",
-      "Text on the app can no longer be selected/highlighted by long-pressing — it behaves like an app, not a web page. (The What's-new page stays selectable.)",
-    ],
-  },
-  {
-    v: "1.14.0",
-    date: "2026-07-23",
     size: "minor",
-    title: "A flight recorder, and a torture chamber for the sound",
+    title: "Chasing the stutter",
     notes: [
-      "The app can now record its own black-box log on a real phone: tap the version number below five times, run a session, then tap \"Copy audit log\" and send it in. Sound problems become an exact timeline instead of a memory.",
-      "A new torture-test suite hammers the app with the misbehavior real iPhones produce — sound events arriving late, twice, or never — across hundreds of simulated sessions, and proves the words never overlap, repeat, or get cut off mid-round.",
-      "That suite immediately earned its keep: it found (and we fixed) a lurking flaw where a late-arriving sound event could make a word play twice or cut the next one short — very likely a driver of the remaining rare stutter.",
-    ],
-  },
-  {
-    v: "1.13.3",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Stutter root cause, blips back, ripple stays centred",
-    notes: [
-      "The word stutter (\"p-pivot\", \"e-eight\") and the end bells striking double: when a sound is replayed, the phone rewinds it to the start by itself — and the app was issuing its own rewind at the same instant. The two raced, and you heard the start twice. The app now leaves the rewind to the phone. (Needs a real-phone session to call it closed.)",
-      "The rising blips are back under the punch count. They had been moved onto a sound path the iPhone's silent switch mutes; they now play the same way as the bell and the voice, which the switch never touches.",
-      "The finish ripple blooms only while the ring is at the centre of the screen — it no longer replays off to the side a moment after the numbers arrive.",
-    ],
-  },
-  {
-    v: "1.13.2",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Ghost words fixed, start truly seamless",
-    notes: [
-      "Fixed words collapsing to a ghost of themselves (\"six\" → \"s\", \"slip\" → \"lip\") — this morning's stutter fix backfired on real phones, so the voice is back on the proven pipeline. The old rare stutter may occasionally return until it can be diagnosed properly on a real device.",
-      "The start is now one clean crossfade: the settings screen fades out and the countdown fades in — no more layout jumping partway and then sliding the rest.",
-    ],
-  },
-  {
-    v: "1.13.1",
-    date: "2026-07-23",
-    size: "patch",
-    title: "A calmer start",
-    notes: [
-      "The start is one smooth motion again: the ring stays where it lives, \"Get ready\" stays on screen, the settings fold away gently, and the countdown begins only once the screen has settled — so the 5 always gets its full second.",
-      "(This replaces the centre-stage countdown from v1.13.0, pulled on feedback the same day.)",
-    ],
-  },
-  {
-    v: "1.13.0",
-    date: "2026-07-23",
-    size: "minor",
-    title: "A proper entrance, and the last stutter hunted",
-    notes: [
-      "Starting a session now has a real entrance: the ring drifts to the centre of the screen and grows, the countdown happens there — big, centre stage — and the bell glides it back as round 1 begins. No more \"5\" getting eaten while the screen sorts itself out.",
-      "Found and fixed the likely cause of the rare word-stutter: a repeated word in one combo (like the 2s in the 10 combo) could reuse a clip that was still sitting at its end, forcing a last-instant rewind that iOS sometimes played over. Every clip now rewinds the moment it finishes.",
-      "Tapping the screen mid-round can no longer trigger a burst of background audio work that could hiccup the word being spoken.",
+      "Fixed the word stutter and double bell strikes: the app and the phone were both rewinding a sound at once.",
+      "Fixed words collapsing to a ghost of themselves after an earlier attempt at the same bug.",
+      "Fixed the finish blips glitching when the phone dropped frames. The riff keeps its own time now.",
+      "A combo no longer starts talking right before the bell.",
+      "Countdown clicks keep an even tempo, and the countdown starts on a clean beat.",
+      "The app can record its own black-box log: five taps on the version, run a session, Copy audit log.",
+      "New torture-test suite runs hundreds of sessions against the misbehaviour real iPhones produce.",
+      "Starting a session has a real entrance, settling before the countdown begins.",
+      "Text can no longer be selected by long-pressing. It behaves like an app, not a web page.",
     ],
   },
   {
@@ -474,195 +208,39 @@ export const CHANGELOG = [
     size: "minor",
     title: "Know your session, never miss the bell",
     notes: [
-      "The main screen now shows how long your whole session will take with your current settings — rounds plus rests — instead of a dead 00:00.",
-      "Rest now warns you before it ends: the two-beep heads-up with 10 seconds left, then the same 3-2-1 ticks as the pre-round countdown — so the bell never catches you with your hands down.",
-      "The \"Call combos out loud\" switch is gone. The voice is always on — it's the whole point of Combify — and the volume buttons cover the rest.",
-    ],
-  },
-  {
-    v: "1.11.8",
-    date: "2026-07-23",
-    size: "patch",
-    title: "The stutter, hunted down",
-    notes: [
-      "Fixed words occasionally starting twice (\"t-two\", \"1-one\") — an interrupted callout could leave a clip parked mid-word, and its next use raced an audio seek. Every clip is now rewound the moment it's stopped.",
-      "\"Get ready\" now clears the moment the round starts instead of lingering until the first call.",
-      "Starting a session holds the 5 steady while the screen transitions, so the countdown never eats its first second.",
-      "Bakr's combo is now announced as \"10 combo\", and the useless Reset button on the main screen is gone — Start has the room now.",
-    ],
-  },
-  {
-    v: "1.11.7",
-    date: "2026-07-23",
-    size: "patch",
-    title: "The last of the stutters",
-    notes: [
-      "The countdown now starts on a perfectly clean beat — no more \"5... then rushing\" when starting or restarting.",
-      "The glow behind the punch total now builds as the number climbs, peaks with the pop, and fades away naturally — without costing any smoothness.",
-      "The countdown's expanding pulse can no longer silently go missing.",
+      "The main screen shows how long your whole session will take, rounds plus rests.",
+      "Rest warns you before it ends: a heads-up at 10 seconds, then 3-2-1 ticks.",
+      "The Call combos out loud switch is gone. The voice is always on.",
     ],
   },
   {
     v: "1.11.6",
     date: "2026-07-23",
-    size: "patch",
-    title: "Version at a glance",
-    notes: [
-      "The version number and the What's new link now sit at the bottom of the main screen — no need to open About to find them.",
-    ],
-  },
-  {
-    v: "1.11.5",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Clean bells, calm starts",
-    notes: [
-      "The bell no longer fights the voice: the round-start bell rings clean before the first callout, and the end-of-round bell lands in silence instead of cutting a word off mid-syllable.",
-      "After the bell, you now get a moment to get your hands up before the first combo is called.",
-      "The glow is back on the punch total's pop — rebuilt so it stays smooth.",
-    ],
-  },
-  {
-    v: "1.11.4",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Smooth like butter",
-    notes: [
-      "Fixed the voice stuttering on Steady and Relaxed pace — a leftover timer could make two combo callouts talk over each other after leaving and returning to the app.",
-      "The finish count-up was rebuilt for total smoothness: the circle glides, then the numbers count, each with the screen to itself — and the digits no longer nudge the layout as they climb.",
-      "Count-up blips now use a jitter-free audio path, so the rising rhythm is even.",
-      "Restarting a session no longer flashes through the settings screen — it restarts in place, instantly.",
-    ],
-  },
-  {
-    v: "1.11.3",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Leaner under the hood",
-    notes: [
-      "The app now does strictly nothing between timer ticks — screen updates only happen when something actually changed. Same look, less work for the phone.",
-    ],
-  },
-  {
-    v: "1.11.2",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Anti-lag",
-    notes: [
-      "Fixed the freeze-then-fast-forward at the start of the countdown when restarting, unpausing, or re-entering fullscreen — the heavy audio setup now happens once, not on every tap.",
-      "The count-up no longer skips numbers under lag: every number arrives in order with its blip, just slightly later if the phone is busy.",
-      "Blips, ticks and the landing hit respond noticeably quicker.",
-    ],
-  },
-  {
-    v: "1.11.1",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Count-up timing fixes",
-    notes: [
-      "Fixed the count-up blips playing early, before the numbers were even on screen.",
-      "Every number you see now lands together with its own blip — sound and count move as one.",
-    ],
-  },
-  {
-    v: "1.11.0",
-    date: "2026-07-23",
-    size: "minor",
-    title: "Hear your total climb",
-    notes: [
-      "The punch count now sounds like it feels: rising blips as your total climbs, and a solid landing hit when it arrives.",
-      "The get-ready countdown is now 5 seconds instead of 3 — time to actually get your hands up.",
-    ],
-  },
-  {
-    v: "1.10.2",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Ten ways to say well done",
-    notes: [
-      "The finish screen now congratulates you differently each time — \"Strong finish.\", \"Round's yours.\", \"In the bank.\" and more — instead of the same \"Nice work.\" every session.",
-    ],
-  },
-  {
-    v: "1.10.1",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Every last pixel",
-    notes: [
-      "During a session the app now truly fills the phone — the strips at the notch and the bottom corners that stayed empty are used now.",
-      "The timer and combo sit properly centred on the screen when the phone is on its side (they sat slightly left before).",
-    ],
-  },
-  {
-    v: "1.10.0",
-    date: "2026-07-23",
     size: "minor",
     title: "A finish worth watching",
     notes: [
-      "Finishing a session is now a moment: the timer circle holds the centre of the screen while the ripple plays, then drifts aside and your numbers slide in one by one — instead of everything appearing at once.",
-      "The whole session stays fullscreen now, including the finish screen and while paused. A new exit button (next to pause and restart) is how you leave and get back to settings.",
-      "The restart icon now restarts the session on the spot instead of dropping you back to the settings screen.",
+      "Finishing is a moment now: the ring holds centre stage, then your numbers slide in one by one.",
+      "The punch count sounds like it feels: rising blips as your total climbs, and a landing hit when it arrives.",
+      "Every number lands together with its own blip, and none are skipped when the phone is busy.",
+      "A glow builds behind the total, peaks with the pop, and fades.",
+      "The finish screen congratulates you differently each time.",
+      "The whole session stays fullscreen. A new exit button leaves it, and restart restarts in place.",
+      "The countdown is 5 seconds instead of 3, and the app fills the whole phone.",
+      "Version and What's new moved to the bottom of the main screen.",
     ],
   },
   {
     v: "1.9.2",
     date: "2026-07-23",
-    size: "patch",
-    title: "The bell is back",
-    notes: [
-      "The session now ends with the classic three bell strikes again — the victory jingle didn't feel right, and nothing says the fight's over like the bell.",
-    ],
-  },
-  {
-    v: "1.9.1",
-    date: "2026-07-23",
-    size: "patch",
-    title: "A proper finish",
-    notes: [
-      "Finishing a session now plays a short victory jingle instead of three more bell rings — the bell keeps meaning \"round\", the jingle only ever means \"you did it\".",
-      "Fixed the sound glitching or dying after you left the app mid-round and came back — the callouts now stop cleanly when you leave and pick up fresh when you return.",
-    ],
-  },
-  {
-    v: "1.9.0",
-    date: "2026-07-23",
     size: "minor",
-    title: "Make it an app",
+    title: "Sound that stays on",
     notes: [
-      "Combify can now be put on your home screen properly: a real BWB logo icon, and it opens fullscreen with no browser bar at all — including on iPhone.",
-      "The app offers this once: one tap on Android, and on iPhone it shows where Apple hid the option (Share → Add to Home Screen). Dismiss it and it won't ask again.",
-      "Nothing changes if you'd rather keep using the link — it works the same as always.",
-    ],
-  },
-  {
-    v: "1.8.3",
-    date: "2026-07-23",
-    size: "patch",
-    title: "The bell fix, actually working on iPhone",
-    notes: [
-      "The previous update's bell fix worked everywhere except the phones it was for: iPhones never told the app the bell file had loaded, so it kept using the old muted route. The app now assumes its own sound files are there.",
-    ],
-  },
-  {
-    v: "1.8.2",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Bells you can actually hear",
-    notes: [
-      "The bell, countdown ticks and 10-second warning now play even with your iPhone's silent switch on — they were muted along with it before, while the voice kept going.",
-      "All sounds now work offline in the installed app; previously an offline session ran completely silent.",
-      "The end-of-session bell rings all three strikes cleanly instead of cutting itself off.",
-    ],
-  },
-  {
-    v: "1.8.1",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Sound that doesn't drop out",
-    notes: [
-      "Fixed the countdown beeps sometimes not playing at all when you pressed Start.",
-      "Fixed all sound going dead for the rest of a session after your phone locked, a call came in, or you switched apps — it now comes back the moment you return.",
-      "If one voice clip ever fails to load, only that word falls back to the phone's voice instead of the whole app switching over.",
+      "Fixed all sound dying for the rest of a session after a lock, a call, or switching apps.",
+      "Bell, ticks and warnings now play with the iPhone silent switch on.",
+      "All sounds work offline in the installed app.",
+      "The session ends with the classic three bell strikes.",
+      "Combify can be put on your home screen properly, with a real BWB logo icon.",
+      "If one voice clip fails to load, only that word falls back to the phone's voice.",
     ],
   },
   {
@@ -671,151 +249,57 @@ export const CHANGELOG = [
     size: "minor",
     title: "This page",
     notes: [
-      "Added this list of updates, so you can see what changed and when. It's linked from About at the bottom of the app.",
-      "If one of these changes made something worse, note the version next to it — going back is easy.",
+      "Added this list of updates, so you can see what changed and when.",
+      "If a change made something worse, note the version next to it. Going back is easy.",
     ],
   },
   {
     v: "1.7.1",
     date: "2026-07-23",
-    size: "patch",
-    title: "The screen follows the voice",
-    notes: [
-      "The move being called now lights up as you hear it, so you can glance down mid-combo and see exactly where you are.",
-      "The 3-2-1 countdown circle moves smoothly between each second again instead of jumping.",
-    ],
-  },
-  {
-    v: "1.7.0",
-    date: "2026-07-23",
-    size: "patch",
-    title: "Fullscreen fixes",
-    notes: [
-      "Fixed Resume doing nothing if you paused during the 3-2-1.",
-      "The celebration ring at the end now comes out of the timer circle properly instead of off to one side.",
-      "Finishing a session or hitting Reset no longer kicks you out of fullscreen.",
-    ],
-  },
-  {
-    v: "1.6.0",
-    date: "2026-07-23",
     size: "minor",
     title: "True fullscreen training",
     notes: [
-      "Starting a session now takes over the whole screen, so there's no browser bar while you train.",
-      "Pause and Reset became small icons in the corner, giving the combo more room.",
-      "The countdown pulses so you know the round is about to start.",
+      "A session takes over the whole screen, so there is no browser bar while you train.",
+      "Pause and Reset became small corner icons, giving the combo more room.",
+      "The move being called lights up as you hear it.",
+      "Fixed Resume doing nothing if you paused during the countdown.",
     ],
   },
   {
     v: "1.5.1",
     date: "2026-07-22",
-    size: "patch",
-    title: "Smoother timer",
-    notes: [
-      "The timer ring now drains smoothly instead of ticking once a second.",
-      "Fixed the clock spilling out of its circle when the phone was on its side.",
-    ],
-  },
-  {
-    v: "1.5.0",
-    date: "2026-07-22",
     size: "minor",
     title: "A proper look",
     notes: [
-      "Added the ring around the clock that empties as the round runs down.",
-      "Long combos now wrap neatly and scale to fit any screen.",
-      "Rebuilt the finish screen around your punch total.",
-    ],
-  },
-  {
-    v: "1.4.0",
-    date: "2026-07-22",
-    size: "minor",
-    title: "Focus mode",
-    notes: [
-      "While a session runs, everything but the combo folds away so it can be read from across the room.",
-      "Proper layouts for holding the phone upright, on its side, or using a laptop.",
+      "Added the ring around the clock that empties as the round runs down, draining smoothly.",
+      "While a session runs, everything but the combo folds away so it reads from across the room.",
+      "Proper layouts for upright, on its side, and on a laptop.",
+      "Long combos wrap neatly and scale to any screen.",
     ],
   },
   {
     v: "1.3.1",
     date: "2026-07-22",
-    size: "patch",
-    title: "Flame from day one",
-    notes: [
-      "The streak flame now shows from your very first session instead of waiting.",
-      "Confirmed with Bakr that 7 and 8 mean body shots.",
-    ],
-  },
-  {
-    v: "1.3.0",
-    date: "2026-07-22",
     size: "minor",
-    title: "Bakr's 10 combo",
+    title: "Streaks, and Bakr's 10 combo",
     notes: [
-      "Added Bakr's \"10 combo\" and it's announced by name on screen.",
-      "The finish screen counts your punches up and shows a flame for your streak.",
-    ],
-  },
-  {
-    v: "1.2.1",
-    date: "2026-07-22",
-    size: "patch",
-    title: "Quicker setup",
-    notes: [
-      "Hold the + or - buttons to run the number up or down instead of tapping repeatedly.",
-    ],
-  },
-  {
-    v: "1.2.0",
-    date: "2026-07-22",
-    size: "minor",
-    title: "Streaks",
-    notes: [
-      "Your rounds, punches and days in a row are now saved on your phone.",
-      "The finish screen tells you what you just did, not just \"nice work\".",
-    ],
-  },
-  {
-    v: "1.1.0",
-    date: "2026-07-22",
-    size: "patch",
-    title: "Version shown in About",
-    notes: [
-      "The app now shows which build it's running, so you can tell whether your phone has the latest one.",
-    ],
-  },
-  // ---- Before version numbers existed (the first two days) ----
-  {
-    v: null,
-    date: "2026-07-22",
-    size: "minor",
-    title: "A real voice",
-    notes: [
-      "Combos are now called out in a real recorded voice instead of the robotic one built into the phone.",
+      "Your rounds, punches and days in a row are saved on your phone.",
+      "The finish screen tells you what you just did, with a flame for your streak from day one.",
+      "Added Bakr's 10 combo, announced by name on screen.",
+      "Hold + or - to run a number up or down instead of tapping repeatedly.",
+      "The app shows which build it is running, so you can tell if your phone has the latest.",
     ],
   },
   {
     v: null,
     date: "2026-07-22",
-    size: "patch",
-    title: "Fixes from Bakr's testing",
+    size: "minor",
+    title: "A real voice, and Bakr's first testing",
     notes: [
-      "The callouts no longer go silent partway through a round.",
-      "The timer keeps proper time if you switch to another app mid-round.",
-      "The bell works again, and the screen stays awake while you train.",
-      "Tapping + and - no longer zooms the page on an iPhone.",
-    ],
-  },
-  {
-    v: null,
-    date: "2026-07-22",
-    size: "patch",
-    title: "Better variety, simpler setup",
-    notes: [
-      "The same combo can't come up twice in a row any more.",
-      "Your settings are remembered between visits.",
+      "Combos are called out in a real recorded voice instead of the phone's robotic one.",
+      "Fixed callouts going silent partway through a round.",
+      "The timer keeps proper time if you switch apps mid-round, and the screen stays awake.",
+      "The same combo cannot come up twice in a row, and your settings are remembered.",
       "Level and Combo pace moved to the top; round lengths tucked into More options.",
     ],
   },

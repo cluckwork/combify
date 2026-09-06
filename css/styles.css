@@ -864,14 +864,16 @@ label {
 .doc__title { margin: 8px 0 0; font-size: clamp(26px, 7vw, 38px); font-weight: 800; }
 .doc__lede { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
 
-.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
-.log__item {
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-}
-.log__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* LINEAR, not cards. Seventy-odd releases in boxes gives every one of them the
+   same visual weight and turns the page into a scroll of identical containers —
+   the reader has to parse a frame before they can read a line. A changelog is
+   skimmed for "what changed", so it wants the shape of a list: version, then
+   its lines, then a rule. The hairline does the separating that a border, a
+   fill, a radius and a padding were all doing before. */
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.log__item { padding: 18px 0; border-top: 1px solid var(--hairline); }
+.log__item:first-child { border-top: none; padding-top: 4px; }
+.log__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .log__ver {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -892,9 +894,12 @@ label {
   border-radius: 999px;
   padding: 2px 8px;
 }
-.log__title { margin: 6px 0 0; font-size: 18px; font-weight: 700; }
-.log__notes { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
-.log__notes li { color: var(--muted); font-size: 14px; line-height: 1.55; }
+.log__title { margin: 4px 0 0; font-size: 16px; font-weight: 700; }
+/* Tight. Every line is one claim, so they read as a list rather than as
+   paragraphs that happen to have bullets. */
+.log__notes { margin: 6px 0 0; padding-left: 16px; display: grid; gap: 3px; }
+.log__notes li { color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.log__notes li::marker { color: var(--accent-dim); }
 .log__kind {
   font-family: var(--font-mono);
   font-size: 10px;
