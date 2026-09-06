@@ -336,8 +336,9 @@ function getSilence() {
     silenceEl = new Audio(SFX_DIR + "silence.wav");
     silenceEl.preload = "auto";
   }
-  // stopAudioSession detaches the source to retire the lock-screen Now Playing
-  // card; put it back before the next session needs the keeper.
+  // Defensive only: nothing detaches this any more (see stopAudioSession), but
+  // an element that somehow lost its source would silently cost every sound
+  // effect its silent-switch protection.
   if (!silenceEl.src) {
     silenceEl.src = SFX_DIR + "silence.wav";
     try { if (silenceEl.load) silenceEl.load(); } catch (e) {}
@@ -361,18 +362,22 @@ export function stopAudioSession() {
   silenceOk = false;
   if (!silenceEl) return;
   try { silenceEl.pause(); silenceEl.currentTime = 0; } catch (e) {}
-  // RETIRE THE LOCK-SCREEN CARD. iOS builds a Now Playing entry from any
-  // element that has played, and merely PAUSING one keeps it there — so the
-  // phone showed "Combify — Boxing With Bakr" sitting at 0:00 with transport
-  // controls on the lock screen, like an abandoned podcast, long after the
-  // member had finished training. Detaching the source is what actually
-  // retires it; getSilence puts the source back before the next session.
-  try {
-    silenceEl.loop = false;
-    if (silenceEl.removeAttribute) silenceEl.removeAttribute("src");
-    else silenceEl.src = "";
-    if (silenceEl.load) silenceEl.load();
-  } catch (e) {}
+  // DO NOT DETACH THE KEEPER'S SOURCE. This is the second time that lesson has
+  // been paid for, so it is written down here.
+  //
+  // This element is not decoration. A looping media element is what puts the
+  // whole page on iOS's media channel, and that is the ONLY reason Web Audio —
+  // every bell, tick, warning and blip — survives the hardware silent switch.
+  // The voice plays through audio elements and is unaffected either way, which
+  // is why the failure looks so specific: the words keep coming and everything
+  // else goes quiet. v1.5.0 and v1.7.1 both shipped that bug; a
+  // removeAttribute("src") + load() here shipped it a third time, this time to
+  // retire a lock-screen card.
+  //
+  // Pausing is as far as it goes. If iOS keeps showing a paused Now Playing
+  // entry, that is the trade being taken deliberately: a tidy lock screen is
+  // cosmetic, silent bells mean the app does not work. Clearing the media
+  // session below is the most that may be done about it.
   try {
     if (typeof navigator !== "undefined" && navigator.mediaSession) {
       navigator.mediaSession.metadata = null;
@@ -632,8 +637,26 @@ function eachPool(fn) {
 export function unlockAudioForMobile() {
   if (audioUnlocked && !needsReprime) return;
   audit("audio:prime", needsReprime ? "reprime" : "first");
+  try { eachPool(() => {}); } catch (e) {}   // ensure every pool exists before priming
   try {
-    eachPool((pool) => primeElement(pool[0]));
+    // Voice clips: one element each, as before — twelve plays is already the
+    // most this tap can afford, and a spare voice element gets its chance on
+    // the next tap via deepPrime, with a whole round of combos to wait.
+    CLIP_KEYS.forEach((key) => { const p = clipPool[key]; if (p && p[0]) primeElement(p[0]); });
+    // SFX: EVERY slot, not just the first.
+    //
+    // The countdown is the case that breaks the tiered scheme. deepPrime tops
+    // up spares "on the next tap anywhere" — but the five seconds after Start
+    // contain no tap at all, and the tick pool round-robins onto its spare on
+    // the second beat. So tick 1 played from the primed element and ticks 2-5
+    // landed on one iOS had never blessed: play() rejects, the synth fallback
+    // needs a running context, and the member hears one tick and then silence.
+    // Exactly the report. Sfx pools are small (bell 3, tick 2, warning 2,
+    // blip 4, land 1) so this is seven extra plays, not another thirty-five.
+    SFX_KEYS.forEach((key) => {
+      const p = sfxPool[key];
+      if (p) for (let i = 0; i < p.length; i++) primeElement(p[i]);
+    });
     primeElement(getSilence()); // the keeper needs the gesture blessing too
     deepPrimePending = true;
     audioUnlocked = true;

@@ -178,6 +178,10 @@ const el = {
 let history = loadHistory();
 const session = { rounds: 0, punches: 0, seconds: 0, pendingPunches: 0, started: false };
 
+// The dev panel's finish preview waits a beat before finishing; held here so a
+// second press cancels the first rather than running two finales at once.
+let replayTimer = null;
+
 // Set when a new build takes over mid-session (see the service worker block).
 // Declared up here rather than beside that code because reset() runs during
 // boot, long before it — a `let` further down would be in its temporal dead
@@ -2018,6 +2022,14 @@ const nextFrame = (fn) => {
 // Deferred a frame so the dialog's own buttons are wired first.
 nextFrame(() => { try { maybeAskToInstall(); } catch (e) {} });
 
+// Closing or swiping the app away is the one exit that never runs reset(), so
+// the keeper would be left attached and its lock-screen card could outlive the
+// page. Only when nothing is running: a locked screen mid-round is exactly
+// when the keeper is doing its job and must stay.
+window.addEventListener("pagehide", () => {
+  if (!state.running) { try { stopAudioSession(); } catch (e) {} }
+});
+
 // ---------- The developer's workbench (js/dev.js) ----------
 // Wired unconditionally: the five-tap gesture has to be listening before dev
 // mode is on, or there would be no way to turn it on inside an installed app.
@@ -2029,20 +2041,46 @@ initDev({
   deviceId: usageId(),
   // The finale is normally three rounds away. Seed a plausible session and run
   // the genuine finish(), bell and all.
+  // The finale preview has now misrepresented the real thing three separate
+  // ways, so it is worth stating the rule: a real finish happens minutes into
+  // a session, in focus mode, with a warm audio route and a settled layout.
+  // Anything the preview skips, it lies about.
+  //
+  //   1. AUDIO ROUTE. It never called startAudioSession, so silenceOk stayed
+  //      false, every Web Audio path was refused, and all 23 count-up blips
+  //      fell back to individual element plays — stuttery and uneven.
+  //   2. THAT CALL IS ASYNCHRONOUS. Adding it was not enough: silenceOk is set
+  //      when the keeper's play() PROMISE resolves, and finish() ran in the
+  //      same tick, so the riff was scheduled before the route existed and
+  //      fell back anyway. Only a later press felt right, because by then the
+  //      keeper from the previous press was still warm.
+  //   3. LAYOUT. startFinale measures the dial with getBoundingClientRect to
+  //      find screen centre. Going ready → finish in one tick measures WHILE
+  //      the chrome is still folding away, so the dial lands wherever the
+  //      transition happened to be — low, half off the bottom of the screen,
+  //      and differently every time. It appeared to "fix itself" because the
+  //      glide back clears the transform.
+  //
+  // So the preview now enters focus mode, renders, and waits for both the
+  // chrome transition and the keeper before finishing.
   replayFinish() {
+    clearTimeout(replayTimer);
     reset();
-    // Take the audio route the way a real session does. Without this the
-    // preview never called startAudioSession, so silenceOk stayed false, every
-    // Web Audio path was refused, and all 23 count-up blips fell back to
-    // individual element plays — stuttery, uneven, and nothing like the finale
-    // a member actually gets. A workbench that misrepresents the thing it is
-    // previewing is worse than no workbench.
     armAudio();
     unlockAudioForMobile();
     startAudioSession();
     session.rounds = 3; session.punches = 84; session.seconds = 360;
     session.pendingPunches = 0; session.started = true;
-    finish();
+    state.phase = "done";
+    render();                       // focus mode on; the chrome starts folding
+    // Long enough for the 0.3s chrome transition to land AND the keeper's
+    // play() promise to resolve. Cleared on re-entry, so hammering the button
+    // restarts one preview rather than overlapping two — which is what rang
+    // the bell twice.
+    // 500ms was not enough: the first press still measured mid-transition and
+    // put the dial 52px below centre. The chrome fold, the stage growing to
+    // fullscreen and the keeper's promise all have to land first.
+    replayTimer = setTimeout(finish, 900);
   },
   // Two ten-second rounds: the whole arc — countdown, work, rest, finish — in
   // about half a minute, using the ordinary settings and the ordinary start.

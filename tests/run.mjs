@@ -2435,15 +2435,21 @@ async function collectSpokenVsShown(app, ms) {
 
   app2.click("exitBtn");
   await app2.clock.advance(100);
-  const k = app2.stats.live.find((a) => a.src === "" || /silence/.test(a.src));
-  check("ending the session releases the keeper's source",
-    !!k && !k.src, `src still "${k && k.src}"`);
+  // THE KEEPER'S SOURCE MUST SURVIVE. A looping media element is what puts the
+  // page on iOS's media channel, and that is the only reason Web Audio — every
+  // bell, tick, warning and blip — ignores the hardware silent switch. Detach
+  // it and the voice keeps playing while everything else goes silent. That bug
+  // has now shipped three times; this is the assertion that stops a fourth.
+  const k = app2.stats.live.find((a) => /silence/.test(a.src) || a.src === "");
+  check("ending a session leaves the keeper's source attached",
+    !!k && /silence/.test(k.src),
+    `keeper src is "${k && k.src}" — detaching it costs every sfx its silent-switch protection`);
+  check("and the keeper is paused, not still looping", !!k && k.paused, "keeper still playing");
 
-  // ...and the next session must get it back, or there is no keeper at all.
   app2.click("startBtn");
   await app2.clock.advance(300);
-  const back = app2.stats.live.some((a) => /silence/.test(a.src));
-  check("and the next session gets it back", back, "keeper never returned");
+  const back = app2.stats.live.some((a) => /silence/.test(a.src) && !a.paused);
+  check("and the next session starts it again", back, "keeper never restarted");
   app2.restore();
   clearStore();
 }

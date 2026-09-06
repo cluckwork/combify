@@ -48,6 +48,17 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "2.0.1",
+    date: "2026-09-06",
+    size: "patch",
+    title: "Sound effects are back",
+    notes: [
+      "Fixed every sound except the voice going silent with the iPhone silent switch on. Yesterday's lock-screen tidy-up removed the thing that was protecting them.",
+      "The lock-screen player may reappear after a session. That is the trade: a tidy lock screen is cosmetic, silent bells are not.",
+      "Fixed the countdown playing only its first tick.",
+    ],
+  },
+  {
     v: "2.0.0",
     date: "2026-09-05",
     size: "minor",
