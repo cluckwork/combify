@@ -1063,6 +1063,17 @@ button.foot__link {
   -webkit-user-select: text;
 }
 .report__text:focus { outline: none; border-color: var(--accent); }
+/* The placeholder is an EXAMPLE, and has to look like one. At the browser
+   default it sat almost as bright as real typed text, so the box read as
+   already filled in — which is the one thing a placeholder must never do.
+   Muted and italic: clearly a suggestion, still comfortably legible.
+   `opacity: 1` is not redundant — Firefox dims placeholders by default, and
+   without it this lands too faint to read. */
+.report__text::placeholder {
+  color: var(--muted);
+  opacity: 1;
+  font-style: italic;
+}
 .report__actions { display: flex; justify-content: flex-end; gap: 8px; }
 .report__thanks {
   margin: 0;
@@ -1506,3 +1517,28 @@ button.foot__link {
 @media (prefers-reduced-motion: reduce) {
   .ins__aim { animation: none; opacity: 0.9; }
 }
+
+
+/* "Don't ask again" — the real opt-out on the install card.
+   Deliberately the loneliest thing on the screen: pinned to whichever end the
+   pointer is NOT using (js/app.js sets data-edge), so it is nowhere near the
+   card, the arrow, or "Not now". Someone who genuinely never wants asking can
+   find it; nobody hits it by accident while declining once. */
+.ins__never {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 10px 16px;
+  min-height: 40px;
+  cursor: pointer;
+  opacity: 0.45;   /* present, findable, and clearly not the intended answer */
+}
+.ins__never:hover { opacity: 0.85; color: var(--text); }
+.ins__never[data-edge="top"]    { top: max(6px, env(safe-area-inset-top)); }
+.ins__never[data-edge="bottom"] { bottom: max(6px, env(safe-area-inset-bottom)); }

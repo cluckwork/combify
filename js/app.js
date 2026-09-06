@@ -1604,16 +1604,11 @@ refreshInstallNudge();
 // actually answered. Skip, the scrim, or the action button are answers. A tab
 // that just disappears is not, and gets asked again — up to a cap, because
 // something that returns forever is a nag no matter how good the reason.
-const INS_ASKS_KEY = "combify.install.asks.v1";
-const INS_ANSWERED_KEY = "combify.install.answered.v1";
-const INS_MAX_ASKS = 3;
-
-// The Chrome card hands off to Safari with ?ath=1 on the URL. Safari has no
-// idea a decision was already made in another browser — the two share nothing
-// on iOS, not even localStorage — so the marker is the only way the second
-// half of the journey knows it is the second half. Without it, someone who
-// just agreed to switch browsers lands in Safari and is shown nothing at all,
-// because Safari's ask waits for a finished session.
+// An install LINK — the QR code at the gym points at ?ath=1 — shows the card
+// immediately instead of waiting for a finished session. Someone who scanned a
+// code labelled "put this on your phone" has already asked; making them train
+// first would be obtuse. The parameter is lifted straight back out of the
+// address bar so a link the member later shares does not carry it.
 const ATH_KEY = "combify.install.arrived";
 const ATH_PARAM = "ath";
 
@@ -1621,8 +1616,6 @@ const ATH_PARAM = "ath";
   try {
     if (new URLSearchParams(location.search).get(ATH_PARAM) !== "1") return;
     localStorage.setItem(ATH_KEY, "1");
-    // Take it back out of the address bar: it has done its job, and a URL the
-    // member might bookmark or share should not carry our internal breadcrumb.
     // NOTE window.history, spelled out: this module has its own module-level
     // `history` (the member's training log), which shadows the global. Written
     // as bare `history.replaceState` the check is silently undefined and the
@@ -1641,23 +1634,68 @@ function clearArrival() {
   try { localStorage.removeItem(ATH_KEY); } catch (e) {}
 }
 
+// ASKING AGAIN, ON PURPOSE.
+//
+// Getting Combify onto a home screen is the single highest-value thing a
+// member can do, so one refusal is not a final answer — someone who declines
+// on day one and is still training three weeks later has changed their mind
+// about the app even if they have not thought about the icon. But "ask again"
+// has to mean something specific or it becomes a nag.
+//
+// The clock is SESSIONS, not days. Time-based re-asking treats a member who
+// trains daily and one who trains monthly identically, which is backwards:
+// the person who keeps coming back is exactly the person worth asking twice.
+// And the gap widens each time — 3 sessions, then 6, then 12 — so the app
+// gets quieter the longer someone declines, rather than louder.
+//
+// The way out is explicit, not inferred. "Don't ask again" ends it for good.
+const INS_ASKS_KEY = "combify.install.asks.v1";
+const INS_AT_KEY = "combify.install.atSessions.v1";
+const INS_NEVER_KEY = "combify.install.never.v1";
+const INS_GAPS = [3, 6, 12];   // sessions between asks; the last one repeats
+
 function insAsks() {
   try { return parseInt(localStorage.getItem(INS_ASKS_KEY), 10) || 0; } catch (e) { return 0; }
 }
-function insAnswered() {
-  try { return localStorage.getItem(INS_ANSWERED_KEY) === "1"; } catch (e) { return false; }
+function insAtSessions() {
+  try { return parseInt(localStorage.getItem(INS_AT_KEY), 10) || 0; } catch (e) { return 0; }
 }
-function noteInsOpened() {
-  try { localStorage.setItem(INS_ASKS_KEY, String(insAsks() + 1)); } catch (e) {}
+function insNever() {
+  try { return localStorage.getItem(INS_NEVER_KEY) === "1"; } catch (e) { return false; }
 }
-function noteInsAnswered() {
-  try { localStorage.setItem(INS_ANSWERED_KEY, "1"); } catch (e) {}
+function sessionCount() {
+  return (history && history.totals && history.totals.sessions) | 0;
 }
+// Recorded when the card is actually shown, so the next ask is counted from
+// there rather than from whenever the member last happened to answer.
+function noteInsShown() {
+  try {
+    localStorage.setItem(INS_ASKS_KEY, String(insAsks() + 1));
+    localStorage.setItem(INS_AT_KEY, String(sessionCount()));
+  } catch (e) {}
+}
+function insDueAgain() {
+  const asks = insAsks();
+  if (asks === 0) return true;
+  const gap = INS_GAPS[Math.min(asks - 1, INS_GAPS.length - 1)];
+  return sessionCount() >= insAtSessions() + gap;
+}
+function noteInsNever() {
+  try {
+    localStorage.setItem(INS_NEVER_KEY, "1");
+    // Silence the quiet strip too. Someone who says "don't ask again" means
+    // the whole subject, not just this card — leaving the strip up would read
+    // as the app ignoring them.
+    saveInstallState({ declines: INSTALL_MAX_DECLINES, snoozeUntil: 0 });
+  } catch (e) {}
+}
+
 // Used by the dev panel to replay a first run without wiping everything else.
 function clearInsAsk() {
   try {
     localStorage.removeItem(INS_ASKS_KEY);
-    localStorage.removeItem(INS_ANSWERED_KEY);
+    localStorage.removeItem(INS_AT_KEY);
+    localStorage.removeItem(INS_NEVER_KEY);
     localStorage.removeItem(INSTALL_KEY);
   } catch (e) {}
 }
@@ -1681,7 +1719,8 @@ function openInstallDialog(force) {
       : "Keep Combify on your phone";
   }
   if (sub) {
-    sub.textContent = (arrivedForInstall() && guide.arrivedSub) ? guide.arrivedSub : guide.sub;
+    sub.textContent = guide.sub || "";
+    sub.hidden = !guide.sub;
   }
   if (steps) renderInstallSteps(steps, guide.steps);
   renderAim(guide);
@@ -1694,7 +1733,7 @@ function openInstallDialog(force) {
       go.innerHTML = `${GLYPHS.addhome}<span>${guide.actionLabel}</span>`;
     }
   }
-  if (!force) noteInsOpened();
+  if (!force) noteInsShown();
   modal.hidden = false;
   audit("install", `dialog ${guide.mode}`);
   return true;
@@ -1715,9 +1754,11 @@ function renderAim(guide) {
   const aim = document.getElementById("insAim");
   if (!aim) return;
   const modalEl = document.getElementById("insModal");
+  const neverEl = document.getElementById("insNever");
   if (!guide || !guide.aim) {
     aim.hidden = true;
     if (modalEl) delete modalEl.dataset.aim;   // nothing to point at: stay centred
+    if (neverEl) neverEl.dataset.edge = "bottom";
     return;
   }
   const { edge, side } = guide.aim;
@@ -1748,13 +1789,17 @@ function renderAim(guide) {
   // centred to fix in the first place.
   const modal = document.getElementById("insModal");
   if (modal) modal.dataset.aim = edge;
+  // Park the opt-out at the opposite end from the pointer, so the two never
+  // compete for the same corner and "Don't ask again" stays as far from the
+  // rest of the card as the screen allows.
+  const never = document.getElementById("insNever");
+  if (never) never.dataset.edge = edge === "top" ? "bottom" : "top";
 }
 
 function closeInstallDialog() {
   const modal = document.getElementById("insModal");
   if (modal) modal.hidden = true;
-  noteInsAnswered();
-  clearArrival();   // the journey that started in Chrome is over, either way
+  clearArrival();
   // Whatever the member does next, the quiet strip is what remains — so the
   // route back in is always there without this dialog ever reopening itself.
   refreshInstallNudge();
@@ -1784,6 +1829,15 @@ function closeInstallDialog() {
     });
   }
   if (skip) skip.addEventListener("click", closeInstallDialog);
+  const never = document.getElementById("insNever");
+  if (never) {
+    never.addEventListener("click", () => {
+      noteInsNever();
+      closeInstallDialog();
+      hideInstallNudge();
+      audit("install", "never ask again");
+    });
+  }
   // NO scrim-to-dismiss, deliberately. Tapping outside a card is a reflex
   // rather than a decision, and this is the one moment the app asks for
   // something it genuinely wants: a stray tap should not answer it. "Not now"
@@ -1817,7 +1871,7 @@ function closeInstallDialog() {
 // session), never while snoozed or declined, and only the first time.
 function maybeAskToInstall() {
   if (!canInstall() || isStandalone()) return;
-  if (insAnswered() || insAsks() >= INS_MAX_ASKS || installSilenced()) return;
+  if (insNever() || !insDueAgain()) return;
   if (!installEarned() && !installBlocked()) return;
   openInstallDialog();
 }

@@ -1693,6 +1693,8 @@ async function collectSpokenVsShown(app, ms) {
     g.steps[0].includes("{menudots} button") && !g.steps[0].includes("•••"), g.steps[0]);
   check("Share is its own step now", g.steps[1].includes("{share}"), g.steps[1]);
   check("nothing to automate on iOS", g.action === null, String(g.action));
+  check("the reason line is one plain sentence, not display-mode jargon",
+    g.sub.split(/\s+/).length <= 9 && !/fullscreen|address bar|standalone|offline/i.test(g.sub), g.sub);
   // Reported from a real iPhone: expanding the sheet is a REQUIRED step of
   // its own, it is called "View more", and Add to Home Screen is still
   // further down after that. Two earlier builds got this wrong.
@@ -2098,9 +2100,9 @@ async function collectSpokenVsShown(app, ms) {
   const link = await boot({ duration: 0.6, search: "?ath=1", ...CHROME_IOS });
   await link.clock.advance(50);
   check("an install link shows the steps at once", link.doc.getElementById("insModal").hidden === false, "ignored the link");
-  check("and skips the pitch, since they already asked",
-    /A few taps/.test(link.doc.getElementById("insSub").textContent),
-    link.doc.getElementById("insSub").textContent);
+  check("and it shows the real steps, not a pitch",
+    /Add to Home Screen/.test(link.doc.getElementById("insSteps").textContent),
+    link.doc.getElementById("insSteps").textContent);
   check("the breadcrumb is taken back out of the address bar",
     !/ath=1/.test(link.window.location.search), link.window.location.search);
   link.click("insSkip");
@@ -2114,6 +2116,50 @@ async function collectSpokenVsShown(app, ms) {
     [...after.doc.querySelectorAll(".foot button")].some((b) => /home screen/i.test(b.textContent)),
     "no route back");
   after.restore();
+  clearStore();
+
+  // ---- Asked again, on a session clock ----
+  // One "not now" is not a final answer: someone still training three weeks
+  // later has changed their mind about the app even if they never thought
+  // about the icon again. The gap widens each time (3, 6, 12 sessions) so the
+  // app gets quieter the longer they decline, not louder.
+  const dlgOpen = (app) => app.doc.getElementById("insModal").hidden === false;
+
+  const seed = await boot({ duration: 0.6, ...CHROME_IOS });
+  await trainAndExit(seed);
+  check("asked after the first session", dlgOpen(seed), "never asked");
+  seed.click("insSkip");
+  await trainAndExit(seed);
+  check("not asked again the very next session", !dlgOpen(seed), "asked immediately again");
+  await trainAndExit(seed);
+  await trainAndExit(seed);
+  check("asked again three sessions later", dlgOpen(seed), "went quiet for good");
+  seed.click("insSkip");
+  await trainAndExit(seed);
+  await trainAndExit(seed);
+  await trainAndExit(seed);
+  check("and the gap widens rather than repeating every three",
+    !dlgOpen(seed), "nagged on the same cadence");
+  seed.restore();
+
+  // ---- The explicit way out ----
+  clearStore();
+  const never = await boot({ duration: 0.6, ...CHROME_IOS });
+  await trainAndExit(never);
+  check("the opt-out is on the card", !!never.doc.getElementById("insNever"), "no opt-out");
+  check("and sits at the opposite end from the pointer",
+    never.doc.getElementById("insNever").dataset.edge !== never.doc.getElementById("insAim").dataset.edge,
+    `${never.doc.getElementById("insNever").dataset.edge} vs ${never.doc.getElementById("insAim").dataset.edge}`);
+  never.click("insNever");
+  check("it closes the card", !dlgOpen(never), "still open");
+  check("and takes the quiet strip with it — they meant the subject, not the card",
+    never.doc.getElementById("installNudge").hidden === true, "strip survived");
+  await trainAndExit(never);
+  await trainAndExit(never);
+  await trainAndExit(never);
+  await trainAndExit(never);
+  check("never asked again, however many sessions follow", !dlgOpen(never), "asked after opting out");
+  never.restore();
   clearStore();
 }
 

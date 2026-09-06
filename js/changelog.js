@@ -21,6 +21,18 @@
 // Newest first.
 export const CHANGELOG = [
   {
+    v: "1.32.0",
+    date: "2026-09-05",
+    size: "minor",
+    title: "The home-screen card asks again, and asks in plain words",
+    notes: [
+      "\"Opens fullscreen, no address bar, works offline\" is gone. It now just says it runs better and works without signal, which is the part that matters in a gym with bad reception.",
+      "Saying \"not now\" no longer ends the conversation for good. It comes back after a few more sessions, and the gap gets longer each time — three sessions, then six, then twelve — so it gets quieter the longer you decline, never louder.",
+      "And there's a proper \"Don't ask again\" tucked in the far corner, away from everything else, for anyone who truly means it. It silences the small reminder strip too.",
+      "The example text in Report a problem is now grey and italic, so it reads as a suggestion instead of looking like something already typed.",
+    ],
+  },
+  {
     v: "1.31.0",
     date: "2026-09-05",
     size: "minor",

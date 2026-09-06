@@ -571,6 +571,25 @@ async function runInstallCard() {
       await page.waitForTimeout(200);
       check(`${c.name}: a tap outside the card does not dismiss it`,
         await page.isVisible("#insModal"), "closed on a stray tap");
+
+      // "Don't ask again" is the real opt-out: reachable, but nowhere near
+      // the card, the pointer, or "Not now", so nobody hits it while
+      // declining once.
+      const nev = await page.evaluate(() => {
+        const n = document.getElementById("insNever").getBoundingClientRect();
+        const c2 = document.querySelector(".ins__card").getBoundingClientRect();
+        const a = document.getElementById("insAim");
+        const ar = a.hidden ? null : a.getBoundingClientRect();
+        return {
+          top: n.top, bottom: n.bottom, h: n.height, vh: window.innerHeight,
+          gapFromCard: Math.min(Math.abs(n.top - c2.bottom), Math.abs(c2.top - n.bottom)),
+          overlapsAim: ar ? !(n.bottom < ar.top || n.top > ar.bottom) : false,
+        };
+      });
+      check(`${c.name}: the opt-out is on screen`,
+        nev.top >= 0 && nev.bottom <= nev.vh + 1, `${Math.round(nev.top)}-${Math.round(nev.bottom)} of ${nev.vh}`);
+      check(`${c.name}: and is far from the card`, nev.gapFromCard > 40, `${Math.round(nev.gapFromCard)}px away`);
+      check(`${c.name}: and never collides with the pointer`, !nev.overlapsAim, "overlapping the arrow");
     }
     check(`${c.name}: no JavaScript errors`, errors.length === 0, errors.join("; "));
     check(`${c.name}: no telemetry escaped`, escaped.length === 0, escaped.join(", "));

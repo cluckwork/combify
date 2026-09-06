@@ -150,7 +150,7 @@ export function installGuide(hasPrompt) {
     return {
       mode: "prompt",
       aim: null,   // the button is ours, on our own screen — nothing to point at
-      sub: "Opens fullscreen, works offline.",
+      sub: "Runs better, and works without signal.",
       steps: [],
       action: "prompt",
       actionLabel: "Add to home screen",
@@ -194,10 +194,13 @@ export function installGuide(hasPrompt) {
     return {
       mode: "ios",
       aim: route.aim,
-      sub: "One time. Then it opens fullscreen — no address bar — and works offline.",
-      // Shown instead when the member followed an install link (?ath=1), e.g.
-      // the QR code at the gym: they asked for this, so skip the pitch.
-      arrivedSub: "A few taps and Combify is on your home screen.",
+      // ONE line, in plain words. The old copy — "opens fullscreen, no address
+      // bar, works offline" — was the app describing itself to itself; nobody
+      // reading this card has wondered what a standalone display mode is. What
+      // they might reasonably want to know is whether it is worth doing, and
+      // "works without signal" is the half of that a boxing gym actually cares
+      // about. The four numbered steps below are the real content.
+      sub: "Runs better, and works without signal.",
       steps: [
         ...route.steps,
         // Reported from a real iPhone, and it is TWO actions, not one: the
@@ -231,7 +234,7 @@ export function installGuide(hasPrompt) {
     return {
       mode: "android-manual",
       aim: menu.aim,
-      sub: "Opens fullscreen, works offline.",
+      sub: "Runs better, and works without signal.",
       steps: [
         `Open the ${menu.glyph} menu, ${menu.where}`,
         "Tap {install} <strong>Install app</strong> or <strong>Add to Home screen</strong>",

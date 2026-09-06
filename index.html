@@ -193,6 +193,12 @@
              with the real action just teaches people to decline. -->
         <button class="ins__skip" id="insSkip" type="button">Not now</button>
       </div>
+      <!-- The real opt-out, and deliberately the loneliest thing on the
+           screen: opposite end from the card, from the pointer, and from
+           "Not now". Someone who genuinely never wants asking again can say
+           so; nobody reaches it by accident on the way to declining once.
+           js/app.js parks it at whichever end the pointer is NOT using. -->
+      <button class="ins__never" id="insNever" type="button">Don't ask again</button>
       <!-- Points off the edge of the page toward the browser's own Share or
            menu button. Built by js/app.js from the guide's `aim`; hidden when
            there is nothing outside the page to point at. -->
